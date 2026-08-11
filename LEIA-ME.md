@@ -1,17 +1,13 @@
-# STEGO·STUDIO — Pacote completo do repositório (v2.38.2)
+# STEGO·STUDIO — Pacote completo do repositório (v2.41.0)
 
 Tudo que o repo precisa, na versão mais atual. Substitui o conteúdo anterior.
 
+**Código-fonte público:** github.com/rickschaves/stegostudio — GPL-3.0.
+
 ## Estrutura
-- **`docs/STEGO_STUDIO_CONTEXTO_BASTÃO.md`** — ⭐ **comece por aqui.** É o
-  documento de passagem de bastão: quem é quem, ritual de trabalho, princípios,
-  onde estamos, para onde vamos, e os erros que já cometemos para não repetir.
-- `docs/STEGO_STUDIO_CONTEXTO_ORIGINAL.md` — o contexto original, preservado.
-- `docs/ROADMAP_STEGO_STUDIO.md` — frentes, decisões e justificativas.
 - `docs/STEGO_STUDIO_CHANGELOG.md` — histórico completo de versões.
 - `docs/MEDICAO_REDES_SOCIAIS.md` — as medições de WhatsApp, X, Facebook e
   Instagram, com as provas. **Dado caro, não refaça.**
-- `docs/README.md` — descrição pública do projeto.
 - `src/` — os **16 módulos** do build + `styles.css` + `hash-wasm.js` +
   `fonts/` (5 woff2).
 - `template.html` — **na raiz, e só lá.** O `build.js` lê de `__dirname`, nunca
@@ -23,11 +19,19 @@ Tudo que o repo precisa, na versão mais atual. Substitui o conteúdo anterior.
   alfa), então fontes e ícones vivem aqui em base64 com SHA-256. Rode
   `node unpack_assets.js` para reconstruir `src/fonts/` (necessário para
   buildar) e `deploy/` (o que sobe para a Cloudflare).
-- `HTML_PRODUCAO/stego_studio_v2.38.2.html` — arquivo único para deploy.
+- `LICENSE` — GPL-3.0, texto canônico da FSF.
+- `README.md` — descrição pública (em inglês), para o GitHub.
+- `HTML_PRODUCAO/` — **um único arquivo**, o da versão atual. Ao publicar uma
+  versão nova, apague o HTML anterior; dois arquivos ali significam que alguém
+  vai baixar o errado.
+
+Fora do repositório público, pelo `.gitignore`: `ROADMAP_STEGO_STUDIO.md`,
+`STEGO_STUDIO_CONTEXTO_BASTÃO.md` e `STEGO_STUDIO_CONTEXTO_ORIGINAL.md` — são
+documentos internos de trabalho. Continuam no pacote zip.
 
 ## Como buildar
     node unpack_assets.js   # 1ª vez: recria src/fonts/ e deploy/
-    node build.js           # gera dist/stego_studio_v2.38.2.html
+    node build.js           # gera dist/stego_studio_v<VERSION>.html
     node test.js            # 11 invariantes
 
 ## Deploy
@@ -45,8 +49,16 @@ subir só o `index.html` apaga os favicons, o `og-image.png` e o `sitemap.xml`.
 
 O `test.js` cobre os pontos 1–4 via HTML final; o 5 é manual.
 
+⚠️ **Este arquivo NÃO entra nesse bump automático.** Ele já foi corrompido por
+`sed` cego trocando número por número — o cabeçalho ficou numa versão e o corpo
+em outra, e nenhum invariante pega isso porque é texto de documentação. **Edite
+à mão e releia.**
+
 ## Estado
-- **v2.41.0** — Modo Pro removido: offline sem exceção, sem backend nem chave.
-- **F4** (modo robusto), **JPEG progressivo** (v2.36.0) e **F9** (impressão
-  digital, v2.39.0) concluídas.
-- Próxima frente: **F14** — licença e repositório público.
+- **v2.41.0** — licença GPL-3.0 e código-fonte publicado no GitHub.
+- **v2.40.0** — Modo Pro removido: offline sem exceção, sem backend nem chave.
+- **F4** (modo robusto), **JPEG progressivo** (v2.36.0), **F9** (impressão
+  digital de ferramenta, v2.39.0) e **F14** (licença, v2.41.0) concluídas.
+- Próxima frente: **F13** — submeter ao catálogo do Lerch (textos prontos no
+  roadmap). Na fila de código: **F10 fatia 1** (JSteg ou investigar stegosuite)
+  e **F12 degrau 1** (7 modos do rijndael-128).
