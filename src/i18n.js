@@ -770,7 +770,7 @@ const I18N = {
     helpS6c: "On the steganography side, the tool reliably detects <b>LSB Replacement</b> (via RS/WS) and plaintext or weakly-hidden messages. For neural methods like SteganoGAN it offers a <b>suspicion-level</b> heuristic only — it can flag the GAN-like signature but cannot confirm it without the trained model, which doesn't run in a browser. It does <b>not</b> reliably detect adaptive methods like HILL, UNIWARD or J-UNIWARD. Detecting those takes trained neural models, which do not run in a browser — so this tool does not detect them at all. That is a real limit, not a temporary one: <b>absence of detection here is not evidence that an image is clean.</b> If you need that level of analysis, use a dedicated steganalysis toolbox such as <b>Aletheia</b>, by Daniel Lerch (MIT, <code>github.com/daniellerch/aletheia</code>).",
     // Footer
     footerCredit: "Designed by RASC and developed by JOI",
-    footerOpensource: "Opensource Code",
+    footerOpensource: "Free software under GPL-3.0 &middot; source at <code>github.com/rickschaves/stegostudio</code>",
   },
   pt: {
     decStatusRobustLostPaste: "Há indícios estatísticos de uma mensagem do modo resistente aqui, mas ela não pôde ser lida — a imagem foi recomprimida uma vez a mais. Se você a copiou (Ctrl+C) em vez de salvar o arquivo, é por isso: colar reencoda a imagem e destrói a mensagem. Salve o arquivo e abra ele.",
@@ -1532,7 +1532,7 @@ const I18N = {
     helpS6b: "Casos difíceis: imagens recomprimidas por redes sociais (que apagam metadados e alteram pixels), fotos muito editadas, e imagens de IA de última geração que imitam ruído de câmera. Use os resultados como <b>indício investigativo</b>, cruzando com outras evidências — não como prova isolada.",
     helpS6c: "No lado da esteganografia, a ferramenta detecta com confiança o <b>LSB Replacement</b> (via RS/WS) e mensagens em texto puro ou fracamente ocultas. Para métodos neurais como o SteganoGAN ela oferece apenas uma heurística de <b>nível de suspeita</b> — consegue sinalizar a assinatura tipo GAN, mas não confirmá-la sem o modelo treinado, que não roda no navegador. Ela <b>não</b> detecta com confiabilidade métodos adaptativos como HILL, UNIWARD ou J-UNIWARD. Detectá-los exige modelos neurais treinados, que não rodam em navegador — então esta ferramenta simplesmente não os detecta. É um limite real, não temporário: <b>a ausência de detecção aqui não é evidência de que a imagem esteja limpa.</b> Se você precisa desse nível de análise, use um toolbox dedicado de esteganálise como o <b>Aletheia</b>, de Daniel Lerch (MIT, <code>github.com/daniellerch/aletheia</code>).",
     footerCredit: "Idealizado por RASC e desenvolvido por JOI",
-    footerOpensource: "Opensource Code",
+    footerOpensource: "Software livre sob GPL-3.0 &middot; código em <code>github.com/rickschaves/stegostudio</code>",
   }
 };
 

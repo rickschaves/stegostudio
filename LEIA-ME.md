@@ -46,7 +46,7 @@ subir só o `index.html` apaga os favicons, o `og-image.png` e o `sitemap.xml`.
 O `test.js` cobre os pontos 1–4 via HTML final; o 5 é manual.
 
 ## Estado
-- **v2.40.0** — Modo Pro removido: offline sem exceção, sem backend nem chave.
+- **v2.41.0** — Modo Pro removido: offline sem exceção, sem backend nem chave.
 - **F4** (modo robusto), **JPEG progressivo** (v2.36.0) e **F9** (impressão
   digital, v2.39.0) concluídas.
 - Próxima frente: **F14** — licença e repositório público.

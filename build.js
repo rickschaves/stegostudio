@@ -17,7 +17,7 @@ const SRC = path.join(__dirname, 'src');
 const DIST = path.join(__dirname, 'dist');
 
 // Versão do artefato final. Convenção: pontos entre números (nunca underscore).
-const VERSION = '2.40.0';
+const VERSION = '2.41.0';
 
 // ORDEM DE CONCATENAÇÃO — preserva a ordem-fonte do monolito v2.23.1.
 // hill.js e stc.js foram retirados de dentro do span do encoder (span 100%
@@ -66,7 +66,25 @@ function assembleFonts() {
 }
 
 function assembleApp() {
-  const banner = `// ===== STEGO·STUDIO v${VERSION} — build gerado por build.js =====\n`
+  // Aviso de copyright exigido pela GPL-3.0, embutido no artefato distribuído:
+  // o HTML único É a distribuição, então o aviso precisa viajar dentro dele.
+  const banner = `/*\n`
+               + ` * STEGO·STUDIO v${VERSION} — esteganografia e análise forense de imagens\n`
+               + ` * Copyright (C) 2026 RASC\n`
+               + ` *\n`
+               + ` * Este programa é software livre: você pode redistribuí-lo e/ou modificá-lo\n`
+               + ` * sob os termos da GNU General Public License, versão 3, publicada pela\n`
+               + ` * Free Software Foundation.\n`
+               + ` *\n`
+               + ` * Distribuído na esperança de ser útil, mas SEM NENHUMA GARANTIA; sequer a\n`
+               + ` * garantia implícita de COMERCIABILIDADE ou ADEQUAÇÃO A UM FIM ESPECÍFICO.\n`
+               + ` * Veja a GNU General Public License para mais detalhes, no arquivo\n`
+               + ` * LICENSE que acompanha o código ou em gnu.org/licenses/gpl-3.0.html\n`
+               + ` *\n`
+               + ` * Código-fonte: github.com/rickschaves/stegostudio\n`
+               + ` * Desenvolvido com a ajuda da JOI, uma IA.\n`
+               + ` */\n`
+               + `// ===== build gerado por build.js =====\n`
                + `// Fonte modular em src/. NÃO editar este bloco no HTML final; editar os módulos.\n`;
   const chunks = MODULE_ORDER.map(name => {
     const body = read(path.join(SRC, name)).replace(/\s+$/,'');

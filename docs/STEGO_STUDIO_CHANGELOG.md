@@ -7,6 +7,55 @@
 
 ---
 
+## v2.41.0 — 2026-08-11
+**Licença GPL-3.0 e código-fonte publicado**
+
+Fecha a F14. O repositório está no ar: **github.com/rickschaves/stegostudio**
+
+### A dívida que existia
+O rodapé exibia **"Opensource Code"** como texto solto — sem `href`, sem licença
+nomeada, sem repositório por trás. **Afirmação sem justificativa visível, que é
+exatamente o que tratamos como bug em qualquer outro texto da interface.**
+
+### O que mudou
+- **`LICENSE`** — texto canônico da GPL-3.0 (copiado de
+  `/usr/share/common-licenses/GPL-3`, não transcrito).
+- **Rodapé** (EN+PT) — nomeia a licença e o endereço do código.
+- **Aviso de copyright no artefato** — `Copyright (C) 2026 RASC` + termos da GPL
+  no topo do bloco de script. **O HTML único É a distribuição**, então o aviso
+  precisa viajar dentro dele, não só no repositório.
+- **`README.md` público** — reescrito; o anterior documentava o Pro Backend
+  removido. Abre com o que a ferramenta faz e **fecha com o que ela não faz**,
+  encaminhando ao Aletheia.
+- **`.gitignore`** — barra binários reconstruíveis (`src/fonts/`, `deploy/`,
+  `dist/`), o backend inteiro e os documentos internos (roadmap, contextos).
+
+### Por que GPL e não MIT
+A ferramenta existe para que a pessoa possa **auditar o que roda na máquina
+dela**. Um derivado fechado destrói essa garantia. A GPL funciona bem neste caso
+específico: o JS é **entregue ao navegador de cada visitante**, o que é
+distribuição — o buraco do SaaS não se aplica. E é reversível: autor solo pode
+relicenciar para MIT depois; o contrário não.
+
+### 🔒 Segredo removido antes da publicação
+A chave de API morta do Modo Pro estava em `STEGO_STUDIO_CONTEXTO_ORIGINAL.md`.
+O `.gitignore` já a excluía, mas **depender de configuração para não vazar
+segredo é frágil** — um `git add -f` bastaria. Substituída por placeholder.
+**Regra: segredo não se protege com .gitignore; se remove do conteúdo.**
+
+### A asserção offline pegou o autor pela SEGUNDA vez
+`<https://www.gnu.org/licenses/gpl-3.0.html>` no aviso de licença fez o build
+recusar publicar. Um comentário não busca nada — mas **a regra lê texto, não
+intenção**, e afrouxá-la para acomodar um caso confortável é como asserções
+morrem. Reescrito sem esquema. Primeira vez foi o link do Aletheia (v2.40.0).
+
+### Validação
+Harness **11/11**, i18n **694/694**, build **874.603 bytes**. Repositório
+verificado no ar: público, GPL-3.0 detectada pelo GitHub, README renderizado,
+sem arquivos de backend.
+
+---
+
 ## v2.40.0 — 2026-08-11
 **Remoção do Modo Pro: a ferramenta passa a ser offline sem exceção**
 
