@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>STEGO·STUDIO — Steganography & Image Forensics Tool</title>
+
+<!-- Stego Studio favicons -->
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="/android-chrome-192x192.png">
+<link rel="icon" type="image/png" sizes="512x512" href="/android-chrome-512x512.png">
+
+<!-- SEO -->
+<meta name="description" content="STEGO·STUDIO is a free, 100% client-side tool for steganography and image forensics. Hide encrypted messages in images — in the pixels, or in the JPEG coefficients so they survive being posted to social media — and analyze any image for hidden data and origin (photo, screenshot, digital art, or AI-generated). No uploads, fully private.">
+<meta name="keywords" content="steganography, LSB, image forensics, hidden message, AI image detection, synthetic image, EXIF, C2PA, encrypt image, decode image, stego tool, esteganografia, forense de imagem">
+<meta name="author" content="RASC & JOI">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://stegostudio.com/">
+
+<!-- Open Graph -->
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://stegostudio.com/">
+<meta property="og:title" content="STEGO·STUDIO — Steganography & Image Forensics">
+<meta property="og:description" content="Hide encrypted messages in images and analyze any image for hidden data and origin. 100% client-side and private — nothing is uploaded.">
+<meta property="og:image" content="https://stegostudio.com/og-image.png">
+<meta property="og:locale" content="en_US">
+<meta property="og:locale:alternate" content="pt_BR">
+
+<!-- Twitter Card -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="STEGO·STUDIO — Steganography & Image Forensics">
+<meta name="twitter:description" content="Hide encrypted messages in images and analyze any image for hidden data and origin. 100% client-side and private.">
+<meta name="twitter:image" content="https://stegostudio.com/og-image.png">
+
+<!-- Schema.org structured data -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebApplication",
+  "name": "STEGO·STUDIO",
+  "description": "A free, 100% client-side tool for LSB steganography and image forensics. Hide encrypted messages in images and analyze any image for hidden data and origin.",
+  "url": "https://stegostudio.com/",
+  "applicationCategory": "SecurityApplication",
+  "operatingSystem": "Any (web browser)",
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+  "inLanguage": ["en", "pt-BR"]
+}
+</script>
+
+<style>
+/*BUILD:STYLES*/
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">STEGO<span class="e">·</span>STUDIO <span style="font-size:0.85rem;letter-spacing:2px;color:var(--dim)">v2.40.0 // ENCODER · ANALYZER · DECODER</span></div>
+  <div class="header-meta"><span data-i18n="tagline1">Esteganografia LSB com criptografia AES-256 opcional</span><br><span data-i18n="tagline2">Análise forense integrada · Exportação JSON</span></div>
+</header>
+
+<div class="ticker-bar">
+  <div class="ticker-track" id="ticker-track"><!-- preenchido via JS --></div>
+</div>
+
+<div class="tab-bar">
+  <div class="tab-group">
+    <div class="tab enc active" data-i18n="tabEncode">⬡ ENCODE</div>
+    <div class="tab dec" data-i18n="tabAnalyze">⬢ ANALYZE · DECODE</div>
+  </div>
+  <div class="settings-menu">
+    <button class="settings-gear" id="settings-gear" aria-label="Settings">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="3.2"></circle>
+        <path d="M12 2.2v2.4M12 19.4v2.4M21.8 12h-2.4M4.6 12H2.2M18.9 5.1l-1.7 1.7M6.8 17.2l-1.7 1.7M18.9 18.9l-1.7-1.7M6.8 6.8L5.1 5.1"></path>
+      </svg>
+    </button>
+    <div class="settings-dropdown" id="settings-dropdown">
+      <div class="settings-item" id="settings-help">
+        <span class="settings-item-icon">?</span>
+        <span data-i18n="helpMenuLabel">Como funciona</span>
+      </div>
+      <div class="settings-item" id="settings-changelog">
+        <span class="settings-item-icon">⎘</span>
+        <span data-i18n="changelogMenuLabel">Histórico de versões</span>
+      </div>
+      <div class="settings-divider"></div>
+      <div class="settings-row">
+        <span class="settings-lang-label" data-i18n="langLabel">Idioma</span>
+        <span class="lang-switch">
+          <span class="lang-opt" id="lang-en">EN</span>
+          <span class="lang-sep">|</span>
+          <span class="lang-opt" id="lang-pt">PT</span>
+        </span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ ENCODE ═══════════════ -->
+<div class="panel active" id="panel-enc">
+  <div class="workspace">
+    <div class="col col-left">
+      <div class="status-terminal enc-term">
+        <div class="status-term-header">
+          <span class="status-term-dot"></span>
+          <span class="status-term-title">STATUS</span>
+        </div>
+        <div class="status-term-body" id="enc-status"><span class="info">&gt; Insira a imagem para ser codificada</span><br><span class="prompt">&gt; Aguardando...</span><span class="term-cursor"></span></div>
+      </div>
+      <details class="quick-guide enc-guide">
+        <summary><span class="qg-icon">▸</span> <span data-i18n="encGuideSummary">Guia rápido — como ocultar uma mensagem</span></summary>
+        <div class="qg-body">
+          <p data-i18n-html="encGuide1"><b>1.</b> Carregue uma imagem portadora. <b>PNG, BMP ou WEBP lossless</b> são ideais; outros formatos (JPEG, etc.) são aceitos e convertidos para um novo PNG na saída — a mensagem é sempre salva em um PNG sem perda.</p>
+          <p data-i18n-html="encGuide4"><b>2.</b> Escolha como a mensagem é embutida. <b>Padrão</b> é o modo normal; <b>alta capacidade (RGB)</b> usa os três canais de cor para mensagens mais longas; <b>Adaptativo (anti-detecção)</b> esconde os bits em regiões de textura, onde ataques estruturais como RS/WS não os enxergam. Ative o <b>Modo furtivo</b> para também cifrar o cabeçalho — isso remove a assinatura "STEGO" que denuncia uma mensagem embutida. O furtivo exige chave.</p>
+          <p data-i18n-html="encGuide2"><b>3.</b> Digite a mensagem secreta. O medidor de capacidade mostra quantos caracteres cabem na imagem escolhida.</p>
+          <p data-i18n-html="encGuide3"><b>4.</b> Opcionalmente, defina uma <b>chave</b>. Com chave, a mensagem é cifrada (AES-256-GCM) e tem a ordem dos bits embaralhada antes de ser embutida — sem a chave correta, ninguém consegue lê-la, nem este Studio.</p>
+          <p data-i18n-html="encGuideDecoy"><b>5.</b> Opcional: ative a <b>Segunda mensagem (negação plausível)</b> para esconder <b>duas</b> mensagens na mesma imagem, cada uma com sua própria senha. Se alguém forçar você a revelar a senha, entregue a <b>alternativa</b> — ela mostra uma mensagem inofensiva, enquanto a real permanece protegida e indetectável, mesmo para quem tem o código desta ferramenta. As duas senhas precisam ser diferentes.</p>
+          <p data-i18n-html="encGuide5"><b>6.</b> Clique em <b>Ocultar mensagem</b> e baixe o PNG gerado. Ele parece idêntico ao original, mas carrega a mensagem nos bits menos significativos.</p>
+          <p class="qg-tip" data-i18n-html="encGuideTip">ℹ A imagem gerada é um PNG novo e limpo. Todos os metadados originais — EXIF de câmera, perfil de cor, e assinaturas digitais como C2PA — são <b>removidos</b> no processo. Isto é intencional: a ferramenta não preserva nem reescreve metadados, para não falsificar a procedência da imagem.</p>
+          <p class="qg-tip" data-i18n-html="encGuideWa">⚠ Para enviar pelo WhatsApp ou redes sociais sem perder a mensagem, mande como <b>arquivo/documento</b>, nunca como foto — o reenvio como imagem recomprime e apaga os dados ocultos.</p>
+        </div>
+      </details>
+      <div>
+        <div class="field-label" data-i18n="fieldCarrier">// imagem portadora</div>
+        <div class="drop-zone enc-t" id="enc-drop">
+          <div id="enc-pw" class="preview-wrap" style="display:none">
+            <img id="enc-prev" alt=""/><div class="img-info" id="enc-info"></div>
+            <div class="fmt-badge-img" id="enc-fbadge"></div>
+          </div>
+          <div id="enc-hint" style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px;text-align:center"><div class="drop-icon">▣</div>
+            <div class="drop-hint" data-i18n-html="dropHintEnc">Arraste, clique ou <span class="eh">cole (Ctrl+V)</span><br>para selecionar a imagem portadora</div>
+          </div>
+        </div>
+        <input type="file" id="enc-file" accept="image/*">
+        <div class="hint-text" id="enc-alpha-note" data-i18n-html="encAlphaNote" style="display:none; color:#ffb300; margin-top:6px"></div>
+        <div class="hint-text" id="enc-cover-tip" data-i18n-html="encCoverTip" style="display:none; color:#6f9bd1; margin-top:6px"></div>
+      </div>
+
+      <div>
+        <!-- Comportamento AUTOMÁTICO (sem caixas): furtividade por padrão. O
+             encoder escolhe sozinho o modo mais furtivo que couber, cifra o
+             header quando há senha e comprime/embaralha sozinho. Só resta ao
+             usuário UMA escolha opcional, por objetivo: priorizar capacidade. -->
+        <div class="hint-text" id="enc-auto-note" data-i18n-html="encAutoNote" style="margin-bottom:14px">Por padrão, a mensagem é escondida da forma <b>mais furtiva que couber</b>, e o cabeçalho é cifrado automaticamente quando você usa uma senha. Quanto menor a mensagem, mais furtiva ela fica.</div>
+
+        <div class="hicap-row">
+          <span class="hicap-label" data-i18n="maxcapLabel">Modo de Alta Capacidade</span>
+          <label class="switch">
+            <input type="checkbox" id="enc-maxcap">
+            <span class="switch-track"><span class="switch-thumb"></span></span>
+          </label>
+        </div>
+        <div class="hint-text" id="enc-maxcap-hint" data-i18n-html="maxcapHint">Usa os 3 canais de cor (R, G, B) para caber mensagens grandes — triplica o espaço disponível. Em troca, a imagem fica um pouco mais detectável. <b>Deixe desligado para furtividade máxima</b>.</div>
+      </div>
+
+      <div>
+        <div class="field-label" data-i18n="fieldCapacity">// capacidade</div>
+        <div class="cap-row"><span id="cap-used">0</span><span id="cap-total">—</span></div>
+        <div class="cap-bar"><div class="cap-fill" id="cap-fill"></div></div>
+        <div class="hint-text" id="enc-fill-warn" style="display:none"></div>
+      </div>
+
+      <div>
+        <div class="field-label" data-i18n="fieldMessage">// mensagem secreta</div>
+        <textarea class="enc-t" id="enc-msg" data-i18n-ph="msgPlaceholder" placeholder="Digite a mensagem a ocultar..." rows="4"></textarea>
+        <div class="hint-text" id="enc-mode-note" data-i18n-html="encModeAutoCapacity" style="display:none; color:#ffb300; margin-top:6px"></div>
+      </div>
+
+      <div>
+        <div class="field-label" data-i18n="fieldKeyEnc">// chave de codificação</div>
+        <div class="key-field enc-t">
+          <span class="key-icon">🔑</span>
+          <input type="password" id="enc-key" data-i18n-ph="keyPlaceholder" placeholder="Opcional">
+          <button type="button" class="key-clear-btn" id="enc-key-clear" aria-label="Limpar senha" style="display:none">✕</button>
+        </div>
+        <div class="hint-text" id="enc-key-hint" data-i18n="encKeyHint">Se informada, a mensagem será cifrada com AES-256-GCM antes de ser embutida.</div>
+        <div class="key-warning" id="enc-key-warn" data-i18n="encKeyWarn">⚠ Sem chave, a mensagem fica em texto puro nos LSBs — qualquer analisador LSB pode recuperá-la facilmente.</div>
+        <div id="enc-pw-strength" style="display:none;margin-top:6px">
+          <div style="height:5px;border-radius:3px;background:rgba(255,255,255,.08);overflow:hidden">
+            <div id="enc-pw-fill" style="height:100%;width:0;transition:width .2s ease,background .2s ease"></div>
+          </div>
+          <div class="hint-text" id="enc-pw-label" style="margin-top:4px"></div>
+        </div>
+
+        <!-- ── NEGAÇÃO PLAUSÍVEL: segunda mensagem (isca) ── -->
+        <div id="enc-decoy-wrap" style="margin-top:16px;padding-top:14px;border-top:1px solid rgba(255,255,255,.08)">
+          <div class="hicap-row">
+            <span class="hicap-label" id="enc-decoy-toggle-label" data-i18n="decoyToggle">Segunda mensagem (negação plausível)</span>
+            <label class="switch">
+              <input type="checkbox" id="enc-decoy-toggle">
+              <span class="switch-track"><span class="switch-thumb"></span></span>
+            </label>
+          </div>
+          <div class="hint-text" id="enc-decoy-hint" data-i18n="decoyToggleHint" style="margin-top:6px;color:#6f9bd1;display:none">Se alguém forçar você a entregar a senha desta imagem, você pode entregar uma diferente. Essa segunda senha revela uma mensagem inofensiva, enquanto sua mensagem real permanece protegida.</div>
+          <div id="enc-decoy-fields" style="display:none;margin-top:14px">
+            <div class="field-label" id="enc-decoy-msg-label" data-i18n="decoyMsgLabel">// mensagem alternativa</div>
+            <textarea class="enc-t" id="enc-decoy-msg" data-i18n-ph="decoyMsgPlaceholder" placeholder="Uma mensagem plausível e inofensiva…" rows="3"></textarea>
+            <div class="hint-text" id="enc-decoy-plausible-tip" data-i18n="decoyPlausibleTip" style="margin-top:4px;color:#6f9bd1">Escolha algo plausível — evite mensagens que pareçam isca.</div>
+            <div class="key-warning kw-static" id="enc-decoy-pngonly" data-i18n="decoyPngOnlyWarn" style="margin-top:8px">⚠ A mensagem alternativa vai apenas na imagem mais furtiva (PNG). A imagem mais resistente carrega só a mensagem real — se a negação plausível importa para você, é o PNG que você deve guardar e enviar.</div>
+            <div class="field-label" id="enc-decoy-key-label" data-i18n="decoyKeyLabel" style="margin-top:12px">// senha alternativa</div>
+            <div class="key-field enc-t">
+              <span class="key-icon">🔑</span>
+              <input type="password" id="enc-decoy-key" data-i18n-ph="decoyKeyPlaceholder" placeholder="Senha para a mensagem alternativa">
+              <button type="button" class="key-clear-btn" id="enc-decoy-key-clear" aria-label="Limpar senha" style="display:none">✕</button>
+            </div>
+            <div class="key-warning" id="enc-decoy-samekey-warn" data-i18n="decoySameKeyWarn" style="display:none">⚠ As duas senhas precisam ser diferentes.</div>
+            <div class="key-warning" id="enc-decoy-needkey-warn" data-i18n="decoyNeedKeyAlert" style="display:none">⚠ A mensagem alternativa precisa da própria senha para ser embutida.</div>
+            <div id="enc-decoy-pw-strength" style="display:none;margin-top:6px">
+              <div style="height:5px;border-radius:3px;background:rgba(255,255,255,.08);overflow:hidden">
+                <div id="enc-decoy-pw-fill" style="height:100%;width:0;transition:width .2s ease,background .2s ease"></div>
+              </div>
+              <div class="hint-text" id="enc-decoy-pw-label" style="margin-top:4px"></div>
+            </div>
+            <div class="hint-text" id="enc-decoy-capacity" data-i18n="decoyCapacityShared" style="margin-top:6px">As duas mensagens dividem a capacidade desta imagem.</div>
+          </div>
+        </div>
+      </div>
+
+      <button class="btn btn-enc" id="btn-encode" data-i18n="hideBtn" disabled>OCULTAR MENSAGEM</button>
+      <button class="btn-clear" id="btn-clear-enc" data-i18n="clearBtn">✕ LIMPAR</button>
+    </div>
+
+    <div class="col">
+      <div class="field-label" data-i18n="fieldGenerated">// imagem gerada</div>
+      <div class="out-pair">
+        <div class="download-wrap" id="enc-dl">
+          <div class="rb-head">
+            <span class="rb-title" data-i18n="outStealthTitle">Imagem mais furtiva</span>
+            <span class="rb-sub" data-i18n="outStealthSub">PNG — para guardar, ou enviar como arquivo</span>
+          </div>
+          <div class="enc-img-wrap"><img id="enc-out-prev" class="dl-preview" alt=""/><div id="enc-heatmap" class="enc-heatmap"></div></div>
+          <button class="enc-map-toggle" id="btn-enc-heatmap" data-i18n="encMapShow">⊞ Ver mapa de furtividade</button>
+          <div class="leak-legend"><div class="leak-legend-bar"></div><div class="leak-legend-labels"><span data-i18n="leakLegendClean">menos detectável</span><span data-i18n="leakLegendLeak">mais detectável</span></div></div>
+          <button class="btn btn-enc" id="btn-dl-enc" data-i18n="dlBtn">⬇ BAIXAR IMAGEM PNG</button>
+          <div class="stats-wrap" id="enc-stats"></div>
+          <div class="enc-stealth" id="enc-stealth"></div>
+        </div>
+
+        <div class="download-wrap rb-wrap" id="enc-rb">
+          <div class="rb-head">
+            <span class="rb-title" data-i18n="outRobustTitle">Imagem mais resistente</span>
+            <span class="rb-sub" data-i18n="outRobustSub">JPG — para publicar em rede social</span>
+          </div>
+          <div class="rb-body" id="rb-body">
+            <div class="enc-img-wrap"><img id="rb-out-prev" class="dl-preview" alt=""/></div>
+            <button class="btn btn-enc" id="btn-dl-rb" data-i18n="rbDlBtn">⬇ BAIXAR IMAGEM JPG</button>
+            <div class="stats-wrap" id="rb-stats"></div>
+            <div class="enc-stealth visible" id="rb-report"></div>
+          </div>
+          <div class="rb-unavailable" id="rb-unavailable"></div>
+        </div>
+      </div>
+
+      <div class="enc-tips-box enc-tips-solo" id="enc-tips">
+        <div class="leak-tips-title" data-i18n="leakTipsTitle">Como escolher a imagem</div>
+        <ul class="leak-tips">
+          <li data-i18n="leakTip1"></li><li data-i18n="leakTip2"></li><li data-i18n="leakTip3"></li><li data-i18n="leakTip4"></li>
+        </ul>
+      </div>
+      <div style="color:var(--dim);font-size:0.7rem;font-style:italic" id="enc-placeholder" data-i18n="encPlaceholder">A imagem processada aparecerá aqui após o encode.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ DECODE + ANALYZE ═══════════════ -->
+<div class="panel" id="panel-dec">
+  <div class="workspace">
+    <!-- LEFT: controls -->
+    <div class="col col-left">
+      <div class="status-terminal dec-term">
+        <div class="status-term-header">
+          <span class="status-term-dot"></span>
+          <span class="status-term-title">STATUS</span>
+        </div>
+        <div class="status-term-body" id="dec-status"><span class="info">&gt; Insira a imagem para análise</span><br><span class="prompt">&gt; Aguardando...</span><span class="term-cursor"></span></div>
+      </div>
+      <details class="quick-guide dec-guide">
+        <summary><span class="qg-icon">▸</span> <span data-i18n="decGuideSummary">Guia rápido — como interpretar a análise</span></summary>
+        <div class="qg-body">
+          <p data-i18n-html="decGuide1"><b>1.</b> Carregue qualquer imagem — <b>qualquer formato</b>. A análise forense roda automaticamente e é independente de chave.</p>
+          <p data-i18n-html="decGuide2"><b>2.</b> O <b>Threat Score</b> indica a suspeita de mensagem oculta (esteganografia). Quanto maior, mais forte a evidência de conteúdo escondido nos pixels.</p>
+          <p data-i18n-html="decGuide3"><b>3.</b> Se a imagem contém uma mensagem cifrada, insira a <b>chave</b> e analise de novo para decodificá-la. A chave também é o que revela mensagens em <b>Modo furtivo</b> — o cabeçalho delas é cifrado, então sem a chave são indistinguíveis de ruído. Mensagens em texto puro são recuperadas automaticamente, sem chave.</p>
+          <p data-i18n-html="decGuide4"><b>4.</b> A <b>Probabilidade de origem</b> estima se a imagem é fotografia, screenshot, arte digital ou gerada por IA. São scores independentes — vários podem ser altos. O maior é a origem mais provável.</p>
+          <p data-i18n-html="decGuide5"><b>5.</b> Abra os <b>indicadores</b> para ver os detalhes técnicos de cada sinal e entender por que cada score foi atribuído.</p>
+          <p class="qg-tip" data-i18n-html="decGuideAdaptive">⚠ Alguns métodos deixam apenas traços estruturais fracos. Stego <b>adaptativo</b> e LSB matching podem manter o Threat Score modesto mesmo com mensagem presente — a análise neural <b>Pro</b> (com o servidor online) detecta melhor esses casos. Um score baixo não garante que a imagem esteja limpa.</p>
+          <p class="qg-tip" data-i18n-html="decGuideTip">ℹ A classificação de origem é heurística, não uma prova definitiva. Scores próximos entre si indicam que a ferramenta não conseguiu determinar a origem com certeza.</p>
+        </div>
+      </details>
+      <div>
+        <div class="field-label" data-i18n="fieldImageAnalyze">// imagem para análise</div>
+        <div class="drop-zone dec-t" id="dec-drop">
+          <div id="dec-pw" class="preview-wrap" style="display:none">
+            <img id="dec-prev" alt=""/><div class="img-info" id="dec-info"></div>
+            <div class="fmt-badge-img" id="dec-fbadge"></div>
+          </div>
+          <div id="dec-hint" style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px;text-align:center">
+            <div class="drop-icon">▣</div>
+            <div class="drop-hint" data-i18n-html="dropHintDec2">Arraste, clique ou <span class="dh">cole (Ctrl+V)</span><br>qualquer imagem suspeita ou codificada<br><span class="dh">PNG · BMP · WEBP · JPEG · qualquer formato</span></div>
+          </div>
+        </div>
+        <input type="file" id="dec-file" accept="image/*">
+      </div>
+
+      <div>
+        <div class="field-label" data-i18n="fieldKeyDec">// chave de decodificação</div>
+        <div class="key-field dec-t">
+          <span class="key-icon">🔑</span>
+          <input type="password" id="dec-key" data-i18n-ph="keyPlaceholder" placeholder="Opcional">
+          <button type="button" class="key-clear-btn" id="dec-key-clear" aria-label="Limpar senha" style="display:none">✕</button>
+        </div>
+        <div class="hint-text" data-i18n="decKeyHint2">Necessária apenas se a mensagem foi cifrada. A análise forense roda independente da chave.</div>
+      </div>
+
+      <button class="btn btn-dec" id="btn-analyze" data-i18n="analyzeBtn" disabled>ANALISAR IMAGEM</button>
+
+      <div class="export-wrap" id="export-wrap">
+        <div class="export-hint">
+          <span data-i18n="exportHint">📄 Exporte o relatório completo em JSON e envie para sua IA de preferência — Claude, ChatGPT, Gemini — para uma interpretação investigativa mais aprofundada dos resultados.</span>
+        </div>
+        <button class="btn-outline btn-outline-dec" id="btn-export-json" data-i18n="exportBtn">⬇ EXPORTAR RELATÓRIO JSON</button>
+      </div>
+
+      <button class="btn-clear" id="btn-clear-dec" style="margin-top:4px" data-i18n="clearAnalysisBtn">✕ LIMPAR ANÁLISE</button>
+    </div>
+
+    <!-- RIGHT: results -->
+    <div class="col">
+      <div style="color:var(--dim);font-size:0.7rem;font-style:italic" id="dec-placeholder" data-i18n="decPlaceholder">Carregue uma imagem e clique em Analisar para ver os resultados.</div>
+
+      <div class="results-area" id="results-area">
+
+        <!-- Título global -->
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:4px">
+          <span style="font-family:var(--display);font-size:1.1rem;letter-spacing:5px;color:var(--text)" data-i18n="resultTitle">RESULTADO</span>
+          <div style="flex:1;height:1px;background:var(--border)"></div>
+        </div>
+
+        <!-- Aviso de calibração -->
+        <div class="calib-banner">
+          <span class="calib-icon">⚙</span>
+          <div class="calib-text">
+            <span data-i18n-html="calibWarn"><b>Ferramenta em calibração.</b> A classificação de origem (Fotografia, Screenshot, Arte Digital, Sintética/IA) é heurística e está em fase de refinamento. Os resultados devem ser usados como indício investigativo, não como prova definitiva — especialmente para imagens sem metadados EXIF ou processadas por redes sociais.</span>
+          </div>
+        </div>
+
+        <!-- Decoded message -->
+        <div class="decoded-box" id="decoded-box">
+          <div class="decoded-inner">
+            <div class="decoded-label" data-i18n="decodedLabel">Mensagem Encontrada e Decodificada</div>
+            <div class="decoded-text" id="decoded-text"></div>
+          </div>
+        </div>
+
+        <!-- Score banner: threat à esquerda, origem à direita -->
+        <div class="score-banner" id="score-banner">
+          <div class="score-half threat">
+            <div class="score-half-title threat-title" data-i18n="threatTitle">Nível de suspeita de mensagem oculta</div>
+            <div class="score-top">
+              <div style="display:flex;flex-direction:column;align-items:center;min-width:64px">
+                <div class="score-num" id="threat-num">—</div>
+                <div class="score-label" data-i18n="threatScore">THREAT SCORE</div>
+              </div>
+              <div class="score-level" id="threat-level" style="color:var(--dim)">—</div>
+            </div>
+            <div class="score-flags" id="threat-flags"></div>
+            <!-- Aviso: C2PA confirmado pode causar falso-positivo de stego -->
+            <div class="c2pa-fp-note" id="c2pa-fp-note" style="display:none"></div>
+          </div>
+          <div class="score-half origin">
+            <div class="score-half-title origin-title-label" data-i18n="originTitle">Probabilidade de origem</div>
+            <div class="origin-grid" id="origin-grid">
+              <div class="origin-cell" data-cat="fotografia">
+                <div class="origin-row">
+                  <div class="origin-score" id="orig-foto">—</div>
+                  <div class="origin-vbar"><div class="origin-vbar-fill" id="orig-foto-bar"></div></div>
+                </div>
+                <div class="origin-label" data-i18n="catFotografia">Fotografia</div>
+              </div>
+              <div class="origin-cell" data-cat="screenshot">
+                <div class="origin-row">
+                  <div class="origin-score" id="orig-screen">—</div>
+                  <div class="origin-vbar"><div class="origin-vbar-fill" id="orig-screen-bar"></div></div>
+                </div>
+                <div class="origin-label" data-i18n="catScreenshot">Screenshot</div>
+              </div>
+              <div class="origin-cell" data-cat="arte">
+                <div class="origin-row">
+                  <div class="origin-score" id="orig-art">—</div>
+                  <div class="origin-vbar"><div class="origin-vbar-fill" id="orig-art-bar"></div></div>
+                </div>
+                <div class="origin-label" data-i18n="catArte">Arte digital</div>
+              </div>
+              <div class="origin-cell" data-cat="sintetica">
+                <div class="origin-row">
+                  <div class="origin-score" id="orig-synth">—</div>
+                  <div class="origin-vbar"><div class="origin-vbar-fill" id="orig-synth-bar"></div></div>
+                </div>
+                <div class="origin-label" data-i18n="catSintetica">Sintética / IA</div>
+              </div>
+            </div>
+            <!-- Nota: esteganografia pode inflar o score sintético (foto real) -->
+            <div class="origin-stego-note" id="origin-stego-note" style="display:none"></div>
+          </div>
+        </div>
+
+        <!-- Aviso de conteúdo adversarial (texto que manipula o analista) -->
+        <div class="adversarial-warning" id="adversarial-warning" style="display:none"></div>
+        <!-- Alerta de stegomalware (mensagem decodificada = script/executável) -->
+        <div class="adversarial-warning" id="stegomalware-warning" style="display:none"></div>
+
+        <!-- F9 fatia 2: impressão digital de FERRAMENTA. Só aparece quando
+             nenhum motor extraiu a mensagem — se a extração deu certo, ela já é
+             a prova mais forte e repetir aqui seria ruído. -->
+        <div class="toolprint-panel" id="toolprint-panel" style="display:none"></div>
+
+        <!-- Seção Neural (Modo Pro) — preenchida via JS quando o backend responde -->
+
+        <!-- Nota de limitação do modo offline (Pro indisponível + suspeita parcial) -->
+        <div class="offline-limit-note" id="offline-limit-note" style="display:none"></div>
+
+        <!-- Module accordion -->
+        <div class="modules-wrap" id="modules-wrap"></div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal de confirmação -->
+<div class="modal-overlay" id="modal-overlay">
+  <div class="modal-box">
+    <div class="modal-icon" id="modal-icon">⚠️</div>
+    <div class="modal-title" id="modal-title">Confirmar limpeza</div>
+    <div class="modal-msg" id="modal-msg"></div>
+    <div class="modal-warn" id="modal-warn"></div>
+    <div class="modal-buttons">
+      <button class="modal-btn-cancel" id="modal-cancel">Cancelar</button>
+      <button class="modal-btn-confirm" id="modal-confirm">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Como funciona -->
+<div class="modal-overlay" id="help-overlay">
+  <div class="help-box">
+    <div class="help-head">
+      <span class="help-title" data-i18n="helpTitle">Como funciona o STEGO·STUDIO</span>
+      <span class="help-close" id="help-close-btn">✕</span>
+    </div>
+    <div class="help-content">
+      <details class="help-section" open>
+        <summary data-i18n="helpS1Title">O que esta ferramenta faz</summary>
+        <div class="help-text">
+          <p data-i18n-html="helpS1a">O STEGO·STUDIO tem duas funções. O <b>Encoder</b> esconde mensagens de texto dentro de imagens usando esteganografia LSB. O <b>Analyzer</b> examina qualquer imagem em busca de mensagens ocultas e estima a origem provável da imagem (foto, screenshot, arte digital ou IA).</p>
+          <p data-i18n-html="helpS1b">Tudo roda 100% no seu navegador. Nenhuma imagem ou dado é enviado para servidores.</p>
+        </div>
+      </details>
+      <details class="help-section">
+        <summary data-i18n="helpS2Title">Esteganografia LSB</summary>
+        <div class="help-text">
+          <p data-i18n-html="helpS2a">Cada pixel de uma imagem tem valores de cor (vermelho, verde, azul). O bit menos significativo (LSB) de cada valor pode ser alterado sem mudança visível na imagem. A esteganografia LSB escreve a mensagem nesses bits.</p>
+          <p data-i18n-html="helpS2b">Por isso a imagem portadora é sempre salva como um <b>PNG novo (sem perda)</b> — os bits precisam de um formato lossless para sobreviver. Você pode partir de qualquer imagem, inclusive JPEG: a ferramenta a converte e embute a mensagem no PNG de saída. O que destrói a mensagem é recomprimir <b>depois</b> (salvar como JPEG de novo, ou reenviar por redes sociais como foto).</p>
+          <p data-i18n-html="helpS2c">Há duas formas de escrever o LSB. O <b>LSB Replacement (LSBR)</b> simplesmente sobrescreve o bit — simples, mas deixa uma assimetria par/ímpar estrutural que ataques estatísticos detectam com facilidade. Já o <b>LSB Matching (LSBM)</b> soma ou subtrai 1 aleatoriamente para chegar ao mesmo bit, sem deixar essa assimetria. O STEGO·STUDIO usa <b>LSBM</b>, muito mais difícil de detectar que o LSBR usado por ferramentas como OpenStego e OpenPuff.</p>
+          <p data-i18n-html="helpS2d">Por padrão, a mensagem é escrita só no <b>canal azul</b> (~1 bit por pixel), o que dá o menor impacto visual. O <b>modo alta capacidade (RGB)</b> espalha a mensagem pelos três canais de cor, triplicando o espaço disponível (~3 bits por pixel) — útil para mensagens grandes. Em troca, mexer nos três canais é um pouco mais detectável que mexer só no azul. A imagem registra qual modo foi usado, então a decodificação é automática.</p>
+        </div>
+      </details>
+      <details class="help-section">
+        <summary data-i18n="helpRbTitle">As duas imagens: mais furtiva e mais resistente</summary>
+        <div class="help-text">
+          <p data-i18n-html="helpRbA"></p>
+          <p data-i18n-html="helpRbB"></p>
+          <p data-i18n-html="helpRbC"></p>
+          <p data-i18n-html="helpRbD"></p>
+          <p data-i18n-html="helpRbE"></p>
+        </div>
+      </details>
+      <details class="help-section">
+        <summary data-i18n="helpSecProtTitle">Proteção e furtividade</summary>
+        <div class="help-text">
+          <p data-i18n-html="helpProtA">Quando você define uma <b>senha</b>, a mensagem é cifrada com <b>AES-256-GCM</b> (chave derivada por <b>Argon2id</b>) antes de ser embutida. Mesmo que alguém extraia os bits, o conteúdo é ilegível sem a senha — e qualquer adulteração é detectada.</p>
+          <p data-i18n-html="helpProtB">A senha também <b>embaralha a ordem</b> em que os bits da mensagem são distribuídos pela imagem. Sem ela, mesmo quem souber que é LSB e extrair os bits na ordem física obtém uma sequência embaralhada.</p>
+          <p data-i18n-html="helpProtD">Definir uma senha também <b>oculta o cabeçalho</b>, sem passo extra. Normalmente o cabeçalho carrega uma assinatura fixa ("STEGO") que outras ferramentas usam para perceber que há algo embutido; com senha, ela é cifrada e some — sem a senha, o cabeçalho é indistinguível de ruído. Não é um modo à parte: acontece sozinho sempre que há senha.</p>
+          <p data-i18n-html="helpProtC">Independentemente da senha, ao <b>posicionar</b> os bits a ferramenta segue dois caminhos e escolhe sozinha. No padrão (furtividade máxima), usa <b>códigos síndrome-treliça (STC) sobre um mapa de custo HILL</b>: entre todas as formas de codificar a sua mensagem, escolhe a que altera os pixels de <b>menor custo</b> — as regiões de textura e ruído, fugindo das áreas lisas onde os ataques estatísticos RS/WS mais enxergam. É o menor rastro possível para aquela imagem, e usa só o canal azul.</p>
+          <p data-i18n-html="helpProtStc">O outro caminho é o <b>Modo de Alta Capacidade (RGB)</b>: quando você liga "Modo de Alta Capacidade" — ou automaticamente, quando a mensagem não cabe no furtivo — os bits se espalham pelos três canais de cor, triplicando o espaço disponível. Em troca, mexer nos três canais é um pouco mais detectável. A imagem registra qual caminho foi usado, então decodificar é sempre automático.</p>
+          <p data-i18n-html="helpProtE">Tudo isso se soma automaticamente: uma mensagem com senha fica <b>cifrada (AES-256-GCM)</b>, com <b>ordem embaralhada</b> e <b>sem cabeçalho reconhecível</b>, e o corpo é colocado por <b>STC no mapa HILL</b> no modo padrão. Você não monta nada disso à mão — cada camada cobre um tipo diferente de análise, e a ferramenta aplica o que faz sentido para o que você pediu.</p>
+        </div>
+      </details>
+      <details class="help-section">
+        <summary data-i18n="helpSecDecTitle">O Decoder — o que ele lê, e o que não lê</summary>
+        <div class="help-text">
+          <p data-i18n-html="helpDecA">Não existe um passo separado de "decodificar". O único botão de análise identifica o formato real pelos próprios bytes do arquivo, roda a análise forense e tenta a extração com todos os motores disponíveis. Quando o resultado aparece, tudo isso já aconteceu.</p>
+          <div data-i18n-html="helpDecB">O que ele lê.</div>
+          <div data-i18n-html="helpDecC">O que ele não lê, e por quê.</div>
+          <div data-i18n-html="helpDecD">Limites honestos.</div>
+        </div>
+      </details>
+      <details class="help-section">
+        <summary data-i18n="helpS3Title">Threat Score — suspeita de mensagem oculta</summary>
+        <div class="help-text">
+          <p data-i18n-html="helpS3a">Mede a probabilidade de haver conteúdo escondido. Combina vários sinais: header de protocolo conhecido, texto recuperado pelo investigador, anomalias estatísticas nos LSBs (chi-quadrado), strings suspeitas, dados após o fim do arquivo, e mais.</p>
+          <p data-i18n-html="helpS3b">Quando o investigador profundo recupera texto legível, esse é o sinal mais forte. Mensagens cifradas não podem ser lidas sem a chave, mas a aleatoriedade estatística que deixam nos LSBs levanta a suspeita.</p>
+          <p data-i18n-html="helpS3c">O analisador também roda dois <b>ataques estruturais</b> — RS (Regular–Singular) e WS (Weighted Stego) — que detectam especificamente o <b>LSB Replacement</b> e estimam quanto da imagem carrega payload. Quando os dois concordam, é forte indício de que a imagem foi feita com uma ferramenta como OpenStego ou OpenPuff. Esses testes não acusam o LSB Matching, então as próprias imagens do STEGO·STUDIO passam limpas por eles.</p>
+          <p data-i18n-html="helpS3d">Há ainda uma <b>heurística de embedding neural</b>, que procura a assinatura típica de métodos baseados em GAN como o SteganoGAN: os três canais de cor com planos LSB quase idênticos e ruído de alta frequência muito simétrico entre eles. Quando isso aparece, a ferramenta levanta uma <b>suspeita</b> — nunca uma certeza. O núcleo no navegador não confirma isso — quem faz essa checagem é o <b>modo Pro</b> (modelos neurais no servidor), quando disponível; o padrão também pode surgir em algumas imagens texturizadas ou sintéticas. Trate como pista, não como veredito.</p>
+        </div>
+      </details>
+      <details class="help-section">
+        <summary data-i18n="helpS4Title">Probabilidade de origem</summary>
+        <div class="help-text">
+          <p data-i18n-html="helpS4a">Estima se a imagem é <b>fotografia</b>, <b>screenshot</b>, <b>arte digital/3D</b> ou <b>sintética (IA)</b>. Cada categoria recebe um score independente de 0 a 100 — vários podem ser altos ao mesmo tempo, porque uma imagem pode ter características de mais de uma origem.</p>
+          <p data-i18n-html="helpS4b">O maior score indica a origem mais provável. Scores próximos entre si significam que a ferramenta não conseguiu distinguir com confiança.</p>
+          <p data-i18n-html="helpS4c">Alguns sinais técnicos servem a mais de uma categoria. Para evitar repetição, cada indicador aparece na categoria onde tem maior peso.</p>
+        </div>
+      </details>
+      <details class="help-section">
+        <summary data-i18n="helpS5Title">Como cada origem é detectada</summary>
+        <div class="help-text">
+          <p data-i18n-html="helpS5a"><b>Fotografia</b> — EXIF de câmera física (firmware não é forjável por IA), ruído de sensor, alta diversidade cromática.</p>
+          <p data-i18n-html="helpS5b"><b>Screenshot</b> — bordas perfeitamente nítidas, ausência de ruído de sensor, paleta de interface, dimensões típicas de tela.</p>
+          <p data-i18n-html="helpS5c"><b>Arte digital / 3D</b> — sem ruído de sensor, bordas regulares, paleta controlada, gradientes artificiais.</p>
+          <p data-i18n-html="helpS5d"><b>Sintética / IA</b> — entropia regional uniforme, gradientes suavizados demais, crominância uniforme, ou metadados C2PA/EXIF que declaram geração por IA.</p>
+        </div>
+      </details>
+      <details class="help-section">
+        <summary data-i18n="helpS6Title">Limitações</summary>
+        <div class="help-text">
+          <p data-i18n-html="helpS6a">Esta é uma ferramenta <b>heurística</b>, não um classificador definitivo. Ela analisa propriedades estatísticas e metadados, sem rede neural — o <b>modo Pro opcional</b>, à parte, acrescenta modelos neurais rodando num servidor.</p>
+          <p data-i18n-html="helpS6b">Casos difíceis: imagens recomprimidas por redes sociais (que apagam metadados e alteram pixels), fotos muito editadas, e imagens de IA de última geração que imitam ruído de câmera. Use os resultados como <b>indício investigativo</b>, cruzando com outras evidências — não como prova isolada.</p>
+          <p data-i18n-html="helpS6c">No lado da esteganografia, a ferramenta detecta com confiança o <b>LSB Replacement</b> (via RS/WS) e mensagens em texto puro ou fracamente ocultas. Para métodos neurais como o SteganoGAN ela oferece apenas uma heurística de <b>nível de suspeita</b> — consegue sinalizar a assinatura tipo GAN, mas não confirmá-la sem o modelo treinado, que não roda no navegador. Ela <b>não</b> detecta com confiabilidade métodos adaptativos como HILL, UNIWARD ou J-UNIWARD. Detectá-los exige modelos neurais treinados, que não rodam em navegador — então esta ferramenta simplesmente não os detecta. É um limite real, não temporário: <b>a ausência de detecção aqui não é evidência de que a imagem esteja limpa.</b> Se você precisa desse nível de análise, use um toolbox dedicado de esteganálise como o <b>Aletheia</b>, de Daniel Lerch (MIT, <code>github.com/daniellerch/aletheia</code>).</p>
+        </div>
+      </details>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Histórico de versões -->
+<div class="modal-overlay" id="changelog-overlay">
+  <div class="help-box">
+    <div class="help-head">
+      <span class="help-title" data-i18n="changelogTitle">Histórico de versões</span>
+      <span class="help-close" id="changelog-close-btn">✕</span>
+    </div>
+    <div class="help-content" id="changelog-content"><!-- preenchido via JS --></div>
+  </div>
+</div>
+
+<footer class="site-footer">
+  <div class="footer-credits"><span data-i18n="footerCredit">Idealizado por RASC e desenvolvido por JOI</span> <span class="footer-heart">♥</span></div>
+  <div class="footer-opensource" data-i18n="footerOpensource">Opensource Code</div>
+</footer>
+
+<div id="paste-anchor" tabindex="0" style="position:fixed;opacity:0;pointer-events:none;width:1px;height:1px;top:0;left:0" aria-hidden="true"></div>
+<canvas id="canvas" style="display:none"></canvas>
+
+<!-- hash-wasm Argon2id (UMD, wasm base64 embutido) — usado no KDF do AES (FRENTE #9).
+     Single-file/offline: nada de CDN. Expõe globalThis.hashwasm.argon2id. -->
+<script>
+/*BUILD:HASHWASM*/
+</script>
+
+<script>
+/*BUILD:APP*/
+</script>
+</body>
+</html>
+

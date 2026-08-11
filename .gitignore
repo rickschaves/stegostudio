@@ -1,0 +1,42 @@
+# ── Saída do build ──────────────────────────────────────────────────────────
+# Gerada por `node build.js`. O HTML da versão publicada vive em HTML_PRODUCAO/
+# e esse sim é versionado.
+dist/
+
+# ── Binários reconstruíveis ─────────────────────────────────────────────────
+# Fontes e estáticos de deploy vivem em ASSETS_BASE64.md (texto, com SHA-256).
+# `node unpack_assets.js` os recria. Versionar os dois seria duplicar bytes e
+# abrir espaço para divergirem.
+src/fonts/
+deploy/
+
+# ── Backend do antigo Modo Pro ──────────────────────────────────────────────
+# Removido na v2.40.0. NÃO republicar: o start.sh carregava uma chave de API em
+# texto puro, e um segredo commitado permanece no histórico para sempre.
+server.py
+start.sh
+start.sh.example
+stego_benchmark.py
+requirements.txt
+aletheia-env*/
+
+# ── Documentos internos ─────────────────────────────────────────────────────
+# Roadmap e contextos de trabalho contêm decisões internas e discussões que não
+# pertencem ao repositório público.
+docs/ROADMAP_STEGO_STUDIO.md
+docs/STEGO_STUDIO_CONTEXTO_BASTÃO.md
+docs/STEGO_STUDIO_CONTEXTO_ORIGINAL.md
+docs/LEIA-ME.md
+
+# ── Ambiente ────────────────────────────────────────────────────────────────
+node_modules/
+.env
+.env.*
+*.log
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+*.swp
+*~
