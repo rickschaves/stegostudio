@@ -182,7 +182,7 @@ document.getElementById('btn-analyze').addEventListener('click', async ()=>{
       } else {
         const maxBytes=Math.min(Math.floor(decID.width*decID.height/8),8000);
         const generic=extractLSBRaw(decID,maxBytes);
-        const hasC2PA=report.c2pa?.found||report.c2pa?.confirmed;
+        const hasC2PA=report.c2pa?.found||report.c2pa?.manifestDetected;
 
         // Com chave: tenta decifrar os bytes brutos (AES novo ou XOR legado)
         if(key.length>0){
@@ -343,7 +343,7 @@ document.getElementById('btn-analyze').addEventListener('click', async ()=>{
 // ════════════════════════════════════════
 document.getElementById('btn-export-json').addEventListener('click',()=>{
   if(!lastReport) return;
-  const payload={_tool:'STEGO·STUDIO v2.41.0',_schema:'forensic-report-v2',
+  const payload={_tool:'STEGO·STUDIO v2.42.0',_schema:'forensic-report-v2',
     _hint:t('exportHintJSON'),
     ...lastReport};
   const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});

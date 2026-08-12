@@ -7,6 +7,79 @@
 
 ---
 
+## v2.42.0 — 2026-08-11
+**Hardening de segurança: XSS, C2PA falso e veto de EXIF**
+
+Resposta a uma auditoria externa. Os três achados foram **reproduzidos com
+arquivos forjados** antes de qualquer correção — nada aceito só na leitura.
+
+### 🔴 1. XSS via metadados (P0, estava em PRODUÇÃO)
+`row()` interpolava `val` em HTML sem escape, e a linha 545 passava
+`r.exif.fields[k]` — texto cru vindo do arquivo. **Reproduzido:** JPEG com
+`Make = <img src=x onerror=alert(1)>` produzia a tag intacta no DOM.
+
+Correção de duas peças:
+- `row()` escapa **sempre**; markup interno legítimo migra para `rowHTML()`,
+  tornando a decisão visível na chamada.
+- `escapeHTML()` passou a escapar **aspas** (`"` e `'`) além de `& < >` — dado
+  do arquivo também é interpolado dentro de atributos, onde uma aspa solta
+  fecha o atributo e abre espaço para um handler.
+
+**Vetor que a auditoria não viu:** `r.lsb.decodedSample` — conteúdo
+**decodificado do próprio arquivo** — também ia cru para o HTML. Escapado.
+(`decodedMsg` já usava `textContent`, correto.)
+
+**Correção técnica à auditoria:** `<script>` via `innerHTML` **não executa** nos
+navegadores. O vetor real é handler de evento (`onerror`), que é o que passou.
+
+**12º invariante:** `XSS: metadados hostis saem como texto` extrai `escapeHTML`,
+`row` e `rowHTML` do HTML construído e roda 6 payloads. Validado por **dupla
+injeção de falha** (remover escape da `row`; tirar aspas do `escapeHTML`).
+As duas primeiras versões do check tinham falso positivo — procuravam
+`onerror=` na string, acusando `&lt;img onerror=...&gt;`, que é o resultado
+correto. O invariante certo: nenhum metacaractere cru sobrevive.
+
+### 🔴 2. C2PA "confirmado" sem validação
+`text.includes('JUMB')` em qualquer ponto dos bytes bastava. **Reproduzido:**
+71 bytes num comentário JPEG → `confirmed=true`, `aiGenerator='Midjourney'`.
+E isso alimentava supressão de sinais **moles** de esteganografia.
+
+- **Estrutura, não texto:** nova `findC2PAContainers()` exige o marcador no
+  **APP11** (JPEG) ou chunk **caBX** (PNG), que é onde a norma põe o JUMBF.
+- **Renome:** `confirmed` → `manifestDetected` em 13 pontos. O nome mentia.
+- **Textos (EN+PT):** de "prova criptográfica" para "encontrou a declaração,
+  não conferiu a assinatura"; badge de `CONFIRMADO — IA CERTIFICADA` para
+  `MANIFESTO DE IA DETECTADO`.
+
+**Discriminação verificada:** APP11 legítimo → detecta; comentário forjado →
+não; arquivo limpo → silêncio.
+
+**Validação criptográfica real → F16 no ROADMAP.**
+
+### 🟠 3. Veto de câmera por EXIF não autenticado
+Dois defeitos:
+- **Código contradizia o próprio comentário.** O comentário dizia "Make + Model
+  + ExifIFD"; o código fazia `Make || Model`, **descartando o ExifIFD** que a
+  linha do tag 0x8769 já havia detectado. Agora exige os três.
+- **Teto absoluto de 15** virava veredito a partir de texto forjável. Agora
+  atenua proporcionalmente (`score≥70 → max(15, score*0.45)`): EXIF pesa, mas
+  não apaga sinal de pixel forte.
+- **Texto removido:** "firmware de câmera não é forjável por IA" — falso, em
+  duas línguas. Substituído por "EXIF é escrito por software e não é
+  autenticado".
+
+### Frase final do harness
+De "TODOS OS N TESTES PASSARAM — seguro para build/deploy" para "INVARIANTES
+PASSARAM — build consistente para deploy", com ressalva explícita de que **não
+é suíte de segurança**. A auditoria estava certa: os invariantes provam
+consistência de build, não segurança do software.
+
+### Validação
+Harness **12/12**, i18n **694/694**. Três achados reproduzidos e re-testados
+contra os mesmos arquivos forjados. Controle negativo em C2PA legítimo.
+
+---
+
 ## v2.41.0 — 2026-08-11
 **Licença GPL-3.0 e código-fonte publicado**
 

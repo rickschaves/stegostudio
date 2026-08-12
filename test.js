@@ -215,6 +215,55 @@ check('eventos: alvos no DOM + funções definidas', () => {
 });
 
 // ---------------------------------------------------------------------------
+// CHECK 12 — XSS: dado vindo do ARQUIVO nunca vira markup
+//
+// O modelo de ameaça desta ferramenta é "abrir uma imagem suspeita", então
+// metadado é entrada hostil. Até a v2.41.0 um EXIF com
+// `Make = <img src=x onerror=...>` executava script na página.
+// Este check extrai as funções REAIS do HTML construído e as roda contra
+// payloads hostis; falha se algum sobreviver como tag ou handler.
+// ---------------------------------------------------------------------------
+check('XSS: metadados hostis saem como texto, não markup', () => {
+  const esc = html.match(/function escapeHTML\(s\)\s*\{[\s\S]*?\n\}/);
+  assert(esc, 'escapeHTML não encontrado no HTML final');
+  const escapeHTML = new Function(esc[0] + '\nreturn escapeHTML;')();
+  for (const c of ['&', '<', '>', '"', "'"]) {
+    assert(escapeHTML(c) !== c, `escapeHTML não escapa ${c} — atributos ficam abertos`);
+  }
+  const rowSrc = html.match(/function row\(label, val, cls=''\)\s*\{[\s\S]*?\n\}/);
+  const rowHtmlSrc = html.match(/function rowHTML\(label, html, cls=''\)\s*\{[\s\S]*?\n\}/);
+  assert(rowSrc && rowHtmlSrc, 'row/rowHTML não encontrados no HTML final');
+  const row = new Function('escapeHTML', rowHtmlSrc[0] + '\n' + rowSrc[0] + '\nreturn row;')(escapeHTML);
+
+  const payloads = [
+    '<img src=x onerror=alert(1)>',
+    '<script>alert(1)</script>',
+    '"><img src=x onerror=alert(1)>',
+    "' onmouseover='alert(1)",
+    '<svg/onload=alert(1)>',
+    '<iframe src=javascript:alert(1)>',
+  ];
+  // O invariante correto é simples: na porção que veio do arquivo não pode
+  // sobrar NENHUM metacaractere de HTML cru. Sem `<` e `>` nenhuma tag se
+  // forma, e sem aspas nenhum atributo é fechado — daí `onerror=` como texto
+  // é inerte. Procurar por "onerror=" na string é o teste errado: ele acusa
+  // `&lt;img onerror=...&gt;`, que é exatamente o resultado desejado. (As duas
+  // primeiras versões deste check erraram assim.)
+  for (const p of payloads) {
+    const out = row('Make', p, '');
+    const doArquivo = out
+      .replace(/^<div><span style="color:var\(--dim\)">[^<]*<\/span> <span class="[^"]*">/, '')
+      .replace(/<\/span><\/div>$/, '');
+    for (const [ch, nome] of [['<','menor'],['>','maior'],['"','aspas duplas'],["'",'aspas simples']]) {
+      assert(!doArquivo.includes(ch), `${nome} cru sobreviveu no payload: ${p}`);
+    }
+    assert(doArquivo.length > 0, `payload sumiu por completo — extração do teste quebrou: ${p}`);
+  }
+  assert(row('L', '<b>x</b>', '').includes('&lt;b&gt;'), 'row() não está escapando');
+  return `${payloads.length} payloads neutralizados`;
+});
+
+// ---------------------------------------------------------------------------
 // Relatório
 // ---------------------------------------------------------------------------
 console.log('\n  STEGO·STUDIO — harness de teste\n');
@@ -225,7 +274,9 @@ for (const r of results) {
 }
 console.log('');
 if (failed === 0) {
-  console.log(`  ✓ TODOS OS ${results.length} TESTES PASSARAM — seguro para build/deploy.\n`);
+  console.log(`  ✓ TODOS OS ${results.length} INVARIANTES PASSARAM — build consistente para deploy.`);
+  console.log('    (invariantes de build e um de XSS; NÃO é uma suíte de segurança —');
+  console.log('     não há round-trip cripto/estego nem corpus malformado. Ver F17.)\n');
   process.exit(0);
 } else {
   console.log(`  ✗ ${failed} de ${results.length} FALHARAM — corrigir antes do deploy.\n`);

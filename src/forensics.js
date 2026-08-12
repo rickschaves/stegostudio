@@ -117,13 +117,53 @@ function c2paActionDescriptions(buf) {
   return out;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Localiza os contêineres onde a norma C2PA de fato guarda o manifesto JUMBF:
+//   • JPEG — segmento APP11 (0xFFEB)
+//   • PNG  — chunk caBX
+// Devolve [{kind, text}] com o conteúdo de cada um. Texto solto no meio dos
+// pixels ou num comentário JPEG NÃO entra aqui, e é essa a diferença entre
+// "o arquivo carrega um manifesto" e "o arquivo contém a palavra c2pa".
+// Isto NÃO valida assinatura, certificado nem hash — ver F16 no ROADMAP.
+// ─────────────────────────────────────────────────────────────────────────────
+function findC2PAContainers(bytes) {
+  const out = [];
+  const dec = (a, b) => new TextDecoder('utf-8', {fatal:false}).decode(bytes.subarray(a, Math.min(b, a + 65536)));
+  try {
+    if (bytes[0] === 0xFF && bytes[1] === 0xD8) {           // JPEG
+      let off = 2;
+      while (off + 4 < bytes.length) {
+        if (bytes[off] !== 0xFF) break;
+        const marker = bytes[off + 1];
+        if (marker === 0xDA || marker === 0xD9) break;      // SOS/EOI
+        if (marker >= 0xD0 && marker <= 0xD8) { off += 2; continue; }
+        const len = (bytes[off + 2] << 8) | bytes[off + 3];
+        if (len < 2) break;
+        if (marker === 0xEB) out.push({kind:'app11', text: dec(off + 4, off + 2 + len)});
+        off += 2 + len;
+      }
+    } else if (bytes[0] === 0x89 && bytes[1] === 0x50) {    // PNG
+      let off = 8;
+      while (off + 8 <= bytes.length) {
+        const len  = (bytes[off]<<24 | bytes[off+1]<<16 | bytes[off+2]<<8 | bytes[off+3]) >>> 0;
+        const type = String.fromCharCode(bytes[off+4], bytes[off+5], bytes[off+6], bytes[off+7]);
+        if (type === 'IEND') break;
+        if (type === 'caBX') out.push({kind:'caBX', text: dec(off + 8, off + 8 + len)});
+        off += 12 + len;
+        if (len > bytes.length) break;
+      }
+    }
+  } catch (_) {}
+  return out;
+}
+
 async function parseC2PA(file) {
   return new Promise(res => {
     const r = new FileReader();
     r.onload = e => {
       const result = {
         found: false,
-        confirmed: false,
+        manifestDetected: false,
         aiGenerator: null,
         ca: null,
         certDate: null,
@@ -141,16 +181,22 @@ async function parseC2PA(file) {
         // ── Detectar presença de manifesto JUMBF/C2PA ──
         // Exige evidências explícitas de C2PA — não basta namespace Adobe/XMP genérico
         // XMP do Picasa/Photoshop contém "adobe:ns:meta" mas NÃO é C2PA
-        const hasJUMB   = text.includes('JUMB') || text.includes('jumbf');
-        const hasC2PA   = text.includes('c2pa.org') || text.includes('c2pa/') ||
-                          /\bc2pa\b/i.test(text);
-        // "jumbf manifest" explícito — não apenas "manifest" genérico (XMP usa isso)
-        const hasManifest = text.includes('jumbf manifest') ||
-                            text.includes('c2pa.manifest') ||
-                            text.includes('caBX'); // chunk PNG de C2PA
+        // ⚠️ v2.42.0 — ESTRUTURA, não texto solto.
+        // Antes bastava a string "JUMB" ou "c2pa" aparecer EM QUALQUER LUGAR dos
+        // bytes. Um comentário JPEG de 71 caracteres produzia "C2PA confirmado"
+        // com gerador de IA identificado — zero criptografia envolvida.
+        // Agora o marcador precisa estar no CONTÊINER certo: segmento APP11 no
+        // JPEG (onde a norma põe o JUMBF) ou chunk caBX no PNG. Isso não é
+        // validação criptográfica — continua sendo detecção — mas forjar exige
+        // montar a estrutura do formato, não escrever texto num comentário.
+        const c2paBoxes = findC2PAContainers(bytes);
+        const hasJUMB     = c2paBoxes.some(b => b.kind === 'app11' || b.kind === 'caBX');
+        const boxText     = c2paBoxes.map(b => b.text).join('\n');
+        const hasC2PA     = /c2pa\.org|c2pa\/|\bc2pa\b/i.test(boxText);
+        const hasManifest = /jumbf manifest|c2pa\.manifest/i.test(boxText);
 
-        // Só marca como encontrado se houver evidência C2PA real
-        const c2paEvidence = hasJUMB || hasC2PA || hasManifest;
+        // Evidência = marcador dentro do contêiner do formato.
+        const c2paEvidence = hasJUMB && (hasC2PA || hasManifest || c2paBoxes.length > 0);
         if (c2paEvidence) {
           result.found = true;
           result.manifestPresent = true;
@@ -165,8 +211,8 @@ async function parseC2PA(file) {
         // confirma nada. (O resto da função já segue essa mesma regra.)
         if (c2paEvidence) {
           for (const s of C2PA_AI_SOURCES) {
-            if (s.rx.test(text)) {
-              result.confirmed = true;
+            if (s.rx.test(boxText)) {
+              result.manifestDetected = true;
               const lbl = s.key ? t(s.key) : s.label;
               result.aiGenerator = result.aiGenerator || lbl;
               result.signals.push(t('c2paGenIdentified').replace('{gen}', lbl));
@@ -182,7 +228,7 @@ async function parseC2PA(file) {
           result.digitalSourceType = dstMatch[1].replace(/[^a-zA-Z\/]/g,'').slice(0,60);
           result.found = true;
           if (/trainedAlgorithm|compositeWith/i.test(result.digitalSourceType)) {
-            result.confirmed = true;
+            result.manifestDetected = true;
             result.signals.push(`IPTC digitalSourceType: ${result.digitalSourceType}`);
           }
         }
@@ -519,7 +565,7 @@ async function runForensics(imageData, file, onProgress=()=>{}, sharedDec=null) 
   onProgress(9, PIPELINE_STEPS[8]);
   report.chroma = analyzeChrominance(imageData);
   report.exif  = await parseEXIF(file).catch(()=>({found:false,fields:{},aiSoftware:null,hasCamera:false,hasGPS:false,noExif:true}));
-  report.c2pa  = await parseC2PA(file).catch(()=>({found:false,confirmed:false,aiGenerator:null,ca:null,certDate:null,digitalSourceType:null,manifestPresent:false,signals:[],rawSoftware:null}));
+  report.c2pa  = await parseC2PA(file).catch(()=>({found:false,manifestDetected:false,aiGenerator:null,ca:null,certDate:null,digitalSourceType:null,manifestPresent:false,signals:[],rawSoftware:null}));
   if(!report.exif.found){
     report.exif.noExif = fmt.ext==='JPEG' || file.type==='image/png';
   }
@@ -534,7 +580,7 @@ async function runForensics(imageData, file, onProgress=()=>{}, sharedDec=null) 
   else if(wExact||hExact){aiScore+=10;aiSignals.push({labelKey:'aiLblDimPartial',detailKey:'aiDetDimPartial',detailVars:{w:w,h:h},level:'info'});}
 
   // C2PA — indicador definitivo, peso máximo
-  if(report.c2pa?.confirmed){
+  if(report.c2pa?.manifestDetected){
     aiScore+=85;
     const c2paDetail=[
       report.c2pa.aiGenerator?t('c2paGenPrefix').replace('{gen}',report.c2pa.aiGenerator):null,
@@ -680,7 +726,7 @@ async function runForensics(imageData, file, onProgress=()=>{}, sharedDec=null) 
   }
 
   // PNG sem EXIF — peso reduzido (é o mais fraco isolado)
-  if(file.type==='image/png'&&file.size>200000&&!report.c2pa?.confirmed&&!report.exif.aiSoftware){
+  if(file.type==='image/png'&&file.size>200000&&!report.c2pa?.manifestDetected&&!report.exif.aiSoftware){
     aiScore+=5;aiSignals.push({labelKey:'aiLblPNGNoEXIF',
       detailKey:'aiDetPNGNoEXIF',level:'info'});
   }
@@ -691,14 +737,19 @@ async function runForensics(imageData, file, onProgress=()=>{}, sharedDec=null) 
   // Quando presente e sem nenhum sinal de IA nos metadados, a evidência documental
   // supera a heurística de pixel: o score recebe um teto baixo.
   let cameraVeto = false;
-  if (report.exif.hasCamera && !report.exif.aiSoftware && !report.c2pa?.confirmed) {
+  if (report.exif.hasCamera && !report.exif.aiSoftware && !report.c2pa?.manifestDetected) {
     cameraVeto = true;
-    // Teto de 15 — pode haver foto real editada, mas não é IA gerada
-    const capped = Math.min(aiScore, 15);
-    if (aiScore > 15) {
+    // v2.42.0 — era teto absoluto de 15. Mas EXIF não é autenticado: um teto
+    // duro deixava qualquer arquivo com Make/Model forjado zerar o score de IA.
+    // Agora o EXIF ATENUA em vez de decidir — o sinal de pixel continua
+    // pesando, e um score altíssimo não desaba para 15 por causa de um campo
+    // de texto. 15 vira piso do teto, não veredito.
+    const capped = aiScore >= 70 ? Math.max(15, Math.round(aiScore * 0.45))
+                                 : Math.min(aiScore, 15);
+    if (aiScore > capped) {
       aiSignals.unshift({
         labelKey:'aiLblCameraConfirmed',
-        detail: t('aiVetoDetail').replace('{make}',report.exif.fields?.Make||'?').replace('{model}',report.exif.fields?.Model||''),
+        detail: t('aiVetoDetail').replace('{make}',escapeHTML(report.exif.fields?.Make||'?')).replace('{model}',escapeHTML(report.exif.fields?.Model||'')),
         level: 'info'
       });
     }
@@ -740,7 +791,7 @@ async function runForensics(imageData, file, onProgress=()=>{}, sharedDec=null) 
   const chromaFlat = !!(report.chroma && (report.chroma.uniformChroma ||
     parseFloat(report.chroma.avgSaturation) < 5));
   let digitalRenderVeto = false;
-  if (!vectorArtVeto && !cameraVeto && !report.c2pa?.confirmed &&
+  if (!vectorArtVeto && !cameraVeto && !report.c2pa?.manifestDetected &&
       !report.exif?.aiSoftware && uniqueColors < 2000 &&
       parseFloat(report.entropy.shannon) < 4.0 && chromaFlat) {
     digitalRenderVeto = true;
@@ -882,9 +933,9 @@ function computeOrigin(r, file, fmt) {
   // Reaproveita o aiScore já calculado. Os sinais detalhados com seus pesos estão no
   // módulo "Detecção de Imagem Sintética" — aqui mostramos um resumo sem pesos redundantes.
   let synth = ai.score || 0; const synthSig = [];
-  if (r.c2pa?.confirmed) synthSig.push({labelKey:'sigC2PAConfirmed', weight:null});
+  if (r.c2pa?.manifestDetected) synthSig.push({labelKey:'sigC2PAConfirmed', weight:null});
   if (exif.aiSoftware) synthSig.push({labelKey:'sigAISoftwareEXIF', weight:null});
-  if (ai.score >= 45 && !r.c2pa?.confirmed && !exif.aiSoftware) synthSig.push({labelKey:'sigSyntheticPixels', weight:null});
+  if (ai.score >= 45 && !r.c2pa?.manifestDetected && !exif.aiSoftware) synthSig.push({labelKey:'sigSyntheticPixels', weight:null});
   // Quando o veto de gráfico digital limitou o score, a categoria ficava com
   // pontuação e NENHUM sinal explicando — um número sem justificativa visível.
   // Este sinal fecha essa lacuna: diz por que o score existe e por que parou ali.
@@ -950,7 +1001,7 @@ function consolidateVerdict(r, decodedMsg, decodeStatus, fromDeepScan) {
   // PRIORIDADE stego: o neural só é vetado por C2PA confirmado (origem IA
   // provada) ou por ser outguess isolado (artefato JPEG). "Parecer sintético"
   // NÃO veta — pode ser a própria esteganografia imitando IA.
-  const aiProven = !!(r.c2pa?.confirmed);
+  const aiProven = !!(r.c2pa?.manifestDetected);
   const onlyOutguess = flagged.length === 1 && flagged[0] === 'outguess';
   const lsbFamilyHigh = (na.lsbr?.probability >= 0.9) || (na.lsbm?.probability >= 0.9);
   const structuralCorroborates = hasHeader || robustOk || rsRate >= 25 || (wsRate >= 25 && wsReliable) ||
@@ -1033,7 +1084,7 @@ function computeThreat(r) {
   // mensagem. Escotilha de segurança: a evidência dura abaixo (header STEGO, dado após
   // EOF, stegomalware, LSBR estrutural, RS≥25%, cifra ou texto oculto real) desliga a
   // supressão — então um embedding REAL numa imagem C2PA continua acusando.
-  const aiProvenC2PA = !!(r.c2pa?.confirmed);
+  const aiProvenC2PA = !!(r.c2pa?.manifestDetected);
   const _printR = parseFloat(r.lsb?.printableRatio) || 0;
   const _realHiddenText = r.lsb?.available && r.lsb?.suspicious && r.lsb?.foundText &&
                           (r.lsb?.headerName || _printR > 70);
@@ -1140,7 +1191,7 @@ function computeThreat(r) {
     const lowComplexityCover = r.frequency?.biasLowComplexity === true;
 
     // Veto forte: origem IA comprovada por C2PA → falso-positivo quase certo.
-    const aiProven = !!(r.c2pa?.confirmed);
+    const aiProven = !!(r.c2pa?.manifestDetected);
 
     // Corroboração estrutural (reforça confiança, mas não é obrigatória).
     const rsRate = parseFloat(r.lsb?.rsRate) || 0;
@@ -1415,8 +1466,16 @@ async function parseEXIF(file) {
                 } catch(_) {}
               }
 
-              // Câmera real tem Make + Model + ExifIFD
-              result.hasCamera = !!(result.fields['Make'] || result.fields['Model']);
+              // ⚠️ v2.42.0 — o comentário dizia "Make + Model + ExifIFD" e o código
+              // fazia `Make OU Model`, descartando o ExifIFD que a linha do tag
+              // 0x8769 já havia detectado. Agora o código cumpre o que promete:
+              // os três, porque um EXIF montado à mão costuma trazer só Make.
+              // Continua sendo EXIF — não autenticado, forjável por qualquer
+              // editor. É evidência de apoio, nunca prova (ver aiVetoDetail).
+              result.hasExifIFD = result.hasCamera;   // vem do tag 0x8769
+              result.hasCamera  = !!(result.fields['Make'] && result.fields['Model'] && result.hasExifIFD);
+              result.cameraPartial = !result.hasCamera &&
+                                     !!(result.fields['Make'] || result.fields['Model']);
             }
             offset += 2 + segLen;
           } else if ((marker & 0xFF00) === 0xFF00) {

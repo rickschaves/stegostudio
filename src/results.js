@@ -109,8 +109,18 @@ function renderGroupHeader(label, type) {
   document.getElementById('modules-wrap').appendChild(div);
 }
 
+// ⚠️ SEGURANÇA — `val` é escapado SEMPRE.
+// Metadados (EXIF, C2PA) e amostras decodificadas vêm de DENTRO do arquivo
+// analisado, e o modelo de ameaça desta ferramenta é justamente "abrir uma
+// imagem suspeita". Um `Make` contendo `<img src=x onerror=...>` executava
+// script na página (corrigido na v2.42.0). Arquivo é hostil por definição.
+// Quem precisa de markup interno usa rowHTML(), e a decisão fica visível na
+// chamada em vez de escondida no dado.
 function row(label, val, cls='') {
-  return `<div><span style="color:var(--dim)">${label}:</span> <span class="${cls} finding">${val}</span></div>`;
+  return rowHTML(label, escapeHTML(val), cls);
+}
+function rowHTML(label, html, cls='') {
+  return `<div><span style="color:var(--dim)">${escapeHTML(label)}:</span> <span class="${cls} finding">${html}</span></div>`;
 }
 
 function renderLeakModule(r){
@@ -239,7 +249,7 @@ function renderResults(r, decodedMsg, decodeStatus) {
   // backend neural, abaixo do threat score.
   const c2paNote = document.getElementById('c2pa-fp-note');
   if (c2paNote) {
-    if (r.c2pa?.confirmed) {
+    if (r.c2pa?.manifestDetected) {
       c2paNote.textContent = t('c2paFPNote');
       c2paNote.style.display = 'block';
     } else {
@@ -350,7 +360,7 @@ function renderResults(r, decodedMsg, decodeStatus) {
     lsbBody=row(t('rowChiR'),r.lsb.chiR,lsbSusp?'finding-warn':'finding-ok');
     lsbBody+=row(t('rowChiG'),r.lsb.chiG,lsbSusp?'finding-warn':'finding-ok');
     lsbBody+=row(t('rowChiB'),r.lsb.chiB,lsbSusp?'finding-warn':'finding-ok');
-    lsbBody+=row(t('rowBestMode'),'<span style="color:var(--scan)">'+translateMode(r.lsb.bestMode)+'</span>');
+    lsbBody+=rowHTML(t('rowBestMode'),'<span style="color:var(--scan)">'+escapeHTML(translateMode(r.lsb.bestMode))+'</span>');
     lsbBody+=row(t('rowPrintableRatio'),r.lsb.printableRatio,parseFloat(r.lsb.printableRatio)>30?'finding-warn':'');
     // Ataques estruturais RS e WS (detecção específica de LSB Replacement)
     lsbBody+=row(t('rowRSAttack'),r.lsb.rsRate,r.lsb.lsbrDetected?'finding-warn':'');
@@ -363,7 +373,8 @@ function renderResults(r, decodedMsg, decodeStatus) {
     if(r.lsb.neuralSuspect){
       lsbBody+=`<div style="margin:6px 0;padding:9px 11px;background:rgba(167,139,250,0.07);border:1px solid rgba(167,139,250,0.28);border-radius:3px;font-size:0.63rem;color:var(--scan);line-height:1.75">${t('neuralNote').replace('{ent}',r.lsb.neuralEntSim).replace('{hf}',r.lsb.neuralHfSim)}</div>`;
     }
-    lsbBody+=row(t('rowDecodedSample'),'<span style="font-size:0.62rem;color:var(--dim)">'+r.lsb.decodedSample.slice(0,80)+'</span>');
+    // A amostra vem do conteúdo decodificado do arquivo: escapar é obrigatório.
+    lsbBody+=rowHTML(t('rowDecodedSample'),'<span style="font-size:0.62rem;color:var(--dim)">'+escapeHTML(r.lsb.decodedSample.slice(0,80))+'</span>');
     lsbBody+=`<div class="interp">${interpretModule('lsb',r)}</div>`;
   }
   renderModule('lsb','🧬',t('modLSB'),!r.lsb?.available?t('badgeNA'):lsbSusp?t('badgeSuspicious'):t('badgeNormal'),!r.lsb?.available?'mb-scan':lsbSusp?'mb-warn':'mb-ok',lsbBody);
@@ -457,7 +468,7 @@ function renderResults(r, decodedMsg, decodeStatus) {
 
   // C2PA
   if(r.c2pa){
-    const c2Confirmed=r.c2pa.confirmed;
+    const c2Confirmed=r.c2pa.manifestDetected;
     const c2Found=r.c2pa.found;
     const c2Badge=c2Confirmed?t('c2BadgeConfirmed'):c2Found?t('c2BadgeFound'):t('c2BadgeNotFound');
     const c2Class=c2Confirmed?'mb-crit':c2Found?'mb-warn':'mb-ok';
@@ -471,9 +482,9 @@ function renderResults(r, decodedMsg, decodeStatus) {
           : '';
         c2Body+=`<div style="padding:10px 12px;background:rgba(255,64,96,0.08);border:1px solid rgba(255,64,96,0.3);border-radius:4px;margin-bottom:10px">
           <div style="font-size:0.58rem;color:#ff6080;letter-spacing:2px;margin-bottom:4px">${t('c2paSignatureLabel')}</div>
-          <div style="font-size:0.85rem;color:#fff;font-family:var(--sans);font-weight:600">${r.c2pa.aiGenerator||t('c2paDefaultGenerator')}</div>
+          <div style="font-size:0.85rem;color:#fff;font-family:var(--sans);font-weight:600">${escapeHTML(r.c2pa.aiGenerator||t('c2paDefaultGenerator'))}</div>
           ${hlBlock}
-          ${r.c2pa.digitalSourceType?`<div style="font-size:0.62rem;color:#ffb0b0;margin-top:6px">IPTC: ${r.c2pa.digitalSourceType}</div>`:''}
+          ${r.c2pa.digitalSourceType?`<div style="font-size:0.62rem;color:#ffb0b0;margin-top:6px">IPTC: ${escapeHTML(r.c2pa.digitalSourceType)}</div>`:''}
         </div>`;
       }
       if(r.c2pa.ca) c2Body+=row(t('rowSigningCA'),r.c2pa.ca,c2Confirmed?'finding-crit':'finding-warn');
@@ -536,7 +547,7 @@ function renderResults(r, decodedMsg, decodeStatus) {
     if(r.exif.aiSoftware){
       exifBody+=`<div style="padding:8px 10px;background:rgba(255,64,96,0.08);border:1px solid rgba(255,64,96,0.25);border-radius:3px;margin-bottom:8px">
         <div style="font-size:0.58rem;color:#ff6080;letter-spacing:2px;margin-bottom:3px">${t('exifGeneratorIdentified')}</div>
-        <div style="font-size:0.9rem;color:#fff;font-family:var(--sans)">${r.exif.aiSoftware}</div>
+        <div style="font-size:0.9rem;color:#fff;font-family:var(--sans)">${escapeHTML(r.exif.aiSoftware)}</div>
       </div>`;
     }
     if(r.exif.noExif){
@@ -547,7 +558,7 @@ function renderResults(r, decodedMsg, decodeStatus) {
       exifBody+=row(t('rowGPS'),r.exif.hasGPS?t('valPresent'):t('valAbsent'));
     }
     const interp = r.exif.aiSoftware
-      ? t('exifInterpAI').replace('{software}',r.exif.aiSoftware)
+      ? t('exifInterpAI').replace('{software}',escapeHTML(r.exif.aiSoftware))
       : r.exif.noExif
         ? t('exifInterpNoExif')
         : r.exif.hasCamera

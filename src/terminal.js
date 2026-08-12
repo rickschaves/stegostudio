@@ -83,8 +83,15 @@ function termWrite(id, lines, opts={}) {
   tick();
 }
 
+// Escapa os 5 caracteres que mudam o sentido do HTML. As ASPAS importam tanto
+// quanto os sinais de maior/menor: dado do arquivo também é interpolado DENTRO
+// de atributos (class, style), e ali um `"` solto fecha o atributo e permite
+// injetar outro — inclusive um handler de evento. Escapar só < e > deixaria
+// esse caminho aberto.
 function escapeHTML(s) {
-  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  return String(s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 
 // setStatus compatível — uma única linha digitada
@@ -161,9 +168,9 @@ async function encStatusLoaded(fmt, w, h, size, file) {
     try {
       const [exif, c2pa] = await Promise.all([
         parseEXIF(file).catch(()=>({hasCamera:false})),
-        parseC2PA(file).catch(()=>({found:false,confirmed:false}))
+        parseC2PA(file).catch(()=>({found:false,manifestDetected:false}))
       ]);
-      if (c2pa?.found || c2pa?.confirmed) { hasSignature = true; sigType.push('C2PA'); }
+      if (c2pa?.found || c2pa?.manifestDetected) { hasSignature = true; sigType.push('C2PA'); }
       if (exif?.hasCamera || exif?.found) { hasSignature = true; sigType.push('EXIF'); }
     } catch(e) {}
   }

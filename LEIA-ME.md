@@ -1,4 +1,4 @@
-# STEGO·STUDIO — Pacote completo do repositório (v2.41.0)
+# STEGO·STUDIO — Pacote completo do repositório (v2.42.0)
 
 Tudo que o repo precisa, na versão mais atual. Substitui o conteúdo anterior.
 
@@ -32,7 +32,7 @@ documentos internos de trabalho. Continuam no pacote zip.
 ## Como buildar
     node unpack_assets.js   # 1ª vez: recria src/fonts/ e deploy/
     node build.js           # gera dist/stego_studio_v<VERSION>.html
-    node test.js            # 11 invariantes
+    node test.js            # 12 invariantes
 
 ## Deploy
 O HTML de produção sobe para a Cloudflare **renomeado para `index.html`**,
@@ -55,6 +55,7 @@ em outra, e nenhum invariante pega isso porque é texto de documentação. **Edi
 à mão e releia.**
 
 ## Estado
+- **v2.42.0** — hardening: XSS de metadados, C2PA sem validação, veto de EXIF.
 - **v2.41.0** — licença GPL-3.0 e código-fonte publicado no GitHub.
 - **v2.40.0** — Modo Pro removido: offline sem exceção, sem backend nem chave.
 - **F4** (modo robusto), **JPEG progressivo** (v2.36.0), **F9** (impressão
