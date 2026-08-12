@@ -129,9 +129,24 @@ async function pngDeflate(u8) {
   const w = cs.writable.getWriter(); w.write(u8); w.close();
   return new Uint8Array(await new Response(cs.readable).arrayBuffer());
 }
+// ── Limites contra arquivo hostil ──────────────────────────────────────────
+// Os campos de largura e altura do IHDR vêm do arquivo e podem dizer qualquer
+// coisa: 65535×65535 pede ~17 GB só para o buffer RGBA. E o inflate é uma bomba
+// de descompressão em potencial — poucos KB de IDAT podem virar gigabytes.
+// A alocação acontece ANTES de qualquer validação, então a aba morre antes de
+// qualquer mensagem de erro. Estes tetos falham cedo, com erro legível.
+const PNG_MAX_PIXELS = 80e6;      // ~80 MP: acima de qualquer câmera de consumo
+const PNG_MAX_INFLATED = 512e6;   // 512 MB de raster descomprimido
+
 async function pngDecodeRGBA(u8) {
   const meta = pngParse(u8);
+  if (!(meta.width > 0 && meta.height > 0))
+    throw new Error('pngDimensoesInvalidas');
+  if (meta.width * meta.height > PNG_MAX_PIXELS)
+    throw new Error('pngExcedeLimitePixels');
   const inflated = await pngInflate(meta.idat);
+  if (inflated.length > PNG_MAX_INFLATED)
+    throw new Error('pngExcedeLimiteRaster');
   return { width: meta.width, height: meta.height, data: pngRasterToRGBA(meta, inflated) };
 }
 async function pngEncodeRGBA(width, height, rgba) {

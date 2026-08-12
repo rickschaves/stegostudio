@@ -149,13 +149,29 @@ function buildPayload(data, mode=MODE_B) {
   return out;
 }
 
+// Fonte de bits ±1 do LSB Matching. Era Math.random(), que num navegador é um
+// PRNG rápido e previsível — a direção de cada alteração é parte do padrão que
+// um esteganalista observa, então ela merece a mesma aleatoriedade do resto da
+// cripto. Consome de um buffer de crypto.getRandomValues() para não pagar uma
+// chamada por pixel.
+const _lsbmBits = { buf: new Uint8Array(0), byte: 0, bit: 8 };
+function lsbmSign() {
+  if (_lsbmBits.bit > 7) {
+    if (_lsbmBits.buf.length === 0) { _lsbmBits.buf = new Uint8Array(4096); _lsbmBits.i = 4096; }
+    if (_lsbmBits.i >= _lsbmBits.buf.length) { crypto.getRandomValues(_lsbmBits.buf); _lsbmBits.i = 0; }
+    _lsbmBits.byte = _lsbmBits.buf[_lsbmBits.i++];
+    _lsbmBits.bit = 0;
+  }
+  return ((_lsbmBits.byte >> _lsbmBits.bit++) & 1) ? 1 : -1;
+}
+
 // Escreve um bit via LSB Matching num índice do array de dados (canal já resolvido).
 function writeBitLSBM(d, idx, bit) {
   const cur = d[idx];
   if ((cur & 1) === bit) return;       // já coincide
   if (cur === 0) d[idx] = 1;           // não pode subtrair
   else if (cur === 255) d[idx] = 254;  // não pode somar
-  else d[idx] = cur + (Math.random() < 0.5 ? -1 : 1);
+  else d[idx] = cur + lsbmSign();
 }
 
 // LSB Replacement puro: substitui só o bit menos significativo, sem transbordar

@@ -229,7 +229,7 @@ async function parseC2PA(file) {
           result.found = true;
           if (/trainedAlgorithm|compositeWith/i.test(result.digitalSourceType)) {
             result.manifestDetected = true;
-            result.signals.push(`IPTC digitalSourceType: ${result.digitalSourceType}`);
+            result.signals.push(`IPTC digitalSourceType: ${escapeHTML(result.digitalSourceType)}`);
           }
         }
 
@@ -582,11 +582,13 @@ async function runForensics(imageData, file, onProgress=()=>{}, sharedDec=null) 
   // C2PA — indicador definitivo, peso máximo
   if(report.c2pa?.manifestDetected){
     aiScore+=85;
+    // Estes valores saem do manifesto do arquivo e terminam em HTML via
+    // detailVars. Escapados na origem (sink perdido na v2.42.0).
     const c2paDetail=[
-      report.c2pa.aiGenerator?t('c2paGenPrefix').replace('{gen}',report.c2pa.aiGenerator):null,
-      report.c2pa.digitalSourceType?`IPTC: ${report.c2pa.digitalSourceType}`:null,
-      report.c2pa.ca?`CA: ${report.c2pa.ca}`:null,
-      report.c2pa.certDate?`Certificado: ${report.c2pa.certDate}`:null,
+      report.c2pa.aiGenerator?t('c2paGenPrefix').replace('{gen}',escapeHTML(report.c2pa.aiGenerator)):null,
+      report.c2pa.digitalSourceType?`IPTC: ${escapeHTML(report.c2pa.digitalSourceType)}`:null,
+      report.c2pa.ca?`CA: ${escapeHTML(report.c2pa.ca)}`:null,
+      report.c2pa.certDate?`Certificado: ${escapeHTML(report.c2pa.certDate)}`:null,
     ].filter(Boolean).join(' · ');
     aiSignals.push({labelKey:'aiLblC2PAConfirmed',
       detailKey:'aiDetC2PAConfirmed',detailVars:{extra:c2paDetail},level:'crit'});

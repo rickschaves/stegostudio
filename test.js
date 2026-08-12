@@ -260,6 +260,69 @@ check('XSS: metadados hostis saem como texto, não markup', () => {
     assert(doArquivo.length > 0, `payload sumiu por completo — extração do teste quebrou: ${p}`);
   }
   assert(row('L', '<b>x</b>', '').includes('&lt;b&gt;'), 'row() não está escapando');
+
+  // ── Varredura estática: interpolação de dado do ARQUIVO em template string ──
+  // A v2.42.0 escapou row() e declarou "tudo que vem do arquivo agora é
+  // escapado" — mas hl(), detailVars e labelVars ficaram de fora, e este check,
+  // por só exercitar row(), passou verde com os furos abertos. Um invariante
+  // que testa apenas o caminho já corrigido dá falsa segurança.
+  const camposDoArquivo = [
+    'signerCN', 'genName', 'genVersion', 'rawSoftware', 'digitalSourceType',
+    'aiGenerator', 'decodedSample', 'certDate',
+  ];
+  const semEscape = [];
+  // Analisa CADA `${...}` isoladamente, com contagem de chaves — um `${a?...${b}...}`
+  // contém dois pontos de saída distintos, e um escapeHTML em torno de `a` não
+  // absolve `b`. A primeira versão desta varredura casava o trecho inteiro e
+  // deixava passar exatamente esse caso.
+  const interps = [];
+  for (let i = 0; i < html.length - 1; i++) {
+    if (html[i] !== '$' || html[i+1] !== '{') continue;
+    let depth = 1, j = i + 2;
+    while (j < html.length && depth > 0) {
+      if (html[j] === '{') depth++;
+      else if (html[j] === '}') depth--;
+      j++;
+      if (j - i > 400) break;              // interpolação gigante: ignora
+    }
+    if (depth === 0) interps.push(html.slice(i, j));
+  }
+  for (const frag of interps) {
+    // conteúdo direto desta interpolação, sem os `${...}` aninhados
+    const direto = frag.slice(2, -1).replace(/\$\{[^]*?\}/g, '');
+    for (const campo of camposDoArquivo) {
+      if (!new RegExp('\\b' + campo + '\\b').test(direto)) continue;
+      // guarda de condicional (`x ? ... : ...`) não imprime nada: só o valor importa
+      const ehGuarda = /^\s*[\w.?![\]]+\s*\?/.test(direto) || /^\s*[\w.?![\]]+\s*(&&|\|\|)/.test(direto);
+      if (ehGuarda) continue;
+      // Invólucros que escapam internamente (e cujo escape é exercitado pelos
+      // payloads acima). Passar o valor a eles é seguro.
+      const involucroSeguro = /\b(hl|row|rowHTML)\s*\(/.test(direto);
+      if (!direto.includes('escapeHTML') && !involucroSeguro) {
+        semEscape.push(`${campo} → ${frag.slice(0, 70).replace(/\n/g, ' ')}`);
+      }
+    }
+  }
+  for (const m of html.matchAll(/\.replace\(`\{\$\{k\}\}`,\s*([^)]+)\)/g)) {
+    if (!m[1].includes('escapeHTML')) semEscape.push(`variável do i18n sem escape: ${m[0].slice(0, 45)}`);
+  }
+
+  // ── Pontos de render nomeados ──
+  // A varredura acima procura NOMES DE CAMPO no ponto de interpolação. Dentro
+  // de um helper o parâmetro se chama `val` ou `s`, e o nome do campo não
+  // aparece — foi assim que hl() e o laço de signals passaram na primeira
+  // versão desta checagem. Estes trechos precisam existir literalmente; se
+  // alguém tirar o escape, o padrão some e o build falha.
+  const escapesObrigatorios = [
+    ['hl() — campos do manifesto C2PA',  'word-break:break-word">${escapeHTML(val)}'],
+    ['laço de c2pa.signals',             'padding:2px 0">· ${escapeHTML(s)}'],
+    ['amostra decodificada (LSB)',       'escapeHTML(r.lsb.decodedSample'],
+  ];
+  for (const [nome, trecho] of escapesObrigatorios) {
+    if (!html.includes(trecho)) semEscape.push(`escape removido em ${nome}`);
+  }
+  assert(semEscape.length === 0,
+    `dado do arquivo interpolado sem escapeHTML:\n     ${[...new Set(semEscape)].join('\n     ')}`);
   return `${payloads.length} payloads neutralizados`;
 });
 

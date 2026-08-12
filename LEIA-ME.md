@@ -1,4 +1,4 @@
-# STEGO·STUDIO — Pacote completo do repositório (v2.42.0)
+# STEGO·STUDIO — Pacote completo do repositório (v2.42.1)
 
 Tudo que o repo precisa, na versão mais atual. Substitui o conteúdo anterior.
 
@@ -20,6 +20,9 @@ Tudo que o repo precisa, na versão mais atual. Substitui o conteúdo anterior.
   `node unpack_assets.js` para reconstruir `src/fonts/` (necessário para
   buildar) e `deploy/` (o que sobe para a Cloudflare).
 - `LICENSE` — GPL-3.0, texto canônico da FSF.
+- `README.md`, `CONTRIBUTING.md`, `SECURITY.md` — **em inglês**, para o público
+  externo. O repositório está migrando para inglês no que o leitor de fora
+  encontra; changelog e comentários de código seguem em português.
 - `README.md` — descrição pública (em inglês), para o GitHub.
 - `HTML_PRODUCAO/` — **um único arquivo**, o da versão atual. Ao publicar uma
   versão nova, apague o HTML anterior; dois arquivos ali significam que alguém
@@ -55,6 +58,7 @@ em outra, e nenhum invariante pega isso porque é texto de documentação. **Edi
 à mão e releia.**
 
 ## Estado
+- **v2.42.1** — hardening: 4 sinks de XSS restantes, textos, limites de memória.
 - **v2.42.0** — hardening: XSS de metadados, C2PA sem validação, veto de EXIF.
 - **v2.41.0** — licença GPL-3.0 e código-fonte publicado no GitHub.
 - **v2.40.0** — Modo Pro removido: offline sem exceção, sem backend nem chave.

@@ -60,7 +60,7 @@ function renderOriginModule(r) {
         // Traduz o rótulo a partir da chave; aplica variáveis (ex.: largura em px)
         let label = s.labelKey ? t(s.labelKey) : (s.label || '');
         if (s.labelVars) {
-          for (const [k,v] of Object.entries(s.labelVars)) label = label.replace(`{${k}}`, v);
+          for (const [k,v] of Object.entries(s.labelVars)) label = label.replace(`{${k}}`, escapeHTML(v));
         }
         body += `<div class="origin-sig">✓ ${label}${w}</div>`;
       }
@@ -475,8 +475,10 @@ function renderResults(r, decodedMsg, decodeStatus) {
     let c2Body='';
     if(c2Confirmed||c2Found){
       if(c2Confirmed){
+        // `val` sai do CBOR/ASN.1 do manifesto — dado do arquivo, hostil por
+        // definição. Escapar aqui é obrigatório (sink perdido na v2.42.0).
         const hl = (lbl,val) => val ? `<div style="padding:3px 0;border-top:1px solid rgba(255,255,255,0.06);font-size:0.72rem;line-height:1.5">
-          <span style="color:#ffb0b0;text-transform:uppercase;letter-spacing:1px">${lbl}:</span> <span style="color:#fff;font-family:var(--mono,monospace);word-break:break-word">${val}</span></div>` : '';
+          <span style="color:#ffb0b0;text-transform:uppercase;letter-spacing:1px">${escapeHTML(lbl)}:</span> <span style="color:#fff;font-family:var(--mono,monospace);word-break:break-word">${escapeHTML(val)}</span></div>` : '';
         const hlBlock = (r.c2pa.signerCN || r.c2pa.genName || r.c2pa.genVersion)
           ? `<div style="margin-top:8px">${hl(t('c2paFieldSigner'), r.c2pa.signerCN)}${hl(t('c2paFieldGenerator'), r.c2pa.genName)}${hl(t('c2paFieldVersion'), r.c2pa.genVersion)}</div>`
           : '';
@@ -492,7 +494,8 @@ function renderResults(r, decodedMsg, decodeStatus) {
       if(r.c2pa.rawSoftware) c2Body+=row(t('rowSoftwareId'),r.c2pa.rawSoftware,'finding-crit');
       if(r.c2pa.signals.length>0){
         c2Body+=`<div style="margin-top:8px;font-size:0.6rem;color:var(--dim);letter-spacing:1px;text-transform:uppercase;margin-bottom:4px">${t('c2paEvidenceFound')}</div>`;
-        for(const s of r.c2pa.signals) c2Body+=`<div style="font-size:0.65rem;color:var(--neutral);padding:2px 0">· ${s}</div>`;
+        // Sinais montados no parser, com pedaços do manifesto do arquivo dentro.
+        for(const s of r.c2pa.signals) c2Body+=`<div style="font-size:0.65rem;color:var(--neutral);padding:2px 0">· ${escapeHTML(s)}</div>`;
       }
       const c2interp=c2Confirmed?t('c2paInterpConfirmed'):t('c2paInterpPartial');
       c2Body+=`<div class="interp">${c2interp}</div>`;
@@ -635,10 +638,14 @@ function renderResults(r, decodedMsg, decodeStatus) {
       aiBody+=`<div style="font-size:0.58rem;color:var(--dim);letter-spacing:2px;text-transform:uppercase;margin-bottom:8px">${t('aiDetectedHeader')}</div>`;
       for(const s of r.ai.signals){
         // Traduz label e detail a partir das chaves, aplicando variáveis
+        // As STRINGS-BASE vêm do i18n (confiáveis, podem conter markup), mas as
+        // VARIÁVEIS podem vir do arquivo — `{software}` é o campo Software do
+        // EXIF, cru. Escapa-se o valor interpolado, nunca o molde. (Sink
+        // perdido na v2.42.0.)
         let lbl = s.labelKey ? t(s.labelKey) : (s.label||'');
-        if (s.labelVars) for (const [k,v] of Object.entries(s.labelVars)) lbl = lbl.replace(`{${k}}`, v);
+        if (s.labelVars) for (const [k,v] of Object.entries(s.labelVars)) lbl = lbl.replace(`{${k}}`, escapeHTML(v));
         let det = s.detailKey ? t(s.detailKey) : (s.detail||'');
-        if (s.detailVars) for (const [k,v] of Object.entries(s.detailVars)) det = det.replace(`{${k}}`, v);
+        if (s.detailVars) for (const [k,v] of Object.entries(s.detailVars)) det = det.replace(`{${k}}`, escapeHTML(v));
         aiBody+=`<div class="ai-signal ${s.level}"><div class="ai-signal-label">${lbl}</div><div class="ai-signal-detail">${det}</div></div>`;
       }
     }

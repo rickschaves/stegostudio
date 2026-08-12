@@ -7,6 +7,97 @@
 
 ---
 
+## v2.42.1 — 2026-08-11
+**Hardening: os sinks de XSS que a v2.42.0 deixou passar**
+
+Segunda auditoria externa, no site publicado e no GitHub. **Sete dos oito
+achados eram reais** — a maioria falha de execução minha na v2.42.0.
+
+### 🔴 Quatro sinks de XSS remanescentes
+A v2.42.0 escapou `row()` e o changelog declarou *"tudo que vem do arquivo agora
+é escapado"*. **Faltaram quatro caminhos:**
+
+| sink | dado |
+|---|---|
+| `hl()` no painel C2PA | `signerCN`, `genName`, `genVersion` — CBOR/ASN.1 do arquivo |
+| `detailVars` / `labelVars` | `{software}` = campo Software do EXIF, cru |
+| `c2pa.signals` no render | sinais montados com pedaços do manifesto |
+| `c2paDetail` no forensics | `aiGenerator`, `digitalSourceType`, `ca`, `certDate` |
+
+**A causa raiz é metodológica:** escapei os caminhos que já haviam quebrado, em
+vez de **enumerar todos os pontos onde dado de arquivo é exibido**. E o
+invariante, escrito com a mesma lógica, exercitava só `row()` — ficou verde com
+quatro furos abertos. **Um invariante que testa apenas o caminho já corrigido dá
+falsa segurança.**
+
+### O invariante refeito
+Agora tem três camadas:
+1. **Payloads** contra `row()`/`rowHTML()` (como antes).
+2. **Varredura estática:** percorre cada `${...}` do HTML construído com
+   contagem de chaves, isola o conteúdo direto (sem interpolações aninhadas) e
+   exige `escapeHTML` quando há campo conhecidamente vindo do arquivo. Ignora
+   guardas de condicional e invólucros que escapam internamente.
+3. **Escapes nomeados:** trechos literais que precisam existir (`hl()`, laço de
+   `signals`, `decodedSample`) — dentro de um helper o parâmetro se chama `val`
+   ou `s`, e a varredura por nome de campo não alcança.
+
+⚠️ **A primeira versão da varredura tinha furo:** casava o trecho inteiro, então
+num `${a ? ... ${b} ...}` um `escapeHTML` em torno de `a` absolvia `b`.
+Descoberto por injeção de falha. **Validado com 5 regressões distintas, todas
+detectadas.**
+
+### 🟠 Textos que ainda mentiam
+- **C2PA:** `aiLblC2PAConfirmed` ("C2PA CONFIRMADO — Origem sintética
+  certificada") e `aiDetC2PAConfirmed` sobreviveram à v2.42.0. Mais
+  `c2paFPNote`, `flagNeuralUncertainAI`, `flagC2PAExplained` dizendo
+  "certificada". Todos corrigidos.
+- **Modo Pro** (removido na v2.40.0): 6 textos ainda o recomendavam, incluindo
+  "tente novamente quando o modo Pro estiver online" — ao lado da promessa de
+  que nada é enviado a servidor.
+- **"Firmware não é forjável por IA":** sobrevivia em `helpS5a` (EN+PT) e
+  `helpS3d`. O código da v2.42.0 já sabia que era falso; o texto não.
+- **17 fallbacks estáticos do `template.html`** ressincronizados com o `i18n` —
+  eles aparecem antes do JS rodar.
+
+### 🟠 Asserção offline
+O comentário dizia "formas EXATAS de metadado"; o padrão aceitava **qualquer
+caminho** em `stegostudio.com` — `/api/exfil` passava. Trocado por **conjunto
+fechado de URLs exatas** (2 endereços) + namespaces XML. Verificado por tabela.
+
+### 🟡 Limites contra arquivo hostil
+`pngDecodeRGBA` alocava a partir de largura×altura do IHDR **sem validação**:
+65535×65535 pede ~17 GB. Tetos de **80 MP** e **512 MB** de raster
+descomprimido, checados antes de alocar, com erro legível.
+
+### 🟡 LSB Matching com CSPRNG
+`Math.random()` escolhia ±1 por pixel. A direção faz parte do padrão que um
+esteganalista observa. Agora vem de `crypto.getRandomValues` com buffer de 4 KB.
+Distribuição verificada em 20 mil amostras (desvio 122).
+
+### Achado 8 — parcialmente cache
+A auditoria disse que `HTML_PRODUCAO/` tinha só a v2.41.0. **Era cache do
+GitHub** — o Rick confirmou a v2.42.0 no repo, e eu reproduzi o mesmo cache
+("1 Commit" com 3 pushes feitos). **Mas a segunda metade era real:** o
+`README.md` dizia "11 invariants". Corrigido.
+
+### Não corrigido nesta versão
+**Semente de 32 bits do header** (FNV-1a → mulberry32). Real, mas afeta
+**furtividade**, não confidencialidade — a mensagem segue sob AES-256-GCM com
+Argon2id. A correção muda o formato do payload e exige byte de versão para
+retrocompatibilidade: **v2.43.0, ver F21**.
+
+### Repositório em inglês
+Novos: **`CONTRIBUTING.md`** e **`SECURITY.md`** (modelo de ameaça, limites
+conhecidos declarados, canal de reporte). O `CONTRIBUTING` documenta a
+transição: inglês no que o leitor externo encontra; changelog (2.002 linhas) e
+comentários de código seguem em português, convertidos aos poucos.
+
+### Validação
+Harness **12/12**, i18n **694/694**. Os três achados da primeira auditoria
+reconferidos contra os mesmos arquivos forjados.
+
+---
+
 ## v2.42.0 — 2026-08-11
 **Hardening de segurança: XSS, C2PA falso e veto de EXIF**
 

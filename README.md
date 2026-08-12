@@ -52,7 +52,7 @@ build anything to use the tool. To build it yourself:
 ```sh
 node unpack_assets.js   # recreates src/fonts/ from ASSETS_BASE64.md
 node build.js           # assembles dist/stego_studio_v<VERSION>.html
-node test.js            # 11 invariants
+node test.js            # 12 invariants
 ```
 
 No bundler and no dependencies. `build.js` concatenates 16 JavaScript modules,
@@ -71,7 +71,7 @@ before writing.
 src/            16 modules + styles.css + hash-wasm.js
 template.html   page markup; the build injects CSS and JS into it
 build.js        the build
-test.js         11 invariants (syntax, i18n parity, offline guarantee, ...)
+test.js         12 invariants (syntax, i18n parity, offline guarantee, XSS, ...)
 HTML_PRODUCAO/  the published single-file build
 docs/           changelog and the social-platform measurements
 ```

@@ -17,7 +17,7 @@ const SRC = path.join(__dirname, 'src');
 const DIST = path.join(__dirname, 'dist');
 
 // Versão do artefato final. Convenção: pontos entre números (nunca underscore).
-const VERSION = '2.42.0';
+const VERSION = '2.42.1';
 
 // ORDEM DE CONCATENAÇÃO — preserva a ordem-fonte do monolito v2.23.1.
 // hill.js e stc.js foram retirados de dentro do span do encoder (span 100%
@@ -123,7 +123,18 @@ function build({ write = true } = {}) {
   // og:image, JSON-LD). Antes o padrão era solto e casava com QUALQUER subdomínio
   // — foi assim que `api.stegostudio.com`, o backend do antigo Modo Pro, passou
   // pela asserção enquanto o build anunciava "0 dependências de rede".
-  const OFFLINE_SAFE = /^https?:\/\/(schema\.org|www\.w3\.org|ns\.adobe\.com|(www\.)?stegostudio\.com|www\.npmjs\.com)([\/#?]|$)/;
+  // ⚠️ Lista de URLs EXATAS, não de domínios. O padrão anterior ancorava o
+  // domínio mas deixava o caminho livre, então `stegostudio.com/api/exfil`
+  // passava — o comentário dizia "formas exatas de metadado" e o código não
+  // cumpria. Metadado é um conjunto fechado e conhecido; enumerá-lo custa nada
+  // e fecha a diferença entre o que a regra promete e o que ela faz.
+  const OFFLINE_EXACT = new Set([
+    'https://stegostudio.com/',
+    'https://stegostudio.com/og-image.png',
+  ]);
+  // Namespaces XML/JSON-LD: identificadores, nunca buscados em runtime.
+  const OFFLINE_NS = /^https?:\/\/(schema\.org|www\.w3\.org|ns\.adobe\.com|www\.npmjs\.com)([\/#]|$)/;
+  const OFFLINE_SAFE = { test: (u) => OFFLINE_EXACT.has(u) || OFFLINE_NS.test(u) };
   const runtimeUrls = [...new Set((html.match(/https?:\/\/[^"'\s)]+/g) || [])
     .filter(u => !OFFLINE_SAFE.test(u)))];
   if (/fonts\.(googleapis|gstatic)\.com/.test(html)) {
