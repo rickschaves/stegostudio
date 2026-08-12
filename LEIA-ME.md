@@ -1,4 +1,4 @@
-# STEGO·STUDIO — Pacote completo do repositório (v2.42.1)
+# STEGO·STUDIO — Pacote completo do repositório (v2.42.2)
 
 Tudo que o repo precisa, na versão mais atual. Substitui o conteúdo anterior.
 
@@ -58,7 +58,7 @@ em outra, e nenhum invariante pega isso porque é texto de documentação. **Edi
 à mão e releia.**
 
 ## Estado
-- **v2.42.1** — hardening: 4 sinks de XSS restantes, textos, limites de memória.
+- **v2.42.2** — hardening: 4 sinks de XSS restantes, textos, limites de memória.
 - **v2.42.0** — hardening: XSS de metadados, C2PA sem validação, veto de EXIF.
 - **v2.41.0** — licença GPL-3.0 e código-fonte publicado no GitHub.
 - **v2.40.0** — Modo Pro removido: offline sem exceção, sem backend nem chave.

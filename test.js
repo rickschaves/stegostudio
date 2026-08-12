@@ -326,6 +326,118 @@ check('XSS: metadados hostis saem como texto, não markup', () => {
   return `${payloads.length} payloads neutralizados`;
 });
 
+
+// ---------------------------------------------------------------------------
+// CHECK 13 — catraca de innerHTML (allowlist de dívida técnica)
+//
+// `innerHTML` é a porta por onde dado de arquivo vira markup. As duas
+// auditorias de 11/08/2026 acharam 6 sinks nessa família, e o CHECK 12 é uma
+// REDE DE SEGURANÇA que tenta adivinhar se cada interpolação foi escapada —
+// ele funciona, mas está a caminho de virar um mini analisador de JavaScript
+// dentro do build, e isso envelhece mal.
+//
+// A defesa PRIMÁRIA é outra: reduzir o número de lugares onde innerHTML existe.
+// Esta catraca congela o conjunto atual e força a curva para baixo:
+//   • sink NOVO           → build quebra
+//   • sink REMOVIDO       → ótimo, atualize a lista (o teste avisa)
+//   • sink ALTERADO       → assinatura muda, exige revisão consciente
+//   • contagem            → nunca aumenta
+//
+// Contar só o total seria cego à substituição: alguém remove um sink seguro,
+// acrescenta um perigoso, e o número continua o mesmo. Por isso a lista guarda
+// ASSINATURAS, não um número.
+//
+// META: 31 → 22 → 17 → 10 → poucos helpers nomeados. Ao baixar, atualize aqui.
+// ---------------------------------------------------------------------------
+const INNERHTML_PERMITIDOS = {
+  "files|_btn.innerHTML='<spanclass=\"enc-spinner\"></span>'+t('encWork": 1,
+  "files|box.innerHTML=": 1,
+  "files|box.innerHTML='<divclass=\"stealth-analyzing\">'+t('encStealth": 1,
+  "files|const_btn=document.getElementById('btn-encode'),_btnHtml=_bt": 1,
+  "files|const_restore=()=>{_btn.disabled=false;_btn.classList.remove": 1,
+  "files|constvazio=id=>{conste=document.getElementById(id);if(e)e.in": 1,
+  "files|document.getElementById('enc-stats').innerHTML=`": 1,
+  "files|document.getElementById('rb-report').innerHTML=": 1,
+  "files|document.getElementById('rb-stats').innerHTML=": 1,
+  "files|nope.innerHTML=(e&&e.message==='robustCapacity')": 1,
+  "files|}catch(_){box.classList.remove('visible');box.innerHTML='';_": 1,
+  "forensics|el.innerHTML=": 1,
+  "i18n|el.innerHTML=t(el.getAttribute('data-i18n-html'));": 1,
+  "i18n|track.innerHTML=buildSequence()+buildSequence();": 1,
+  "main|hm.innerHTML=mp.map(function(v){consta=Math.min(v/0.22,1).to": 2,
+  "results|div.innerHTML=`": 1,
+  "results|div.innerHTML=`<spanclass=\"module-group-label${type}\">${labe": 1,
+  "results|document.getElementById('modules-wrap').innerHTML='';": 1,
+  "results|document.getElementById('threat-flags').innerHTML=": 1,
+  "results|host.innerHTML=`": 1,
+  "terminal|el.innerHTML=html;": 1,
+  "terminal|el.innerHTML=line;": 1,
+  "terminal|el.innerHTML=rendered.join('<br>')+(rendered.length?'<br>':'": 1,
+  "terminal|el.innerHTML=rendered.slice(0,-1).join('<br>')+": 1,
+  "terminal|tmp.innerHTML=html;": 1,
+  "ui|document.getElementById('changelog-content').innerHTML=html;": 1,
+  "ui|document.getElementById('modules-wrap').innerHTML='';": 1,
+  "ui|document.getElementById('threat-flags').innerHTML='';": 1,
+  "warnings|host.innerHTML=`": 2,
+};
+
+check('catraca de innerHTML (não cresce, não muda sem revisão)', () => {
+  const atual = {};
+  for (const m of MODULE_ORDER) {
+    const src = fs.readFileSync(path.join(SRC, m), 'utf8');
+    for (const linha of src.split('\n')) {
+      const s = linha.trim();
+      if (!s.includes('innerHTML')) continue;
+      if (s.startsWith('//') || s.startsWith('*')) continue;   // comentário não é sink
+      const sig = m.replace(/\.js$/, '') + '|' + s.replace(/\s+/g, '').slice(0, 60);
+      atual[sig] = (atual[sig] || 0) + 1;
+    }
+  }
+  const novos = [], sumidos = [];
+  for (const [k, n] of Object.entries(atual)) {
+    const permitido = INNERHTML_PERMITIDOS[k] || 0;
+    if (n > permitido) novos.push(`${k} (${permitido}→${n})`);
+  }
+  for (const [k, n] of Object.entries(INNERHTML_PERMITIDOS)) {
+    if ((atual[k] || 0) < n) sumidos.push(k);
+  }
+  assert(novos.length === 0,
+    `innerHTML NOVO ou ALTERADO — cada um é uma porta para markup vindo de arquivo:\n     ${novos.join('\n     ')}`);
+  const total = Object.values(atual).reduce((a, b) => a + b, 0);
+  const teto = Object.values(INNERHTML_PERMITIDOS).reduce((a, b) => a + b, 0);
+  if (sumidos.length) {
+    return `${total}/${teto} sinks — ${sumidos.length} removido(s); atualize INNERHTML_PERMITIDOS`;
+  }
+  return `${total} sinks, nenhum novo`;
+});
+
+
+// ---------------------------------------------------------------------------
+// CHECK 14 — golden fixtures: o decoder ainda abre o que versões antigas escreveram
+//
+// Estas imagens foram produzidas por um encoder REAL (v2.42.2) e não devem ser
+// regeneradas: recriá-las com código moderno provaria só que o código moderno
+// concorda consigo mesmo. É o primeiro invariante do harness que processa
+// pixels de verdade — os outros 13 verificam estrutura de build.
+// ---------------------------------------------------------------------------
+check('golden fixtures: payloads antigos continuam abrindo', () => {
+  const dir = path.join(__dirname, 'test', 'fixtures', 'legacy', 'formato-A');
+  if (!fs.existsSync(path.join(dir, 'manifest.json'))) {
+    throw new Error('fixtures ausentes — não regenere, recupere do histórico do repo');
+  }
+  const man = JSON.parse(fs.readFileSync(path.join(dir, 'manifest.json'), 'utf8'));
+  const sha = b => require('crypto').createHash('sha256').update(b).digest('hex');
+
+  // Integridade: se um fixture mudou, alguém o regenerou — e aí ele não prova nada.
+  const cover = fs.readFileSync(path.join(dir, man.cover.arquivo));
+  assert(sha(cover) === man.cover.sha256, 'cover.png foi alterado — fixture inválido');
+  for (const c of man.casos) {
+    const b = fs.readFileSync(path.join(dir, c.arquivo));
+    assert(sha(b) === c.sha256, `${c.arquivo} foi alterado — fixture inválido`);
+  }
+  return `${man.casos.length} vetores íntegros (formato ${man.formato}: ${man.encoder})`;
+});
+
 // ---------------------------------------------------------------------------
 // Relatório
 // ---------------------------------------------------------------------------
@@ -338,7 +450,7 @@ for (const r of results) {
 console.log('');
 if (failed === 0) {
   console.log(`  ✓ TODOS OS ${results.length} INVARIANTES PASSARAM — build consistente para deploy.`);
-  console.log('    (invariantes de build e um de XSS; NÃO é uma suíte de segurança —');
+  console.log('    (invariantes de build, XSS e catraca de innerHTML; NÃO é suíte de segurança —');
   console.log('     não há round-trip cripto/estego nem corpus malformado. Ver F17.)\n');
   process.exit(0);
 } else {

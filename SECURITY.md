@@ -29,6 +29,13 @@ than implying coverage that does not exist.
   itself is AES-256-GCM with an Argon2id-derived key and is unaffected. The
   layer that hides the header's *position* is weaker than that, and is scheduled
   to be replaced with a 256-bit derivation.
+
+  When that lands, it will remove an artificial ceiling — nothing more. **A
+  256-bit derivation does not turn a weak password into 256 bits of security.**
+  Running any amount of key-stretching over `123456` still leaves you with the
+  guessability of `123456`; Argon2id makes each guess expensive, which buys time,
+  not entropy. Everything here is bounded by the password you choose. Choose one
+  worth the algorithm behind it.
 - **Third-party extraction is partial.** See the compatibility notes in the
   changelog: OpenStego encrypted payloads are identified but not decrypted, and
   Steghide support covers a small subset of its cipher and mode combinations.

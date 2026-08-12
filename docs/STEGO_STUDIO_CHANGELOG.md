@@ -7,6 +7,47 @@
 
 ---
 
+## v2.42.2 — 2026-08-11
+**Catraca de innerHTML: a defesa primária, não a rede de segurança**
+
+Resposta ao feedback da 2ª auditoria. Ela apontou que o CHECK 12 está virando
+"um mini analisador de JavaScript dentro do build" — verdade, e isso envelhece
+mal. A defesa correta é **reduzir a superfície**, não adivinhar melhor.
+
+### CHECK 13 — allowlist de dívida técnica
+Congela os **31 sinks** de `innerHTML` existentes, por assinatura:
+
+| evento | resultado |
+|---|---|
+| sink NOVO | build quebra |
+| sink SUBSTITUÍDO (total igual) | build quebra |
+| sink REMOVIDO | passa, avisa para atualizar a lista |
+| intacto | passa |
+
+⚠️ **Contar só o total seria cego.** A auditoria apontou: remover um sink seguro
+e acrescentar um perigoso mantém 31. Por isso a lista guarda **onde cada um
+vive**, não quantos são. Foi o único dos quatro casos que a minha versão inicial
+(contagem pura) deixaria passar — e é justamente o perigoso.
+
+**Meta:** 31 → 22 → 17 → 10 → poucos helpers nomeados.
+
+Os quatro comportamentos foram validados por injeção deliberada.
+
+### SECURITY.md — ressalva de entropia
+Antes que a v2.43.0 vire promessa mal lida: derivar 256 bits remove um teto
+artificial, **não transforma senha fraca em 256 bits de segurança**. Sobre
+`123456`, alongamento de chave deixa a adivinhabilidade de `123456`; o Argon2id
+encarece cada tentativa — compra tempo, não entropia.
+
+### Frase final do harness
+"invariantes de build, XSS e catraca de innerHTML; NÃO é suíte de segurança".
+
+### Também nesta versão
+`docs/SPEC_F21_DERIVACAO_V3.md` — especificação da mudança de 32→256 bits,
+**escrita antes de qualquer código**, com 4 decisões pendentes do Rick.
+
+---
+
 ## v2.42.1 — 2026-08-11
 **Hardening: os sinks de XSS que a v2.42.0 deixou passar**
 

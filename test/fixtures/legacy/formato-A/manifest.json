@@ -1,0 +1,49 @@
+{
+  "formato": "A",
+  "encoder": "v2.42.2",
+  "nota": "Formato idêntico da v2.35.2 à v2.42.2 — verificado por hash das 6 funções que o definem (buildPayload, seedFromPassword, shuffledOrder, xorHeader, mulberry32, extractLSBStudio).",
+  "senha": "fixture-test-2026",
+  "plaintext": "STEGO·STUDIO golden vector — formato A. Acentuação: ção, ü, ñ. 中文.",
+  "plaintext_sha256": "7a2ffe8048bd082346b9d5987f1640a3eab27ed2da2ed313ed4cf55175e15113",
+  "cover": {
+    "arquivo": "cover.png",
+    "w": 200,
+    "h": 150,
+    "sha256": "fe92b92bdb7f2a35144d332863a173eb9ce83e9a7a2149438289cb443144ca17"
+  },
+  "casos": [
+    {
+      "nome": "plain",
+      "mode": 2,
+      "pwd": "",
+      "stealth": false,
+      "adaptive": false,
+      "arquivo": "encoded_plain.png",
+      "sha256": "bd2ec461d74e826ff199955ac9cf63e7d64579e447dcebd8449a547b09ffe5f1",
+      "extraiu": true,
+      "bytes_payload": 89
+    },
+    {
+      "nome": "shuffled",
+      "mode": 2,
+      "pwd": "fixture-test-2026",
+      "stealth": false,
+      "adaptive": false,
+      "arquivo": "encoded_shuffled.png",
+      "sha256": "62e17737f3414389c44d3265df786f7d3d205e7fc679988dd4bd65e11d45cc23",
+      "extraiu": true,
+      "bytes_payload": 134
+    },
+    {
+      "nome": "stealth",
+      "mode": 2,
+      "pwd": "fixture-test-2026",
+      "stealth": true,
+      "adaptive": false,
+      "arquivo": "encoded_stealth.png",
+      "sha256": "2f0227776e5de4e13443822e9e5082d53b143629af21c732192035f08273d989",
+      "extraiu": true,
+      "bytes_payload": 134
+    }
+  ]
+}
