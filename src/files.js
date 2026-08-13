@@ -369,7 +369,7 @@ let encOutURL=null, encOutID=null, rbOutURL=null;
 function resetEncOutputs() {
   const hide = id => { const e = document.getElementById(id); if (e) e.classList.remove('visible'); };
   ['enc-dl','enc-rb','enc-tips','rb-body','rb-unavailable','enc-stealth'].forEach(hide);
-  const vazio = id => { const e = document.getElementById(id); if (e) e.innerHTML = ''; };
+  const vazio = id => { const e = document.getElementById(id); if (e) e.textContent = ''; };
   ['enc-stats','rb-stats','rb-report','rb-unavailable','enc-stealth'].forEach(vazio);
   const semSrc = id => { const e = document.getElementById(id); if (e) e.src = ''; };
   semSrc('enc-out-prev'); semSrc('rb-out-prev');
@@ -536,7 +536,7 @@ document.getElementById('btn-encode').addEventListener('click',async ()=>{
           +'<div class="stealth-verdict'+(st.verdict==='detect'?' sr-alarm':'')+'" style="color:'+vCol+'">'+vMark+' '+t(vKey)+'</div>'
           +'<div class="stealth-caveat">'+t('encStealthCaveat')+'</div>';
         _restore();
-      }catch(_){ box.classList.remove('visible'); box.innerHTML=''; _restore(); } }, 30);
+      }catch(_){ box.classList.remove('visible'); box.textContent=''; _restore(); } }, 30);
     })();
 
     // ── SEGUNDA SAÍDA: a versão mais resistente (modo robusto, F4) ──────────

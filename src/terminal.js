@@ -96,10 +96,13 @@ function escapeHTML(s) {
 
 // setStatus compatível — uma única linha digitada
 function setStatus(id, html, cls) {
-  // Remove tags HTML do texto para digitar como texto puro, preservando a classe
-  const tmp = document.createElement('div');
-  tmp.innerHTML = html;
-  const text = tmp.textContent || tmp.innerText || '';
+  // Extrai o texto puro do HTML para digitá-lo caractere a caractere.
+  // Antes usava `div.innerHTML = html` num nó solto — funciona, mas constrói
+  // nós reais a partir de uma string que pode carregar conteúdo do arquivo
+  // analisado. O DOMParser monta um documento INERTE: nada é buscado, nada é
+  // executado, e o resultado é o mesmo. Um sink de innerHTML a menos (CHECK 13).
+  const text = new DOMParser().parseFromString(String(html), 'text/html')
+                 .body.textContent || '';
   // Detecta classe pelo span original se não passada
   if (!cls) {
     const m = html.match(/class="(ok|err|warn|info)"/);

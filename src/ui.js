@@ -30,6 +30,10 @@ function hideHelpModal() {
 // CHANGELOG = era semver (v2.10+). CHANGELOG_LEGACY = versões pré-semver (≤ v2.9.1),
 // exibidas com sufixo "— Legacy". O divisor entre os dois é renderizado em renderChangelog.
 const CHANGELOG = [
+  { ver:'v2.42.3', date:'2026-08-11', title:{en:'Fewer doors, and an honest page about what this tool can read',pt:'Menos portas, e uma página honesta sobre o que a ferramenta consegue ler'}, items:[
+    {t:'chg', en:'<b>Six of the places where file data could have become page markup are gone.</b> Five were only clearing a panel, which needed no markup at all, and one was building throwaway elements purely to strip tags out of a string \u2014 that now happens in an inert document where nothing can load or run. Twenty-five remain, and the build refuses to let that number grow. None of this fixes a live flaw; it removes ground where the next one could stand.', pt:'<b>Seis dos lugares onde dado de arquivo poderia virar marcação da página deixaram de existir.</b> Cinco apenas limpavam um painel, o que não exigia marcação nenhuma, e um construía elementos descartáveis só para extrair o texto de dentro de uma string \u2014 isso agora acontece num documento inerte, onde nada carrega nem executa. Restam vinte e cinco, e o build não deixa esse número crescer. Nada disso conserta uma falha viva; retira o terreno onde a próxima poderia se apoiar.'},
+    {t:'add', en:'<b>A page now states exactly what this tool can and cannot read from other steganography tools.</b> Saying "supports Steghide" would be misleading: Steghide can encrypt with eighteen algorithms across seven modes, and this decoder implements two of those combinations \u2014 which means even its default cipher fails in six of its seven modes. That is measured against the real program, not estimated. The page also records that OpenStego payloads written with its own encryption are identified but not decrypted, and that F5 is only ever guessed at, never extracted.', pt:'<b>Uma página agora diz exatamente o que esta ferramenta consegue e não consegue ler de outras ferramentas de esteganografia.</b> Dizer "suporta Steghide" seria enganoso: o Steghide cifra com dezoito algoritmos em sete modos, e este decodificador implementa duas dessas combinações \u2014 o que significa que mesmo a cifra padrão dele falha em seis dos sete modos. Isso foi medido contra o programa real, não estimado. A página também registra que payloads do OpenStego escritos com a criptografia dele são identificados mas não decifrados, e que o F5 é apenas suposto, nunca extraído.'},
+  ]},
   { ver:'v2.42.2', date:'2026-08-11', title:{en:'Closing the door the last two bugs came through',pt:'Fechando a porta por onde os dois últimos bugs entraram'}, items:[
     {t:'add', en:'<b>The build now refuses to accept a new place where file data could become page markup.</b> Both recent flaws came through the same doorway, and the check that guards it works by inspecting each case and guessing whether it was handled correctly \u2014 useful, but it grows more fragile as the code grows. So the tool now also counts those doorways and keeps a list of the ones that exist today: adding one fails the build, and swapping a safe one for a risky one fails it too, since the list records where each lives rather than just how many there are. The number can go down; it cannot go up.', pt:'<b>O build agora recusa aceitar um lugar novo onde dado de arquivo possa virar marcação da página.</b> As duas falhas recentes entraram pela mesma porta, e a checagem que a guarda funciona inspecionando caso a caso e adivinhando se foi tratado direito \u2014 útil, mas cada vez mais frágil conforme o código cresce. Então a ferramenta agora também conta essas portas e mantém a lista das que existem hoje: acrescentar uma derruba o build, e trocar uma segura por uma arriscada derruba também, já que a lista registra onde cada uma vive e não apenas quantas são. O número pode cair; subir, não.'},
   ]},
@@ -635,11 +639,11 @@ document.getElementById('btn-clear-dec').addEventListener('click', () => {
       document.getElementById('results-area').classList.remove('visible');
       document.getElementById('export-wrap').classList.remove('visible');
       document.getElementById('dec-placeholder').style.display = 'block';
-      document.getElementById('modules-wrap').innerHTML = '';
+      document.getElementById('modules-wrap').textContent = '';
       document.getElementById('decoded-box').classList.remove('visible');
       document.getElementById('threat-num').textContent = '—';
       document.getElementById('threat-level').textContent = '—';
-      document.getElementById('threat-flags').innerHTML = '';
+      document.getElementById('threat-flags').textContent = '';
       ['orig-foto','orig-screen','orig-art','orig-synth'].forEach(id=>{
         const el=document.getElementById(id); if(el) el.textContent='—';
       });

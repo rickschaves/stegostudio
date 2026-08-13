@@ -347,7 +347,8 @@ check('XSS: metadados hostis saem como texto, não markup', () => {
 // acrescenta um perigoso, e o número continua o mesmo. Por isso a lista guarda
 // ASSINATURAS, não um número.
 //
-// META: 31 → 22 → 17 → 10 → poucos helpers nomeados. Ao baixar, atualize aqui.
+// META: 31 → 25 → 17 → 10 → poucos helpers nomeados. Ao baixar, atualize aqui.
+// v2.42.3: 31→25 (5 limpezas viraram textContent; 1 strip virou DOMParser).
 // ---------------------------------------------------------------------------
 const INNERHTML_PERMITIDOS = {
   "files|_btn.innerHTML='<spanclass=\"enc-spinner\"></span>'+t('encWork": 1,
@@ -355,29 +356,23 @@ const INNERHTML_PERMITIDOS = {
   "files|box.innerHTML='<divclass=\"stealth-analyzing\">'+t('encStealth": 1,
   "files|const_btn=document.getElementById('btn-encode'),_btnHtml=_bt": 1,
   "files|const_restore=()=>{_btn.disabled=false;_btn.classList.remove": 1,
-  "files|constvazio=id=>{conste=document.getElementById(id);if(e)e.in": 1,
   "files|document.getElementById('enc-stats').innerHTML=`": 1,
   "files|document.getElementById('rb-report').innerHTML=": 1,
   "files|document.getElementById('rb-stats').innerHTML=": 1,
   "files|nope.innerHTML=(e&&e.message==='robustCapacity')": 1,
-  "files|}catch(_){box.classList.remove('visible');box.innerHTML='';_": 1,
   "forensics|el.innerHTML=": 1,
   "i18n|el.innerHTML=t(el.getAttribute('data-i18n-html'));": 1,
   "i18n|track.innerHTML=buildSequence()+buildSequence();": 1,
   "main|hm.innerHTML=mp.map(function(v){consta=Math.min(v/0.22,1).to": 2,
   "results|div.innerHTML=`": 1,
   "results|div.innerHTML=`<spanclass=\"module-group-label${type}\">${labe": 1,
-  "results|document.getElementById('modules-wrap').innerHTML='';": 1,
   "results|document.getElementById('threat-flags').innerHTML=": 1,
   "results|host.innerHTML=`": 1,
   "terminal|el.innerHTML=html;": 1,
   "terminal|el.innerHTML=line;": 1,
   "terminal|el.innerHTML=rendered.join('<br>')+(rendered.length?'<br>':'": 1,
   "terminal|el.innerHTML=rendered.slice(0,-1).join('<br>')+": 1,
-  "terminal|tmp.innerHTML=html;": 1,
   "ui|document.getElementById('changelog-content').innerHTML=html;": 1,
-  "ui|document.getElementById('modules-wrap').innerHTML='';": 1,
-  "ui|document.getElementById('threat-flags').innerHTML='';": 1,
   "warnings|host.innerHTML=`": 2,
 };
 

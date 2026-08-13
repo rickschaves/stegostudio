@@ -7,6 +7,47 @@
 
 ---
 
+## v2.42.3 — 2026-08-11
+**Catraca 31→25 e matriz de compatibilidade (fecha a F20)**
+
+### Superfície de innerHTML reduzida
+Primeiro degrau da meta da v2.42.2. **31 → 25 sinks**, sem refactor grande:
+
+- **5 limpezas** (`innerHTML=''` em `files.js`, `results.js`, `ui.js`) →
+  `textContent`. Limpar painel nunca precisou de markup.
+- **1 strip de tags** (`setStatus`, `terminal.js`) → **`DOMParser`**. Era
+  `div.innerHTML = html` num nó solto só para extrair o texto. Funciona, mas
+  constrói nós reais a partir de string que pode carregar conteúdo do arquivo
+  analisado; o DOMParser monta documento **inerte**. Ganho de segurança real,
+  não só de contagem.
+
+A catraca (CHECK 13) acusou os 5 removidos e pediu a atualização — comportamento
+projetado. Reapertada em 25. **Nenhuma falha viva corrigida: retira o terreno
+onde a próxima se apoiaria.**
+
+### `docs/COMPATIBILITY.md` — F20 fechada
+Em inglês, para o público externo. Diz o que lemos de cada ferramenta e,
+sobretudo, **o que não lemos**:
+
+| ferramenta | limite declarado |
+|---|---|
+| OpenStego | payload cifrado é **identificado, não decifrado** (nome do arquivo sai) |
+| Steghide | **2 de ~129** pares cifra/modo; BMP não implementado |
+| OutGuess | RC4 como a ferramenta aplica |
+| F5 | só detectado pelo comentário do codificador — indício, nunca extração |
+
+**Reconferido contra o binário antes de publicar:** rijndael-128 nos 7 modos —
+**7 identificam, 1 decodifica**. A afirmação da matriz é medição, não memória.
+
+Também registra que métodos adaptativos não são detectados de forma alguma e
+encaminha ao Aletheia, e que esquemas coverless estão fora de detecção por
+construção.
+
+### Deploy
+Produção, GitHub e Release sincronizados em v2.42.2 antes desta versão.
+
+---
+
 ## v2.42.2 — 2026-08-11
 **Catraca de innerHTML: a defesa primária, não a rede de segurança**
 

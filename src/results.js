@@ -200,7 +200,7 @@ function renderResults(r, decodedMsg, decodeStatus) {
   r.stegomalware = decodedMsg ? detectStegomalware(decodedMsg) : [];
   const {score:tScore, flags:tFlags} = computeThreat(r);
 
-  document.getElementById('modules-wrap').innerHTML='';
+  document.getElementById('modules-wrap').textContent='';
 
   const db=document.getElementById('decoded-box');
   if(decodedMsg){document.getElementById('decoded-text').textContent=decodedMsg;db.classList.add('visible');}
