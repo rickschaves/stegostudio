@@ -932,14 +932,14 @@ check('F1 + robusto: formato, portadora e regras de evidência', () => {
   // CHECK 18 perceber. Entre consolidateVerdict e lastReport só são permitidos:
   // (a) a atribuição do status consolidado; (b) o único patch headerOnly.
   const closeStart = html.indexOf('const c0 = consolidateVerdict', thirdStart);
-  const closeEnd = html.indexOf('lastReport={', closeStart);
+  const closeEnd = html.indexOf('lastReport=createPublicLastReport', closeStart);
   const closeBlock = html.slice(closeStart, closeEnd);
   assert(closeStart >= 0 && closeEnd > closeStart, 'região de fechamento da análise não encontrada');
   const closeStudioWrites = (closeBlock.match(/report\.studio\s*=/g) || []).length;
   const closeStatusWrites = (closeBlock.match(/decodeStatus\s*(?:=|\+=|-=|\*=|\/=)/g) || []).length;
   assert(closeStudioWrites === 1 && /nativeHeaderMatched:true/.test(closeBlock),
     `fechamento tem ${closeStudioWrites} escritas em report.studio — só headerOnly é permitido`);
-  assert(closeStatusWrites === 1 && /decodeStatus\s*=\s*c0\.decodeStatus/.test(closeBlock),
+  assert(closeStatusWrites === 1 && /decodeStatus\s*=\s*c0\.decodeStatus\s*;/.test(closeBlock),
     `fechamento tem ${closeStatusWrites} escritas em decodeStatus — só o veredito consolidado é permitido`);
   assert(!/tailLayer|decoyLayer|alternativeLayer/.test(closeBlock),
     'fechamento voltou a publicar qual camada F1 venceu');
@@ -966,6 +966,51 @@ check('F1 + robusto: formato, portadora e regras de evidência', () => {
     `escritas top-level em report mudaram: ${JSON.stringify(topCounts)}; esperado ${JSON.stringify(expectedTopCounts)}`);
   assert(!/lastReport\.modules\.studio\s*(?:\.|\[)/.test(analyzeBlock),
     'handler altera studio através de lastReport depois do fechamento');
+
+  // FRONTEIRA DE EXPORTAÇÃO: catracas de fonte são defesa em profundidade;
+  // a propriedade final é que campos não declarados NÃO saem no JSON, qualquer
+  // que seja a sintaxe usada para criá-los internamente. Exercita a função real.
+  const allowStart = html.indexOf('//  PUBLIC REPORT ALLOWLIST — v2.42.17');
+  const allowEnd = html.indexOf('// PUBLIC REPORT ALLOWLIST — END', allowStart);
+  assert(allowStart >= 0 && allowEnd > allowStart, 'fronteira pública de relatório não encontrada');
+  const allowBlock = html.slice(allowStart, allowEnd + '// PUBLIC REPORT ALLOWLIST — END'.length);
+  const serializePublicModules = new Function(allowBlock + '\nreturn serializePublicModules;')();
+  const leakProbe = {
+    format:{cat:'lossless',ext:'PNG',encOk:true,privateRoute:'tail'},
+    metadata:{filename:'probe.png',width:64,height:64,secretRoute:'tail'},
+    studio:{available:true,nativeExtracted:true,tailLayer:true,route:'tail'},
+    lsb:{available:true,f1route:'tail'},
+    toolprint:[{tool:'Steghide',id:'steghide',level:'confirmado',evidence:'magic',algoName:'rijndael-128',modeName:'cbc',supported:true,usedEmptyPassword:false,route:'tail'}],
+    exif:{found:true,fields:{Make:'ProbeCam',Model:'P1',privateRoute:'tail'},hasCamera:true,hasGPS:false,hasExifIFD:true},
+    c2pa:{found:true,manifestDetected:true,signals:['manifest'],actionDescriptions:['edited'],privateRoute:'tail'},
+    origin:{fotografia:10,screenshot:20,arte_digital:0,sintetica:0,topCategory:'screenshot',signals:{fotografia:[],screenshot:[{labelKey:'sigScreenWidth',labelVars:{w:1080},weight:20,route:'tail'}],arte_digital:[],sintetica:[]}},
+    socialPipeline:{detected:true,platform:'WhatsApp',weak:false,byStructure:true,byFilename:false,level:'alta',route:'tail'},
+    f1route:'tail'
+  };
+  Object.assign(leakProbe, {alternativeLayer:'tail'});
+  const publicProbe = serializePublicModules(leakProbe);
+  const publicJSON = JSON.stringify(publicProbe);
+  assert(publicProbe.studio?.nativeExtracted === true && publicProbe.metadata?.filename === 'probe.png',
+    'allowlist removeu campos públicos legítimos do relatório');
+  assert(!('f1route' in publicProbe) && !('alternativeLayer' in publicProbe),
+    'allowlist deixou escapar campo top-level não público');
+  assert(!('tailLayer' in (publicProbe.studio||{})) && !('route' in (publicProbe.studio||{})),
+    'allowlist deixou escapar campo interno aninhado em studio');
+  assert(!('secretRoute' in (publicProbe.metadata||{})) && !('f1route' in (publicProbe.lsb||{})),
+    'allowlist deixou escapar campo desconhecido em módulo público');
+  assert(publicProbe.toolprint?.[0]?.algoName === 'rijndael-128' && publicProbe.toolprint?.[0]?.supported === true,
+    'allowlist removeu campos públicos raros de toolprint');
+  assert(publicProbe.exif?.fields?.Make === 'ProbeCam' && !('privateRoute' in (publicProbe.exif?.fields||{})),
+    'allowlist EXIF não preserva campos públicos ou deixa escapar campo interno');
+  assert(publicProbe.c2pa?.actionDescriptions?.[0] === 'edited' && !('privateRoute' in (publicProbe.c2pa||{})),
+    'allowlist C2PA não preserva campos públicos ou deixa escapar campo interno');
+  assert(publicProbe.origin?.signals?.screenshot?.[0]?.labelVars?.w === 1080 &&
+         !('route' in (publicProbe.origin?.signals?.screenshot?.[0]||{})),
+    'allowlist de origem não preserva labelVars públicos ou deixa escapar campo interno');
+  assert(publicProbe.socialPipeline?.platform === 'WhatsApp' && !('route' in (publicProbe.socialPipeline||{})),
+    'allowlist socialPipeline não preserva campos públicos ou deixa escapar campo interno');
+  assert(!publicJSON.includes('tailLayer') && !publicJSON.includes('f1route') && !publicJSON.includes('alternativeLayer'),
+    'JSON público contém identificador interno fora da allowlist');
 
   // Vetor comportamental hostil: envelope robusto válido com senha externa
   // diferente da senha AES interna. Prova que esse estado é alcançável em entrada

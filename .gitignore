@@ -21,12 +21,9 @@ requirements.txt
 aletheia-env*/
 
 # ── Documentos internos ─────────────────────────────────────────────────────
-# Roadmap e contextos de trabalho contêm decisões internas e discussões que não
-# pertencem ao repositório público.
-docs/ROADMAP_STEGO_STUDIO.md
-docs/STEGO_STUDIO_CONTEXTO_BASTÃO.md
-docs/STEGO_STUDIO_CONTEXTO_ORIGINAL.md
-docs/LEIA-ME.md
+# Handoff, roadmap operacional, mapa interno e arqueologia ficam no pacote de
+# trabalho completo, mas NÃO pertencem ao repositório público.
+internal/
 
 # ── Ambiente ────────────────────────────────────────────────────────────────
 node_modules/
@@ -41,5 +38,3 @@ desktop.ini
 *.swp
 *~
 
-# Mapa documental interno
-docs/DOCUMENTACAO_MAPA.md

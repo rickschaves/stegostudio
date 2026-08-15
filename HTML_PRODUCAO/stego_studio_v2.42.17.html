@@ -1403,7 +1403,7 @@ textarea.dec-t:focus { border-color:rgba(255,107,53,0.4); }
 <body>
 
 <header>
-  <div class="logo">STEGO<span class="e">·</span>STUDIO <span style="font-size:0.85rem;letter-spacing:2px;color:var(--dim)">v2.42.16 // ENCODER · ANALYZER · DECODER</span></div>
+  <div class="logo">STEGO<span class="e">·</span>STUDIO <span style="font-size:0.85rem;letter-spacing:2px;color:var(--dim)">v2.42.17 // ENCODER · ANALYZER · DECODER</span></div>
   <div class="header-meta"><span data-i18n="tagline1">Esteganografia LSB com criptografia AES-256 opcional</span><br><span data-i18n="tagline2">Análise forense integrada · Exportação JSON</span></div>
 </header>
 
@@ -1917,7 +1917,7 @@ textarea.dec-t:focus { border-color:rgba(255,107,53,0.4); }
 
 <script>
 /*
- * STEGO·STUDIO v2.42.16 — esteganografia e análise forense de imagens
+ * STEGO·STUDIO v2.42.17 — esteganografia e análise forense de imagens
  * Copyright (C) 2026 RASC
  *
  * Este programa é software livre: você pode redistribuí-lo e/ou modificá-lo
@@ -3704,10 +3704,13 @@ function hideHelpModal() {
 // CHANGELOG = era semver (v2.10+). CHANGELOG_LEGACY = versões pré-semver (≤ v2.9.1),
 // exibidas com sufixo "— Legacy". O divisor entre os dois é renderizado em renderChangelog.
 const CHANGELOG = [
+  { ver:'v2.42.17', date:'2026-08-14', title:{en:'Exported reports now have an explicit public schema',pt:'Relatórios exportados agora têm um esquema público explícito'}, items:[
+    {t:'chg', en:'<b>Export JSON now passes through an explicit allowlist before it leaves the Analyzer.</b> Internal working fields are no longer inherited automatically by the public report, making the exported schema more stable and preventing accidental internal state from appearing in future reports.', pt:'<b>O Exportar JSON agora passa por uma lista explícita de campos permitidos antes de sair do Analyzer.</b> Campos internos de trabalho não são mais herdados automaticamente pelo relatório público, tornando o esquema exportado mais estável e evitando que estado interno apareça acidentalmente em relatórios futuros.'},
+    {t:'fix', en:'<b>The export boundary is regression-tested against unknown fields at both module and nested levels.</b> Existing documented report fields remain available; only fields outside the public schema are dropped.', pt:'<b>A fronteira de exportação agora tem teste de regressão contra campos desconhecidos tanto no nível dos módulos quanto em objetos internos.</b> Os campos documentados existentes continuam disponíveis; somente campos fora do esquema público são descartados.'},
+  ]},
   { ver:'v2.42.16', date:'2026-08-14', title:{en:'2.42 closure: evidence strength no longer drops when evidence grows',pt:'Fechamento 2.42: a força da evidência não cai quando a evidência aumenta'}, items:[
     {t:'fix', en:'<b>Adding an active header match can no longer make Threat weaker than the same image with only its passive header.</b> The visible label still follows the most specific protocol state, while strong-evidence gating now follows the raw evidence strength independently.', pt:'<b>Adicionar uma correspondência ativa de header não pode mais deixar o Threat mais fraco do que a mesma imagem com apenas o header passivo.</b> O rótulo visível continua seguindo o estado de protocolo mais específico, enquanto o portão de evidência forte agora segue a força bruta de forma independente.'},
     {t:'chg', en:'<b>CHECK 16 now locks the monotonicity case that exposed the v2.42.15 regression, and CHECK 18 closes three more mutation gaps.</b> Native evidence is consumed directly from the pure resolver, top-level report writes are ratcheted by property, and valid-password status statements must be byte-identical rather than merely contain the same substring.', pt:'<b>O CHECK 16 agora trava o caso de monotonicidade que expôs a regressão da v2.42.15, e o CHECK 18 fecha mais três lacunas de mutação.</b> A evidência nativa é consumida diretamente do resolver puro, escritas top-level em report são catracadas por propriedade, e os statements de status de senha válida precisam ser byte-idênticos em vez de apenas conterem o mesmo trecho.'},
-    {t:'chg', en:'<b>Project handoff and review documents now carry an explicit defensive-security authorization context.</b> This makes the scope clear in new chats and independent reviews without changing product behaviour.', pt:'<b>Os documentos de passagem de bastão e revisão agora carregam contexto explícito de autorização e segurança defensiva.</b> Isso deixa o escopo claro em novos chats e auditorias independentes sem alterar o comportamento do produto.'},
   ]},
   { ver:'v2.42.15', date:'2026-08-14', title:{en:'Final 2.42 hardening: one evidence state, honest robust JPEG errors',pt:'Fechamento do hardening 2.42: uma evidência única e erros honestos no JPEG robusto'}, items:[
     {t:'fix', en:'<b>Threat, Protocol, the explanatory note and the offline-limit note now resolve the same native evidence state.</b> Mixed passive/active header cases can no longer describe the same finding with different labels.', pt:'<b>Threat, Protocolo, a nota explicativa e a nota de limitação offline agora resolvem o mesmo estado de evidência nativa.</b> Casos mistos de header passivo/ativo não podem mais descrever o mesmo achado com rótulos diferentes.'},
@@ -11466,6 +11469,157 @@ function markNativeExtracted(report) {
   return studio;
 }
 
+
+// ════════════════════════════════════════
+//  PUBLIC REPORT ALLOWLIST — v2.42.17
+// ════════════════════════════════════════
+// `report` é o estado de trabalho interno do Analyzer. Ele pode ganhar campos
+// auxiliares no futuro; o JSON público NÃO deve herdar automaticamente esses
+// campos. Esta projeção é a fronteira explícita de exportação: só caminhos
+// listados abaixo podem sair em `lastReport.modules` / Export JSON.
+//
+// Importante para F1: mesmo que uma refatoração futura crie acidentalmente um
+// campo como `tailLayer`, `f1route` ou equivalente em qualquer objeto interno,
+// ele não atravessa esta fronteira sem uma alteração consciente da allowlist.
+const PUBLIC_REPORT_SCHEMA = {
+  format: {cat:true, ext:true, encOk:true, msg:true, webp:true},
+  metadata: {filename:true, size:true, type:true, formatCategory:true, width:true, height:true, pixels:true, lastModified:true},
+  strings: {
+    count:true,
+    interesting:[{str:true,type:true}],
+    adversarial:[{str:true,reasonKey:true}],
+    appendedData:true, appendedBytes:true, note:true
+  },
+  jpegDCT: {
+    available:true, reason:true, progressive:true, components:true, width:true, height:true,
+    acTotal:true, acNonZero:true, nonZeroRatio:true, distinctValues:true, avgAbsCoeff:true,
+    maxAbsCoeff:true, chi:true, chiPairs:true, chiPerPair:true, firstOrderAnomaly:true,
+    bandLow:true, bandMid:true, bandHigh:true, verdict:true
+  },
+  toolprint:[{
+    tool:true, id:true, level:true, evidence:true, algoName:true, modeName:true,
+    supported:true, usedEmptyPassword:true
+  }],
+  lsb: {
+    available:true, note:true, chiR:true, chiG:true, chiB:true, bestMode:true,
+    printableRatio:true, decodedSample:true, suspicious:true, foundText:true,
+    headerName:true, cipherSuspicion:true, rsRate:true, wsRate:true,
+    lsbrDetected:true, lsbrStrong:true, lsbrPossible:true, wsReliable:true,
+    neuralSuspect:true, neuralEntSim:true, neuralHfSim:true, neuralAvgHF:true
+  },
+  frequency: {
+    spikes:true, evenOddBias:true, biasAnomaly:true, biasReliable:true,
+    biasLowComplexity:true, dominantRGB:[true]
+  },
+  entropy: {
+    shannon:true, uniqueColors:true, avgNoise:true, noiseAnomaly:true,
+    noiseThreshold:true, highEntropy:true
+  },
+  color: {
+    uniqueAlpha:true, alphaAnomaly:true, partialAlpha:true, rareClusters:true,
+    rareSuspicious:true, rareDetails:[true]
+  },
+  studio: {
+    hasHeader:true, payloadBytes:true, shuffled:true, available:true, note:true,
+    robustSignature:{razao:true, limiar:true, blocos:true, suspeito:true},
+    robust:true, robustCorrected:true,
+    thirdParty:true, foreignFile:true, foreignEncrypted:true, foreignTruncated:true,
+    genericMode:true, deepScan:true, headerName:true,
+    nativeExtracted:true, nativeHeaderMatched:true
+  },
+  dct: {available:true, reason:true, blockCount:true, stdDev:true, mean:true, suspicious:true},
+  gradients: {available:true, reason:true, totalEdges:true, sharpRatio:true, sharpEdges:true, softEdges:true, suspicious:true},
+  chroma: {
+    available:true, reason:true, avgSaturation:true, highSatRatio:true,
+    cbVariance:true, crVariance:true, oversaturated:true, uniformChroma:true, suspicious:true
+  },
+  exif: {
+    available:true, readError:true, found:true,
+    fields:{
+      Segmento:true, Criador:true, Software:true, Fonte:true, Copyright:true,
+      Make:true, Model:true, Artist:true, DateTimeOriginal:true, UserComment:true,
+      YCbCrPositioning:true, GPS:true
+    },
+    aiSoftware:true, hasCamera:true, hasGPS:true, noExif:true,
+    hasExifIFD:true, cameraPartial:true
+  },
+  c2pa: {
+    available:true, readError:true, found:true, manifestDetected:true,
+    aiGenerator:true, ca:true, certDate:true, digitalSourceType:true,
+    manifestPresent:true, signals:[true], rawSoftware:true,
+    genName:true, genVersion:true, signerCN:true, actionDescriptions:[true],
+    hasManifest:true, hasSvg:true, manifestLen:true, svgLen:true
+  },
+  _regionalEntropyVar:true,
+  ai: {
+    score:true, level:true,
+    signals:[{
+      labelKey:true, detailKey:true, detail:true, level:true,
+      detailVars:{
+        w:true, h:true, extra:true, signals:true, software:true, noise:true,
+        ext:true, colors:true, count:true, spread:true, std:true, ratio:true,
+        detail:true, entropy:true
+      },
+      labelVars:{ratio:true}
+    }],
+    formatCat:true, formatExt:true, cameraVeto:true, vectorArtVeto:true, digitalRenderVeto:true
+  },
+  origin: {
+    fotografia:true, screenshot:true, arte_digital:true, sintetica:true, topCategory:true,
+    signals:{
+      fotografia:[{labelKey:true,labelVars:{w:true},weight:true}],
+      screenshot:[{labelKey:true,labelVars:{w:true},weight:true}],
+      arte_digital:[{labelKey:true,labelVars:{w:true},weight:true}],
+      sintetica:[{labelKey:true,labelVars:{w:true},weight:true}]
+    }
+  },
+  socialPipeline: {
+    detected:true, platform:true, weak:true, byStructure:true, byFilename:true, level:true
+  },
+  stegomalware:[{key:true, sev:true, snippet:true}]
+};
+
+function projectPublicReportValue(value, schema) {
+  if (value === null) return null;
+  if (schema === true) {
+    const type = typeof value;
+    return (type === 'string' || type === 'number' || type === 'boolean') ? value : undefined;
+  }
+  if (Array.isArray(schema)) {
+    if (!Array.isArray(value)) return undefined;
+    const itemSchema = schema[0];
+    return value.map(item => projectPublicReportValue(item, itemSchema)).filter(item => item !== undefined);
+  }
+  if (!schema || typeof schema !== 'object' || !value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const out = {};
+  for (const key of Object.keys(schema)) {
+    if (!Object.prototype.hasOwnProperty.call(value, key)) continue;
+    const projected = projectPublicReportValue(value[key], schema[key]);
+    if (projected !== undefined) out[key] = projected;
+  }
+  return out;
+}
+
+function serializePublicModules(report) {
+  return projectPublicReportValue(report || {}, PUBLIC_REPORT_SCHEMA) || {};
+}
+
+function createPublicLastReport(report, decodedMsg, decodeStatus) {
+  const modules = serializePublicModules(report);
+  const threat = computeThreat(report);
+  const synth = computeSynth(report);
+  return {
+    timestamp:new Date().toISOString(),
+    threat:{score:threat.score, flags:[...(threat.flags || [])]},
+    synth:{score:synth.score, level:synth.level, flags:[...(synth.flags || [])]},
+    origin:modules.origin || null,
+    decodedMsg:decodedMsg ?? null,
+    decodeStatus:typeof decodeStatus === 'string' ? decodeStatus : '',
+    modules
+  };
+}
+// PUBLIC REPORT ALLOWLIST — END
+
 let _analisando = false;   // guarda de reentrância — ver comentário abaixo
 document.getElementById('btn-analyze').addEventListener('click', async ()=>{
   if(!decID||!decFile) return;
@@ -11863,7 +12017,7 @@ document.getElementById('btn-analyze').addEventListener('click', async ()=>{
     if (obsoleta()) return;
 
     report.stegomalware = decodedMsg ? detectStegomalware(decodedMsg) : [];
-    lastReport={timestamp:new Date().toISOString(),threat:computeThreat(report),synth:computeSynth(report),origin:report.origin,decodedMsg,decodeStatus,modules:report};
+    lastReport=createPublicLastReport(report, decodedMsg, decodeStatus);
     // Guarda os argumentos do render para poder refazê-lo ao trocar de idioma
     lastRenderArgs = {report, decodedMsg, decodeStatus, gen: run};
     renderResults(report,decodedMsg,decodeStatus);
@@ -11920,7 +12074,7 @@ document.getElementById('btn-analyze').addEventListener('click', async ()=>{
 // ════════════════════════════════════════
 document.getElementById('btn-export-json').addEventListener('click',()=>{
   if(!lastReport) return;
-  const payload={_tool:'STEGO·STUDIO v2.42.16',_schema:'forensic-report-v2',
+  const payload={_tool:'STEGO·STUDIO v2.42.17',_schema:'forensic-report-v2',
     _hint:t('exportHintJSON'),
     ...lastReport};
   const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});

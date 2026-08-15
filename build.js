@@ -17,7 +17,7 @@ const SRC = path.join(__dirname, 'src');
 const DIST = path.join(__dirname, 'dist');
 
 // Versão do artefato final. Convenção: pontos entre números (nunca underscore).
-const VERSION = '2.42.16';
+const VERSION = '2.42.17';
 
 // ORDEM DE CONCATENAÇÃO — preserva a ordem-fonte do monolito v2.23.1.
 // hill.js e stc.js foram retirados de dentro do span do encoder (span 100%

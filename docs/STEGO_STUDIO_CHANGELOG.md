@@ -5,6 +5,35 @@
 > original. Veja o marco "Troca de versionamento" abaixo. A organização final
 > da numeração antiga fica a critério do Rick.
 
+## v2.42.17 — 2026-08-14
+**Explicit public-report boundary + post-2.42 repository cleanup**
+
+v2.42.16 was published to GitHub and Cloudflare and its final independent recheck
+reported no blocker. The first post-hardening maintenance release turns the main
+remaining audit recommendation into a structural property: the Analyzer's internal
+working object is no longer exported directly.
+
+- **Export allowlist.** `createPublicLastReport()` passes internal state through
+  `serializePublicModules()`. Only modules/fields listed in `PUBLIC_REPORT_SCHEMA`
+  can reach the public JSON; new internal fields are not inherited automatically.
+- **F1 is protected at the export boundary, not only at write sites.** Unknown fields
+  at the top level, inside `studio`, `metadata`, `lsb`, or array items are dropped.
+  CHECK 18 source ratchets remain as defense in depth, but they are no longer the only
+  barrier against accidental layer-identity leakage.
+- **CHECK 18 exercises the real projection function.** The probe injects unknown
+  fields through ordinary assignment and `Object.assign` and requires legitimate
+  public fields to remain while extras disappear from JSON. The
+  `decodeStatus = c0.decodeStatus;` assertion now also requires the complete statement.
+- **Repository organization.** Operational handoff documents move under `internal/`,
+  which is ignored by Git. Public repository documentation now has English as its
+  target language; existing Portuguese public material will be migrated gradually
+  rather than rewritten in bulk.
+- **The in-app changelog is product-only.** Handoff mechanics, audit workflow, and
+  internal documentation changes are no longer shown to site users.
+- **No change** to KDF, wire format, Encoder, Decoder, STC, HILL, robust/PNG/JPEG
+  codecs, F21 specification, or social-platform measurements.
+
+
 ---
 
 ## v2.42.16 — 2026-08-14
@@ -30,10 +59,6 @@ a vencer a **redação** do estado e, acidentalmente, também desligava
   propriedades top-level escritas em `report`; e os statements de status válido
   são exigidos de forma exata para impedir sufixos invisíveis diferentes entre as
   duas rotas F1.
-- **Contexto defensivo/autorizado documentado.** `SECURITY.md`, o mapa documental e
-  o Bastão agora deixam explícito que o projeto é open-source próprio e que
-  revisão/hardening/testes são autorizados e defensivos. Briefings futuros devem
-  repetir esse enquadramento.
 - **Sem mudança** em KDF, wire format, Encoder, Decoder, STC, HILL, robust codec,
   PNG/JPEG codec, SPEC F21 ou medições de redes sociais.
 

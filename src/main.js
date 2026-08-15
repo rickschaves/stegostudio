@@ -22,6 +22,157 @@ function markNativeExtracted(report) {
   return studio;
 }
 
+
+// ════════════════════════════════════════
+//  PUBLIC REPORT ALLOWLIST — v2.42.17
+// ════════════════════════════════════════
+// `report` é o estado de trabalho interno do Analyzer. Ele pode ganhar campos
+// auxiliares no futuro; o JSON público NÃO deve herdar automaticamente esses
+// campos. Esta projeção é a fronteira explícita de exportação: só caminhos
+// listados abaixo podem sair em `lastReport.modules` / Export JSON.
+//
+// Importante para F1: mesmo que uma refatoração futura crie acidentalmente um
+// campo como `tailLayer`, `f1route` ou equivalente em qualquer objeto interno,
+// ele não atravessa esta fronteira sem uma alteração consciente da allowlist.
+const PUBLIC_REPORT_SCHEMA = {
+  format: {cat:true, ext:true, encOk:true, msg:true, webp:true},
+  metadata: {filename:true, size:true, type:true, formatCategory:true, width:true, height:true, pixels:true, lastModified:true},
+  strings: {
+    count:true,
+    interesting:[{str:true,type:true}],
+    adversarial:[{str:true,reasonKey:true}],
+    appendedData:true, appendedBytes:true, note:true
+  },
+  jpegDCT: {
+    available:true, reason:true, progressive:true, components:true, width:true, height:true,
+    acTotal:true, acNonZero:true, nonZeroRatio:true, distinctValues:true, avgAbsCoeff:true,
+    maxAbsCoeff:true, chi:true, chiPairs:true, chiPerPair:true, firstOrderAnomaly:true,
+    bandLow:true, bandMid:true, bandHigh:true, verdict:true
+  },
+  toolprint:[{
+    tool:true, id:true, level:true, evidence:true, algoName:true, modeName:true,
+    supported:true, usedEmptyPassword:true
+  }],
+  lsb: {
+    available:true, note:true, chiR:true, chiG:true, chiB:true, bestMode:true,
+    printableRatio:true, decodedSample:true, suspicious:true, foundText:true,
+    headerName:true, cipherSuspicion:true, rsRate:true, wsRate:true,
+    lsbrDetected:true, lsbrStrong:true, lsbrPossible:true, wsReliable:true,
+    neuralSuspect:true, neuralEntSim:true, neuralHfSim:true, neuralAvgHF:true
+  },
+  frequency: {
+    spikes:true, evenOddBias:true, biasAnomaly:true, biasReliable:true,
+    biasLowComplexity:true, dominantRGB:[true]
+  },
+  entropy: {
+    shannon:true, uniqueColors:true, avgNoise:true, noiseAnomaly:true,
+    noiseThreshold:true, highEntropy:true
+  },
+  color: {
+    uniqueAlpha:true, alphaAnomaly:true, partialAlpha:true, rareClusters:true,
+    rareSuspicious:true, rareDetails:[true]
+  },
+  studio: {
+    hasHeader:true, payloadBytes:true, shuffled:true, available:true, note:true,
+    robustSignature:{razao:true, limiar:true, blocos:true, suspeito:true},
+    robust:true, robustCorrected:true,
+    thirdParty:true, foreignFile:true, foreignEncrypted:true, foreignTruncated:true,
+    genericMode:true, deepScan:true, headerName:true,
+    nativeExtracted:true, nativeHeaderMatched:true
+  },
+  dct: {available:true, reason:true, blockCount:true, stdDev:true, mean:true, suspicious:true},
+  gradients: {available:true, reason:true, totalEdges:true, sharpRatio:true, sharpEdges:true, softEdges:true, suspicious:true},
+  chroma: {
+    available:true, reason:true, avgSaturation:true, highSatRatio:true,
+    cbVariance:true, crVariance:true, oversaturated:true, uniformChroma:true, suspicious:true
+  },
+  exif: {
+    available:true, readError:true, found:true,
+    fields:{
+      Segmento:true, Criador:true, Software:true, Fonte:true, Copyright:true,
+      Make:true, Model:true, Artist:true, DateTimeOriginal:true, UserComment:true,
+      YCbCrPositioning:true, GPS:true
+    },
+    aiSoftware:true, hasCamera:true, hasGPS:true, noExif:true,
+    hasExifIFD:true, cameraPartial:true
+  },
+  c2pa: {
+    available:true, readError:true, found:true, manifestDetected:true,
+    aiGenerator:true, ca:true, certDate:true, digitalSourceType:true,
+    manifestPresent:true, signals:[true], rawSoftware:true,
+    genName:true, genVersion:true, signerCN:true, actionDescriptions:[true],
+    hasManifest:true, hasSvg:true, manifestLen:true, svgLen:true
+  },
+  _regionalEntropyVar:true,
+  ai: {
+    score:true, level:true,
+    signals:[{
+      labelKey:true, detailKey:true, detail:true, level:true,
+      detailVars:{
+        w:true, h:true, extra:true, signals:true, software:true, noise:true,
+        ext:true, colors:true, count:true, spread:true, std:true, ratio:true,
+        detail:true, entropy:true
+      },
+      labelVars:{ratio:true}
+    }],
+    formatCat:true, formatExt:true, cameraVeto:true, vectorArtVeto:true, digitalRenderVeto:true
+  },
+  origin: {
+    fotografia:true, screenshot:true, arte_digital:true, sintetica:true, topCategory:true,
+    signals:{
+      fotografia:[{labelKey:true,labelVars:{w:true},weight:true}],
+      screenshot:[{labelKey:true,labelVars:{w:true},weight:true}],
+      arte_digital:[{labelKey:true,labelVars:{w:true},weight:true}],
+      sintetica:[{labelKey:true,labelVars:{w:true},weight:true}]
+    }
+  },
+  socialPipeline: {
+    detected:true, platform:true, weak:true, byStructure:true, byFilename:true, level:true
+  },
+  stegomalware:[{key:true, sev:true, snippet:true}]
+};
+
+function projectPublicReportValue(value, schema) {
+  if (value === null) return null;
+  if (schema === true) {
+    const type = typeof value;
+    return (type === 'string' || type === 'number' || type === 'boolean') ? value : undefined;
+  }
+  if (Array.isArray(schema)) {
+    if (!Array.isArray(value)) return undefined;
+    const itemSchema = schema[0];
+    return value.map(item => projectPublicReportValue(item, itemSchema)).filter(item => item !== undefined);
+  }
+  if (!schema || typeof schema !== 'object' || !value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const out = {};
+  for (const key of Object.keys(schema)) {
+    if (!Object.prototype.hasOwnProperty.call(value, key)) continue;
+    const projected = projectPublicReportValue(value[key], schema[key]);
+    if (projected !== undefined) out[key] = projected;
+  }
+  return out;
+}
+
+function serializePublicModules(report) {
+  return projectPublicReportValue(report || {}, PUBLIC_REPORT_SCHEMA) || {};
+}
+
+function createPublicLastReport(report, decodedMsg, decodeStatus) {
+  const modules = serializePublicModules(report);
+  const threat = computeThreat(report);
+  const synth = computeSynth(report);
+  return {
+    timestamp:new Date().toISOString(),
+    threat:{score:threat.score, flags:[...(threat.flags || [])]},
+    synth:{score:synth.score, level:synth.level, flags:[...(synth.flags || [])]},
+    origin:modules.origin || null,
+    decodedMsg:decodedMsg ?? null,
+    decodeStatus:typeof decodeStatus === 'string' ? decodeStatus : '',
+    modules
+  };
+}
+// PUBLIC REPORT ALLOWLIST — END
+
 let _analisando = false;   // guarda de reentrância — ver comentário abaixo
 document.getElementById('btn-analyze').addEventListener('click', async ()=>{
   if(!decID||!decFile) return;
@@ -419,7 +570,7 @@ document.getElementById('btn-analyze').addEventListener('click', async ()=>{
     if (obsoleta()) return;
 
     report.stegomalware = decodedMsg ? detectStegomalware(decodedMsg) : [];
-    lastReport={timestamp:new Date().toISOString(),threat:computeThreat(report),synth:computeSynth(report),origin:report.origin,decodedMsg,decodeStatus,modules:report};
+    lastReport=createPublicLastReport(report, decodedMsg, decodeStatus);
     // Guarda os argumentos do render para poder refazê-lo ao trocar de idioma
     lastRenderArgs = {report, decodedMsg, decodeStatus, gen: run};
     renderResults(report,decodedMsg,decodeStatus);
@@ -476,7 +627,7 @@ document.getElementById('btn-analyze').addEventListener('click', async ()=>{
 // ════════════════════════════════════════
 document.getElementById('btn-export-json').addEventListener('click',()=>{
   if(!lastReport) return;
-  const payload={_tool:'STEGO·STUDIO v2.42.16',_schema:'forensic-report-v2',
+  const payload={_tool:'STEGO·STUDIO v2.42.17',_schema:'forensic-report-v2',
     _hint:t('exportHintJSON'),
     ...lastReport};
   const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});

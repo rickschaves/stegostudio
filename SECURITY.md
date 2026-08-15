@@ -9,10 +9,6 @@ remediation, regression testing, compatibility validation and controlled image
 forensics. Nothing in the project documentation authorises intrusion into third-party
 systems, malware development or unauthorised access.
 
-Review briefs and handoff documents should repeat this context when they may be read
-outside the ongoing project conversation, so the purpose is explicit rather than
-inferred from isolated terms such as “payload”, “threat”, “KDF” or “steganography”.
-
 ## Threat model
 
 This tool exists to open images you have reason to distrust. **Every byte read

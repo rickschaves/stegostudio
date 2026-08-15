@@ -2,22 +2,21 @@
 
 ## Language
 
-The project is transitioning to English for anything a reader outside the
-project will encounter.
+English is the target language for **all public-facing repository documentation**.
+Do not add new Portuguese text to public documentation. Existing Portuguese public
+material is being migrated gradually so historical reasoning is not lost through a
+bulk rewrite.
 
-**English:** `README.md`, this file, `SECURITY.md`, commit messages, and the
-in-app interface (both English and Portuguese are shipped; English is the
-reference).
+Operational handoff material is different: it may remain in Portuguese because it is
+working context for the maintainers, but it belongs under `internal/` and is excluded
+from the public repository by `.gitignore`.
 
-**Still Portuguese:** `docs/STEGO_STUDIO_CHANGELOG.md`, `LEIA-ME.md`,
-`docs/MEDICAO_REDES_SOCIAIS.md`, and source comments. The changelog alone runs
-past two thousand lines of detailed engineering notes; translating it in bulk
-would risk losing the reasoning that makes it worth keeping. It is being
-converted gradually, newest entries first.
+Source comments will stay in Portuguese for now. They explain *why* a decision was
+made — often citing the bug that motivated it — and preserving that reasoning has
+priority over translating comments mechanically.
 
-Source comments will stay in Portuguese for now. They explain *why* a decision
-was made — often citing a specific bug that motivated it — and that reasoning is
-worth more intact in the author's language than flattened into a second one.
+The in-app interface remains bilingual (English and Portuguese); English is the
+reference locale for new public-facing copy.
 
 ## Building
 
