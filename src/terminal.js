@@ -95,20 +95,19 @@ function escapeHTML(s) {
 }
 
 // setStatus compatível — uma única linha digitada
-function setStatus(id, html, cls) {
-  // Extrai o texto puro do HTML para digitá-lo caractere a caractere.
-  // Antes usava `div.innerHTML = html` num nó solto — funciona, mas constrói
-  // nós reais a partir de uma string que pode carregar conteúdo do arquivo
-  // analisado. O DOMParser monta um documento INERTE: nada é buscado, nada é
-  // executado, e o resultado é o mesmo. Um sink de innerHTML a menos (CHECK 13).
-  const text = new DOMParser().parseFromString(String(html), 'text/html')
-                 .body.textContent || '';
-  // Detecta classe pelo span original se não passada
-  if (!cls) {
-    const m = html.match(/class="(ok|err|warn|info)"/);
-    cls = m ? m[1] : null;
-  }
-  termWrite(id, [{text, cls}]);
+// Escreve UMA linha de status. Recebe TEXTO e classe — nunca HTML.
+//
+// Já foi `div.innerHTML = html` num nó solto, depois `DOMParser`, ambos só para
+// extrair o texto de dentro de uma string. A revisão externa perguntou qual dos
+// dois era melhor e a resposta foi: nenhum. Os três chamadores sempre passaram
+// `<span class="ok|err">…</span>` — markup montado aqui mesmo, imediatamente
+// desmontado ali. Dois deles interpolam `e.message`, que pode carregar conteúdo
+// do arquivo analisado.
+//
+// Texto puro elimina a classe inteira de problema: não há parser, não há DOM
+// intermediário, não há o que sanitizar.
+function setStatus(id, text, cls) {
+  termWrite(id, [{ text: String(text), cls: cls || null }]);
 }
 
 // Status "trabalhando" com AMPULHETA ANIMADA. O terminal digita texto puro e
@@ -218,14 +217,41 @@ function decStatusLoaded(fmt, w, h, size) {
   termWrite('dec-status', build());
 }
 
-// Destaca o campo de chave quando uma mensagem cifrada é encontrada sem chave
-function flashKey() {
+// Destaca o campo de chave sem depender só de cor. O aviso usa três canais:
+// contorno, ícone ⚠ e texto visível abaixo do campo. Um único timer é mantido;
+// chamadas consecutivas reiniciam o período em vez de deixarem timers competindo.
+let keyFlashTimer = null;
+let keyFlashReason = null;
+function clearKeyFlash() {
+  if (keyFlashTimer !== null) { clearTimeout(keyFlashTimer); keyFlashTimer = null; }
   const k = document.getElementById('dec-key');
-  if (!k) return;
-  k.style.boxShadow = '0 0 0 2px var(--dec)';
-  const orig = k.placeholder;
-  k.placeholder = '⚠ Insira a chave para decodificar';
-  setTimeout(() => { k.style.boxShadow=''; k.placeholder=orig; }, 5000);
+  const field = k?.closest('.key-field');
+  const icon = field?.querySelector('.key-icon');
+  const hint = document.getElementById('dec-key-hint');
+  if (field) field.classList.remove('key-flash');
+  if (icon) icon.textContent = '🔑';
+  if (hint) hint.textContent = t('decKeyHint2');
+  if (k) k.placeholder = t('keyPlaceholder');
+  keyFlashReason = null;
+}
+function refreshKeyFlashText() {
+  if (!keyFlashReason) return;
+  const hint = document.getElementById('dec-key-hint');
+  if (hint) hint.textContent = t(keyFlashReason === 'wrong' ? 'decKeyFlashWrong' : 'decKeyFlashMissing');
+}
+function flashKey(reason='missing') {
+  clearKeyFlash();
+  keyFlashReason = reason;
+  const k = document.getElementById('dec-key');
+  const field = k?.closest('.key-field');
+  const icon = field?.querySelector('.key-icon');
+  const hint = document.getElementById('dec-key-hint');
+  if (!k || !field) return;
+  field.classList.add('key-flash');
+  if (icon) icon.textContent = '⚠';
+  refreshKeyFlashText();
+  if (!k.value) k.placeholder = '⚠ ' + t('keyPlaceholder');
+  keyFlashTimer = setTimeout(clearKeyFlash, 5000);
 }
 // Verifica se bytes brutos têm ratio de ASCII puro (usado para LSB raw / extração genérica)
 function printable(bytes) {

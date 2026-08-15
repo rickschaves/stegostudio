@@ -40,3 +40,6 @@ desktop.ini
 .idea/
 *.swp
 *~
+
+# Mapa documental interno
+docs/DOCUMENTACAO_MAPA.md

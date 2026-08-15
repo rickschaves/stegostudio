@@ -158,9 +158,11 @@ function findC2PAContainers(bytes) {
 }
 
 async function parseC2PA(file) {
+  // Leitura via readFileBytes: falha vira rejeição, nunca promessa pendente.
+  const _bytes = await readFileBytes(file, 'parseC2PA');
   return new Promise(res => {
-    const r = new FileReader();
-    r.onload = e => {
+    const e = { target: { result: _bytes.buffer } };
+    (() => {
       const result = {
         found: false,
         manifestDetected: false,
@@ -298,8 +300,7 @@ async function parseC2PA(file) {
 
       } catch(_) {}
       res(result);
-    };
-    r.readAsArrayBuffer(file);
+    })();
   });
 }
 
@@ -326,10 +327,9 @@ async function runForensics(imageData, file, onProgress=()=>{}, sharedDec=null) 
 
   // M2: STRINGS
   onProgress(2, PIPELINE_STEPS[1]);
-  const strResult = await new Promise(res=>{
-    const r=new FileReader();
-    r.onload=e=>{
-      const bytes=new Uint8Array(e.target.result);
+  const strResult = await (async () => {
+    const bytes = await readFileBytes(file, 'strings');
+    {
       const text=new TextDecoder('utf-8',{fatal:false}).decode(bytes);
       const regex=/[\x20-\x7E]{6,}/g;
       let m,found=[],count=0;
@@ -376,12 +376,11 @@ async function runForensics(imageData, file, onProgress=()=>{}, sharedDec=null) 
           break;
         }
       }
-      res({count:found.length,interesting,adversarial,appendedData,appendedBytes,
+      return {count:found.length,interesting,adversarial,appendedData,appendedBytes,
         note:isLossy?t('noteStringsFiltered'):'',
-        _rawBytes:(fmt.ext==='JPEG'?bytes:null)});
-    };
-    r.readAsArrayBuffer(file);
-  });
+        _rawBytes:(fmt.ext==='JPEG'?bytes:null)};
+    }
+  })();
   report.strings=strResult;
 
   // ── F3-C: esteganálise DCT para JPEG (usa os bytes já lidos acima) ──
@@ -475,6 +474,12 @@ async function runForensics(imageData, file, onProgress=()=>{}, sharedDec=null) 
     const wsReliable = !lowComplexity;
     const wsDetect = wsMax > 0.15 && wsReliable;
     const lsbrDetected = rsDetect || (wsDetect && rsSoft);    // alta confiança
+    // lsbrStrong: SÓ o caminho do RS (>15%), que é o confiável. O caminho
+    // corroborado (WS>15% + RS>8%) fica de fora — o WS produz taxas altas em
+    // imagem limpa, e o próprio comentário acima diz que ele nunca decide
+    // sozinho. Nenhum limiar mudou aqui: é a mesma condição `rsDetect`,
+    // exposta separadamente para quem precisa distinguir os dois caminhos.
+    const lsbrStrong = rsDetect;
     const lsbrPossible = !lsbrDetected && (rsSoft || wsDetect); // baixa confiança
 
     // Heurística de embedding neural (SteganoGAN-like) — suspeita, não prova
@@ -489,7 +494,7 @@ async function runForensics(imageData, file, onProgress=()=>{}, sharedDec=null) 
       // Resultados dos ataques estruturais
       rsRate: (rsMax*100).toFixed(1)+'%',
       wsRate: (wsMax*100).toFixed(1)+'%',
-      lsbrDetected, lsbrPossible, wsReliable,
+      lsbrDetected, lsbrStrong, lsbrPossible, wsReliable,
       // Heurística neural
       neuralSuspect: neural.suspect,
       neuralEntSim: neural.entSim,
@@ -564,9 +569,20 @@ async function runForensics(imageData, file, onProgress=()=>{}, sharedDec=null) 
   report.gradients = analyzeGradients(imageData);
   onProgress(9, PIPELINE_STEPS[8]);
   report.chroma = analyzeChrominance(imageData);
-  report.exif  = await parseEXIF(file).catch(()=>({found:false,fields:{},aiSoftware:null,hasCamera:false,hasGPS:false,noExif:true}));
-  report.c2pa  = await parseC2PA(file).catch(()=>({found:false,manifestDetected:false,aiGenerator:null,ca:null,certDate:null,digitalSourceType:null,manifestPresent:false,signals:[],rawSoftware:null}));
-  if(!report.exif.found){
+  // ⚠️ "não li o arquivo" ≠ "li e não havia EXIF".
+  // O fallback antigo devolvia `noExif:true` também quando a LEITURA falhava, e
+  // esse campo alimenta o classificador de origem — uma falha de I/O virava
+  // evidência de "PNG sem metadados de câmera". A v2.42.8 agravou isso: antes a
+  // leitura travava (ruim e visível); depois passou a rejeitar, e a rejeição era
+  // engolida aqui como ausência (ruim e invisível).
+  report.exif  = await parseEXIF(file).catch(e=>({available:false,readError:String(e&&e.message||e),
+    found:false,fields:{},aiSoftware:null,hasCamera:false,hasGPS:false,noExif:false}));
+  report.c2pa  = await parseC2PA(file).catch(e=>({available:false,readError:String(e&&e.message||e),
+    found:false,manifestDetected:false,aiGenerator:null,ca:null,certDate:null,
+    digitalSourceType:null,manifestPresent:false,signals:[],rawSoftware:null}));
+  // `available===false` significa que a leitura falhou. Sem ler, não dá para
+  // afirmar ausência de EXIF — e `noExif` alimenta o score de origem.
+  if(!report.exif.found && report.exif.available !== false){
     report.exif.noExif = fmt.ext==='JPEG' || file.type==='image/png';
   }
 
@@ -1090,23 +1106,63 @@ function computeThreat(r) {
   const _printR = parseFloat(r.lsb?.printableRatio) || 0;
   const _realHiddenText = r.lsb?.available && r.lsb?.suspicious && r.lsb?.foundText &&
                           (r.lsb?.headerName || _printR > 70);
+  // ⚠️ v2.42.5 — hardStego só aceita evidência ESTRUTURAL ou de EXTRAÇÃO.
+  // Antes incluía `lsbrDetected` e `cipherSuspicion`, que são estatísticos e
+  // são justamente o que conteúdo C2PA/IA produz. Resultado: a supressão era
+  // desligada pelos próprios sinais que ela existe para suprimir — circular.
+  // Medido numa imagem C2PA limpa: threat 100, e zerar o C2PA não mudava nada,
+  // porque a supressão nunca chegava a rodar.
+  //   • `lsbrStrong` (RS>15% sozinho) fica — é o caminho confiável do RS.
+  //   • o caminho corroborado (WS+RS fraco) sai — WS dá taxa alta sem stego.
+  //   • `cipherSuspicion` sai — uma janela de 512 bits com chi<3.84 entre ~39
+  //     janelas, sem correção para comparações múltiplas.
+  // Escotilha preservada: header, extração nativa, modo robusto, dado após EOF,
+  // stegomalware, RS≥25% e texto oculto real continuam desligando a supressão.
   const hardStego = !!(
     r.strings?.appendedData || r.studio?.hasHeader ||
+    r.studio?.nativeExtracted || r.studio?.nativeHeaderMatched ||
+    r.studio?.robust === true || r.studio?.robust === 'locked' ||
+    r.studio?.robust === 'content-error' ||
     (r.stegomalware||[]).some(m=>m.sev==='crit') ||
-    r.lsb?.lsbrDetected || (parseFloat(r.lsb?.rsRate)||0) >= 25 ||
-    r.lsb?.cipherSuspicion || _realHiddenText
+    r.lsb?.lsbrStrong || (parseFloat(r.lsb?.rsRate)||0) >= 25 ||
+    _realHiddenText
   );
   const c2paExplains = aiProvenC2PA && !hardStego; // sinais moles explicados pelo C2PA
   let c2paSuppressed = false; // algum sinal mole foi rebaixado por contexto C2PA?
 
   if(r.strings?.appendedData){score+=35;flags.push(t('flagDataAfterEOF'));hasStrongStego=true;}
-  if(r.studio?.hasHeader){score+=40;flags.push(t('flagStudioHeader'));hasStrongStego=true;}
+  // ── EVIDÊNCIA NATIVA — UMA fonte de precedência ──
+  // A redação vem do MESMO resolveProtocolState usado pelo badge/accordion. O peso
+  // continua refletindo a evidência bruta disponível: header passivo (+40) mantém
+  // seu peso mesmo quando uma tentativa ativa também localizou o header, mas a
+  // FLAG segue o nível mais forte/mais específico resolvido para não contradizer
+  // o painel Protocolo.
+  const studioLevel = resolveProtocolState(r).level;
+  const studioWeight = r.studio?.nativeExtracted ? 40
+    : r.studio?.hasHeader ? 40
+    : r.studio?.nativeHeaderMatched ? 20 : 0;
+  // A FORÇA vem da evidência bruta, não do rótulo resolvido. Um header passivo
+  // continua sendo evidência forte mesmo quando `headerOnly` vence a redação por
+  // ser mais específico. Separar estas duas decisões impede que ADICIONAR uma
+  // evidência ativa faça o Threat cair e apague sinais corroborantes da mesma imagem.
+  if(studioWeight >= 40) hasStrongStego = true;
+  if(studioLevel === 'extracted'){
+    score+=studioWeight; flags.push(t('flagStudioExtracted'));
+  } else if(studioLevel === 'headerOnly'){
+    score+=studioWeight; flags.push(t('flagStudioHeaderOnly'));
+  } else if(studioLevel === 'passive'){
+    score+=studioWeight; flags.push(t('flagStudioHeader'));
+  }
   // ── MODO ROBUSTO (F4): o payload foi EXTRAÍDO dos coeficientes DCT ──
   // Extração real é a evidência mais forte que existe — mais forte que qualquer
   // estatística. Sem isto, a ferramenta lia a mensagem e ainda dizia "ameaça 0".
   // 'damaged' é INDÍCIO, não confirmação: o cabeçalho sobreviveu, o corpo não.
   if(r.studio?.robust === true){
     score+=40; flags.push(t('flagRobustPayload')); hasStrongStego=true;
+  } else if(r.studio?.robust === 'locked'){
+    score+=30; flags.push(t('flagRobustLocked')); hasStrongStego=true;
+  } else if(r.studio?.robust === 'content-error'){
+    score+=30; flags.push(t('flagRobustContentError')); hasStrongStego=true;
   } else if(r.studio?.robust === 'damaged'){
     score+=20; flags.push(t('flagRobustDamaged'));
   } else if(r.studio?.robustSignature?.suspeito){
@@ -1146,7 +1202,13 @@ function computeThreat(r) {
   }
 
   // Ataques estruturais RS/WS detectaram LSB Replacement — evidência forte e específica.
-  if(isLossless&&r.lsb?.lsbrDetected){score+=45;flags.push(t('flagLSBR'));hasStrongStego=true;}
+  if(isLossless&&r.lsb?.lsbrDetected){
+    // O caminho corroborado (WS + RS fraco) é estatístico; numa imagem com
+    // manifesto C2PA ele é explicável pelo próprio conteúdo. O caminho forte
+    // (RS>15%) nunca é suprimido.
+    if(!r.lsb?.lsbrStrong && c2paExplains){ c2paSuppressed = true; }
+    else { score+=45;flags.push(t('flagLSBR'));hasStrongStego=true; }
+  }
   else if(isLossless&&r.lsb?.lsbrPossible){
     if(c2paExplains){ c2paSuppressed = true; }
     else { score+=15;flags.push(t('flagLSBRPossible')); }
@@ -1257,7 +1319,14 @@ function computeSynth(r) {
   // Usa os sinais já calculados no módulo AI do report
   const ai = r.ai;
   if (!ai) return {score:0, level:'—', flags:[]};
-  const flags = ai.signals.map(s => s.labelKey ? t(s.labelKey) : (s.label||''));
+  // labelVars precisa ser interpolado aqui também. A UI já fazia; este caminho
+  // não, e o relatório exportado saía com o placeholder cru ("Proporção exata
+  // {ratio}") enquanto o próprio sinal carregava ratio:"2:3" ao lado.
+  const flags = ai.signals.map(s => {
+    let txt = s.labelKey ? t(s.labelKey) : (s.label||'');
+    if (s.labelVars) for (const [k,v] of Object.entries(s.labelVars)) txt = txt.replace(`{${k}}`, escapeHTML(v));
+    return txt;
+  });
   const level = ai.level || '—';
   return {score: Math.min(ai.score, 100), level, flags};
 }
@@ -1311,13 +1380,22 @@ function interpretModule(key, r) {
   }
 
   if(key==='studio') {
-    if(r.studio.hasHeader) return t('interpStudioHeader').replace('{bytes}', r.studio.payloadBytes);
-    if(r.studio.deepScan && r.lsb?.foundText) {
+    // ⚠️ UMA das superfícies do mesmo estado. A v2.42.5 ensinou o Threat a usar a
+    // evidência ativa; a v2.42.7 ensinou o badge do Protocolo. Esta nota ficou
+    // para trás e continuava lendo só `hasHeader`, então com a senha certa a
+    // tela mostrava "decifrado com chave ✓" logo acima de "nenhum texto legível
+    // foi recuperado — forneça a chave". Agora as três derivam de
+    // `resolveProtocolState`, que é a fonte única também para a nota offline.
+    const proto = resolveProtocolState(r);
+    if(proto.level === 'extracted')   return t('interpStudioExtracted');
+    if(proto.level === 'headerOnly')  return t('interpStudioHeaderOnly');
+    if(proto.level === 'passive')     return t('interpStudioHeader').replace('{bytes}', r.studio.payloadBytes);
+    if(proto.level === 'generic') {
       const hdr = r.studio.headerName || r.lsb?.headerName;
       if (hdr) return t('interpStudioDeepHeader').replace('{hdr}', hdr);
       return t('interpStudioDeepNoHeader');
     }
-    if(r.lsb?.cipherSuspicion) return t('interpStudioCipher');
+    if(proto.level === 'cipher')      return t('interpStudioCipher');
     return t('interpStudioNone');
   }
 
@@ -1328,6 +1406,39 @@ function interpretModule(key, r) {
 // ════════════════════════════════════════
 //  PROGRESS INDICATOR
 // ════════════════════════════════════════
+// ─────────────────────────────────────────────────────────────────────────────
+//  LEITURA DE ARQUIVO À PROVA DE TRAVAMENTO
+//
+//  Havia três `new FileReader()` neste módulo e **nenhum `onerror`**. Cada um
+//  vivia dentro de `new Promise(res => { r.onload = …; r.readAsArrayBuffer(f) })`
+//  — se a leitura falhasse, `onload` nunca disparava, a promessa nunca resolvia
+//  e o pipeline parava para sempre. Sem exceção e sem log: **console limpo e
+//  barra congelada**, que é exatamente o sintoma do smoke da v2.42.7 (travou em
+//  20%, "Strings & bytes brutos", console sem uma linha).
+//
+//  Este helper fecha as três saídas — erro, cancelamento e silêncio. O timeout
+//  existe porque `onerror` cobre a falha declarada, não a leitura que
+//  simplesmente nunca volta.
+// ─────────────────────────────────────────────────────────────────────────────
+const FILE_READ_TIMEOUT_MS = 60000;
+
+function readFileBytes(file, rotulo='arquivo') {
+  return new Promise((resolve, reject) => {
+    let feito = false;
+    const uma = fn => (...a) => { if (feito) return; feito = true; clearTimeout(tm); fn(...a); };
+    const r = new FileReader();
+    const tm = setTimeout(uma(() => {
+      try { r.abort(); } catch(_) {}
+      reject(new Error('fileReadTimeout:' + rotulo));
+    }), FILE_READ_TIMEOUT_MS);
+    r.onload  = uma(e => resolve(new Uint8Array(e.target.result)));
+    r.onerror = uma(() => reject(new Error('fileReadError:' + rotulo)));
+    r.onabort = uma(() => reject(new Error('fileReadAborted:' + rotulo)));
+    try { r.readAsArrayBuffer(file); }
+    catch (_) { uma(() => reject(new Error('fileReadThrew:' + rotulo)))(); }
+  });
+}
+
 const PIPELINE_STEPS = [
   'stepMetaEXIF',
   'stepStrings',
@@ -1362,9 +1473,11 @@ function setProgress(step, label) {
 //  EXIF PARSER (leve, browser-only)
 // ════════════════════════════════════════
 async function parseEXIF(file) {
+  // Leitura via readFileBytes: falha vira rejeição, nunca promessa pendente.
+  const _bytes = await readFileBytes(file, 'parseEXIF');
   return new Promise(res => {
-    const r = new FileReader();
-    r.onload = e => {
+    const e = { target: { result: _bytes.buffer } };
+    (() => {
       const buf = e.target.result;
       const view = new DataView(buf);
       const result = {found: false, fields: {}, aiSoftware: null, hasCamera: false, hasGPS: false};
@@ -1488,8 +1601,7 @@ async function parseEXIF(file) {
         }
       } catch(_) {}
       res(result);
-    };
-    r.readAsArrayBuffer(file);
+    })();
   });
 }
 

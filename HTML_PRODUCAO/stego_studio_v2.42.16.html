@@ -14,7 +14,7 @@
 <link rel="icon" type="image/png" sizes="512x512" href="/android-chrome-512x512.png">
 
 <!-- SEO -->
-<meta name="description" content="STEGO·STUDIO is a free, 100% client-side tool for steganography and image forensics. Hide encrypted messages in images — in the pixels, or in the JPEG coefficients so they survive being posted to social media — and analyze any image for hidden data and origin (photo, screenshot, digital art, or AI-generated). No uploads, fully private.">
+<meta name="description" content="STEGO·STUDIO is a free, 100% client-side tool for steganography and image forensics. Hide encrypted messages in images — in lossless pixels or with a recompression-resistant JPEG mode — and analyze any image for hidden data and origin (photo, screenshot, digital art, or AI-generated). No uploads, fully private.">
 <meta name="keywords" content="steganography, LSB, image forensics, hidden message, AI image detection, synthetic image, EXIF, C2PA, encrypt image, decode image, stego tool, esteganografia, forense de imagem">
 <meta name="author" content="RASC & JOI">
 <meta name="robots" content="index, follow">
@@ -327,6 +327,11 @@ textarea.dec-t:focus { border-color:rgba(255,107,53,0.4); }
 }
 .key-field.enc-t:focus-within { border-color:rgba(0,255,179,0.4); }
 .key-field.dec-t:focus-within { border-color:rgba(255,107,53,0.4); }
+.key-field.key-flash,
+.key-field.dec-t.key-flash:focus-within {
+  border-color:var(--dec);
+  box-shadow:0 0 0 2px var(--dec);
+}
 .key-icon {
   padding:0 10px; font-size:0.75rem; color:var(--dim);
   border-right:1px solid var(--border); height:38px; display:flex; align-items:center;
@@ -1398,7 +1403,7 @@ textarea.dec-t:focus { border-color:rgba(255,107,53,0.4); }
 <body>
 
 <header>
-  <div class="logo">STEGO<span class="e">·</span>STUDIO <span style="font-size:0.85rem;letter-spacing:2px;color:var(--dim)">v2.42.3 // ENCODER · ANALYZER · DECODER</span></div>
+  <div class="logo">STEGO<span class="e">·</span>STUDIO <span style="font-size:0.85rem;letter-spacing:2px;color:var(--dim)">v2.42.16 // ENCODER · ANALYZER · DECODER</span></div>
   <div class="header-meta"><span data-i18n="tagline1">Esteganografia LSB com criptografia AES-256 opcional</span><br><span data-i18n="tagline2">Análise forense integrada · Exportação JSON</span></div>
 </header>
 
@@ -1626,7 +1631,7 @@ textarea.dec-t:focus { border-color:rgba(255,107,53,0.4); }
           <p data-i18n-html="decGuide3"><b>3.</b> Se a imagem contém uma mensagem cifrada, insira a <b>chave</b> e analise de novo para decodificá-la. A chave também é o que revela mensagens em <b>Modo furtivo</b> — o cabeçalho delas é cifrado, então sem a chave são indistinguíveis de ruído. Mensagens em texto puro são recuperadas automaticamente, sem chave. O Decoder também lê imagens do <b>OpenStego</b>, do <b>Steghide</b> e do <b>OutGuess</b> — inclusive Steghide em JPEG (domínio DCT) com AES — automaticamente sem senha, ou com a senha quando informada.</p>
           <p data-i18n-html="decGuide4"><b>4.</b> A <b>Probabilidade de origem</b> estima se a imagem é fotografia, screenshot, arte digital ou gerada por IA. São scores independentes — vários podem ser altos. O maior é a origem mais provável.</p>
           <p data-i18n-html="decGuide5"><b>5.</b> Abra os <b>indicadores</b> para ver os detalhes técnicos de cada sinal e entender por que cada score foi atribuído.</p>
-          <p class="qg-tip" data-i18n-html="decGuideAdaptive">⚠ Alguns métodos deixam apenas traços estruturais fracos. Stego <b>adaptativo</b> e LSB matching podem manter o Threat Score modesto mesmo com mensagem presente — a análise neural <b>Pro</b> (com o servidor online) detecta melhor esses casos. Um score baixo não garante que a imagem esteja limpa.</p>
+          <p class="qg-tip" data-i18n-html="decGuideAdaptive">⚠ Alguns métodos deixam apenas traços estruturais fracos. Stego <b>adaptativo</b> e LSB matching podem manter o Threat Score modesto mesmo com mensagem presente — esta build não detecta esses métodos com confiabilidade. Um score baixo não garante que a imagem esteja limpa.</p>
           <p class="qg-tip" data-i18n-html="decGuideTip">ℹ A classificação de origem é heurística, não uma prova definitiva. Scores próximos entre si indicam que a ferramenta não conseguiu determinar a origem com certeza.</p>
         </div>
       </details>
@@ -1652,7 +1657,7 @@ textarea.dec-t:focus { border-color:rgba(255,107,53,0.4); }
           <input type="password" id="dec-key" data-i18n-ph="keyPlaceholder" placeholder="Opcional">
           <button type="button" class="key-clear-btn" id="dec-key-clear" aria-label="Limpar senha" style="display:none">✕</button>
         </div>
-        <div class="hint-text" data-i18n="decKeyHint2">Necessária apenas se a mensagem foi cifrada. A análise forense roda independente da chave.</div>
+        <div class="hint-text" id="dec-key-hint" data-i18n="decKeyHint2">Necessária apenas se a mensagem foi cifrada. A análise forense roda independente da chave.</div>
       </div>
 
       <button class="btn btn-dec" id="btn-analyze" data-i18n="analyzeBtn" disabled>ANALISAR IMAGEM</button>
@@ -1868,7 +1873,7 @@ textarea.dec-t:focus { border-color:rgba(255,107,53,0.4); }
         <div class="help-text">
           <p data-i18n-html="helpS6a">Esta é uma ferramenta <b>heurística</b>, não um classificador definitivo. Ela analisa propriedades estatísticas e metadados, sem rede neural. Nada roda em servidor: se um método exige modelo treinado, esta ferramenta não o detecta.</p>
           <p data-i18n-html="helpS6b">Casos difíceis: imagens recomprimidas por redes sociais (que apagam metadados e alteram pixels), fotos muito editadas, e imagens de IA de última geração que imitam ruído de câmera. Use os resultados como <b>indício investigativo</b>, cruzando com outras evidências — não como prova isolada.</p>
-          <p data-i18n-html="helpS6c">No lado da esteganografia, a ferramenta detecta com confiança o <b>LSB Replacement</b> (via RS/WS) e mensagens em texto puro ou fracamente ocultas. Para métodos neurais como o SteganoGAN ela oferece apenas uma heurística de <b>nível de suspeita</b> — consegue sinalizar a assinatura tipo GAN, mas não confirmá-la sem o modelo treinado, que não roda no navegador. Ela <b>não</b> detecta com confiabilidade métodos adaptativos como HILL, UNIWARD ou J-UNIWARD. Detectá-los exige modelos neurais treinados, que não rodam em navegador — então esta ferramenta simplesmente não os detecta. É um limite real, não temporário: <b>a ausência de detecção aqui não é evidência de que a imagem esteja limpa.</b> Se você precisa desse nível de análise, use um toolbox dedicado de esteganálise como o <b>Aletheia</b>, de Daniel Lerch (MIT, <code>github.com/daniellerch/aletheia</code>).</p>
+          <p data-i18n-html="helpS6c">No lado da esteganografia, a ferramenta detecta com confiança o <b>LSB Replacement</b> (via RS/WS) e mensagens em texto puro ou fracamente ocultas. Para métodos neurais como o SteganoGAN ela oferece apenas uma heurística de <b>nível de suspeita</b> — consegue sinalizar uma assinatura tipo GAN, mas não confirmá-la sem um modelo treinado. Modelos desse tipo podem rodar no navegador via WASM/WebGPU; esta build offline de arquivo único é que <b>não os embarca</b>. Ela <b>não</b> detecta com confiabilidade métodos adaptativos como HILL, UNIWARD ou J-UNIWARD porque não inclui os modelos especializados necessários. <b>A ausência de detecção aqui não é evidência de que a imagem esteja limpa.</b> Se você precisa desse nível de análise, use um toolbox dedicado de esteganálise como o <b>Aletheia</b>, de Daniel Lerch (MIT, <code>github.com/daniellerch/aletheia</code>).</p>
         </div>
       </details>
     </div>
@@ -1891,7 +1896,11 @@ textarea.dec-t:focus { border-color:rgba(255,107,53,0.4); }
   <div class="footer-opensource" data-i18n-html="footerOpensource">Software livre sob GPL-3.0 &middot; código em <code>github.com/rickschaves/stegostudio</code></div>
 </footer>
 
-<div id="paste-anchor" tabindex="0" style="position:fixed;opacity:0;pointer-events:none;width:1px;height:1px;top:0;left:0" aria-hidden="true"></div>
+<!-- Alvo invisível que recebe foco para capturar Ctrl+V. NÃO leva
+     aria-hidden: um elemento oculto para tecnologia assistiva que recebe foco
+     deixa quem usa leitor de tela sem saber onde está — o Chrome bloqueia e
+     avisa. Fica no fluxo de acessibilidade, com rótulo, em vez de escondido. -->
+<div id="paste-anchor" tabindex="-1" role="note" aria-label="Área de colagem de imagem" style="position:fixed;opacity:0;pointer-events:none;width:1px;height:1px;top:0;left:0"></div>
 <canvas id="canvas" style="display:none"></canvas>
 
 <!-- hash-wasm Argon2id (UMD, wasm base64 embutido) — usado no KDF do AES (FRENTE #9).
@@ -1908,7 +1917,7 @@ textarea.dec-t:focus { border-color:rgba(255,107,53,0.4); }
 
 <script>
 /*
- * STEGO·STUDIO v2.42.3 — esteganografia e análise forense de imagens
+ * STEGO·STUDIO v2.42.16 — esteganografia e análise forense de imagens
  * Copyright (C) 2026 RASC
  *
  * Este programa é software livre: você pode redistribuí-lo e/ou modificá-lo
@@ -2050,6 +2059,11 @@ const I18N = {
     // Decoder — payload robusto
     rbDecFound: "Message recovered from the JPEG coefficients (sturdier mode).",
     rbDecDamaged: "There is a sturdier-mode payload in this image, but it did not survive the trip. The image was probably resized, or recompressed more than once.",
+    rbDecLocked: "A sturdier-mode payload was confirmed, but this key did not open its encrypted content.",
+    rbDecNeedsKey: "A sturdier-mode payload was confirmed — enter its key to open the encrypted content.",
+    rbDecContentError: "A sturdier-mode payload was confirmed, but its inner content could not be decoded.",
+    flagRobustLocked: "sturdier-mode payload confirmed, encrypted content not opened",
+    flagRobustContentError: "sturdier-mode payload confirmed, inner content unreadable",
     // Header
     tagline1: "Steganography in pixels and in JPEG coefficients, with optional AES-256",
     tagline2: "Integrated forensic analysis · JSON export",
@@ -2112,7 +2126,7 @@ const I18N = {
     encKeyHint: "If set, the message will be encrypted with AES-256-GCM before embedding.",
     encKeyWarn: "⚠ Without a key the message stays as plaintext in both images — whoever finds it can read it.",
     decoyToggle: "Second message (plausible deniability)",
-    decoyToggleHint: "If someone forces you to hand over this image's password, you can give a different one. That second password reveals a harmless message, while your real message stays protected.",
+    decoyToggleHint: "If someone forces you to hand over this image's password, you can give a different one. That second password reveals a harmless message, while your real message stays protected. When either valid password recovers a STEGO·STUDIO payload, the Analyzer deliberately reports the same public evidence state and does not label which internal layer was opened.",
     decoyMsgLabel: "// alternate message",
     decoyMsgPlaceholder: "A plausible, harmless message…",
     decoyKeyLabel: "// alternate password",
@@ -2148,13 +2162,15 @@ const I18N = {
     decGuide3: "<b>3.</b> If the image holds an encrypted message, enter the <b>key</b> and analyze again to decode it. The key is also what reveals <b>Stealth-mode</b> messages — their header is encrypted, so without it they're indistinguishable from noise. Plaintext messages are recovered automatically, no key needed. The Decoder also reads <b>OpenStego</b>, <b>Steghide</b> and <b>OutGuess</b> images — including Steghide in JPEG (DCT domain) with AES — automatically without a password, or with the password when provided.",
     decGuide4: "<b>4.</b> The <b>Origin probability</b> estimates whether the image is a photo, screenshot, digital art or AI-generated. These are independent scores — several can be high. The highest is the most likely origin.",
     decGuide5: "<b>5.</b> Open the <b>indicators</b> to see the technical details of each signal and understand why each score was assigned.",
-    decGuideAdaptive: "⚠ Some methods leave only faint structural traces. <b>Adaptive</b> stego and LSB matching can keep the Threat Score modest even when a message is present — the neural <b>Pro</b> analysis (when the server is online) catches these better. A low score is not a guarantee the image is clean.",
+    decGuideAdaptive: "⚠ Some methods leave only faint structural traces. <b>Adaptive</b> stego and LSB matching can keep the Threat Score modest even when a message is present — this build does not reliably detect those methods. A low score is not a guarantee the image is clean.",
     decGuideTip: "ℹ The origin classification is heuristic, not definitive proof. Scores close to each other indicate the tool could not determine the origin with certainty.",
     analyzeBtn: "ANALYZE IMAGE",
     decPlaceholder: "Load an image and click Analyze to see results.",
     fieldImageAnalyze: "// image to analyze",
     dropHintDec2: "Drag, click or <span class=\"dh\">paste (Ctrl+V)</span><br>any suspicious or encoded image<br><span class=\"dh\">PNG · BMP · WEBP · JPEG · any format</span>",
     decKeyHint2: "Only needed if the message was encrypted. The forensic analysis runs independently of the key.",
+    decKeyFlashMissing: "This encrypted message needs a key before it can be opened.",
+    decKeyFlashWrong: "The supplied key did not open the encrypted message.",
     exportHint: "📄 Export the full report as JSON and send it to your preferred AI — Claude, ChatGPT, Gemini — for a deeper investigative interpretation of the results.",
     exportBtn: "⬇ EXPORT JSON REPORT",
     // Results
@@ -2402,6 +2418,10 @@ const I18N = {
     flagArtificialNoise: "artificial noise",
     flagSuspiciousAlpha: "suspicious alpha channel",
     flagRareClusters: "rare color clusters",
+    payloadRecoveredWithKey: "recovered with the supplied password",
+    headerFoundNoContent: "confirmed with the password — content not recovered",
+    flagStudioExtracted: "STEGO·STUDIO payload extracted",
+    flagStudioHeaderOnly: "STEGO·STUDIO header found, content not recovered",
     flagStudioHeader: "STEGO·STUDIO header detected",
     flagLSBR: "LSB Replacement detected (RS+WS)",
     flagLSBRPossible: "possible LSB Replacement",
@@ -2422,7 +2442,7 @@ const I18N = {
     rowNeuralStego: "Neural embedding test",
     neuralMaybe: "⚠ possible (GAN-like signature)",
     neuralNo: "✓ negative (no neural signature)",
-    neuralNote: "Suspicion only — not proof. The LSB planes of the three channels are nearly identical (entropy similarity {ent}) and the high-frequency energy is very symmetric across channels ({hf}). This pattern is compatible with neural steganography (e.g. SteganoGAN), which spreads the payload across all 3 channels. But it can also appear in some textured or synthetic images. Confirming it would require the original neural model, which doesn't run in the browser.",
+    neuralNote: "Suspicion only — not proof. The LSB planes of the three channels are nearly identical (entropy similarity {ent}) and the high-frequency energy is very symmetric across channels ({hf}). This pattern is compatible with neural steganography (e.g. SteganoGAN), which spreads the payload across all 3 channels. But it can also appear in some textured or synthetic images. Confirming it would require a specialised trained model. Models of this kind can run in browsers through WASM/WebGPU; this offline single-file build simply doesn't ship them.",
     // Pipeline progress steps
     stepMetaEXIF: "Metadata & EXIF",
     stepStrings: "Strings & raw bytes",
@@ -2671,6 +2691,8 @@ const I18N = {
     interpStudioHeader: "\"STEGO\\0\" header confirmed in the LSBs — {bytes} bytes of structured payload. This image was encoded by STEGO·STUDIO.",
     interpStudioDeepHeader: "Hidden text recovered by deep investigation. The header \"{hdr}\" was identified before the message — a protocol signature from another tool. Even without a record of this protocol, the investigator located and extracted the message by analyzing the least significant bits directly.",
     interpStudioDeepNoHeader: "Hidden text recovered by deep investigation, with no recognizable proprietary header. The image was encoded by a third-party tool using LSB steganography. The investigator located and extracted the message by analyzing the least significant bits directly.",
+    interpStudioExtracted: "The hidden message was located and read with the password you supplied. This is the strongest confirmation available: the payload was not merely suspected, it was recovered.",
+    interpStudioHeaderOnly: "A STEGO·STUDIO header was located with the password you supplied, so a message is definitely present — but its content could not be reassembled. The body is most likely damaged, truncated, or was altered after being written.",
     interpStudioCipher: "The LSBs show statistical randomness consistent with encrypted data, but no readable text was recovered. There may be an encrypted message — provide the key to attempt decoding.",
     interpStudioNone: "No steganography protocol detected. The image does not appear to contain a hidden message in the LSBs, or was encoded with a method that leaves no detectable traces without the key.",
     // Origin signals — Photo
@@ -2744,7 +2766,7 @@ const I18N = {
     helpS1b: "Everything runs 100% in your browser. No image or data is sent to any server.",
     helpSecDecTitle: "The Decoder — what it reads, and what it doesn't",
     helpDecA: "There is no separate \"decode\" step. The single analyse button identifies the real format from the file's own bytes, runs the forensic analysis and attempts extraction with every available engine. By the time the results appear, all of that has already happened.",
-    helpDecB: "<b>What it reads:</b><ul><li><b>STEGO·STUDIO's own protocol</b> — in PNG and other lossless formats, with or without a password.</li><li><b>STEGO·STUDIO's sturdier mode</b> — in the JPEG coefficients, with or without a password.</li><li><b>OpenStego</b> — randomised LSB in PNG.</li><li><b>Steghide</b> — in BMP and in JPEG (DCT coefficients), including its AES-256 encryption.</li><li><b>OutGuess</b> — in JPEG (DCT coefficients), including with no password, which is its default.</li><li><b>Deep investigator</b> — when there is no known header, it sweeps the image for readable text. A search, not a guarantee.</li></ul>",
+    helpDecB: "<b>What it reads:</b><ul><li><b>STEGO·STUDIO's own protocol</b> — in PNG and other lossless formats, with or without a password.</li><li><b>STEGO·STUDIO's sturdier mode</b> — in the JPEG coefficients, with or without a password.</li><li><b>OpenStego</b> — randomised LSB in PNG.</li><li><b>Steghide</b> — in JPEG (DCT coefficients). Its BMP path is not integrated here, and of its many cipher options only the default (rijndael-128/CBC) and no-encryption are read; other ciphers are named, not decrypted.</li><li><b>OutGuess</b> — in JPEG (DCT coefficients), including with no password, which is its default.</li><li><b>Deep investigator</b> — when there is no known header, it sweeps the image for readable text. A search, not a guarantee.</li></ul>",
     helpDecC: "<b>What it does not read, and why:</b><ul><li><b>F5 (Westfeld)</b> — a landmark in the academic literature, but rare in practice and expensive by construction: it must shuffle the entire image before it can read the first bit, which would cost seconds on every photo analysed, including clean ones. The engine has been built and validated, and is kept on the shelf. If it ever ships, it will be an explicit action, never an automatic one.</li><li><b>Anything locked behind someone else's password</b> — an OpenStego message encrypted with AES, for example, is detected and reported, but decrypting it requires OpenStego itself and the right password. Without it the content is indistinguishable from noise, and that is by design.</li></ul>",
     helpDecD: "<b>Honest limits:</b><ul><li><b>JPEG has no usable LSB.</b> Compression rewrites the least significant bits, so anything read there would be codec noise rather than a message. In a JPEG, only DCT-coefficient methods make sense.</li><li><b>The DCT chi-square test is a weak indicator, not a detector.</b> It catches naive high-rate embedding, but tools that spread a small payload walk straight past it. Absence of a signal is never a clean bill of health.</li></ul>",
     helpS2Title: "LSB steganography",
@@ -2776,7 +2798,7 @@ const I18N = {
     helpS6Title: "Limitations",
     helpS6a: "This is a <b>heuristic</b> tool, not a definitive classifier. It analyzes statistical properties and metadata, with no neural network. Nothing runs on a server: if a method needs a trained model, this tool does not detect it.",
     helpS6b: "Hard cases: images recompressed by social media (which erase metadata and alter pixels), heavily edited photos, and latest-generation AI images that mimic camera noise. Use the results as <b>investigative evidence</b>, cross-referencing with other evidence — not as standalone proof.",
-    helpS6c: "On the steganography side, the tool reliably detects <b>LSB Replacement</b> (via RS/WS) and plaintext or weakly-hidden messages. For neural methods like SteganoGAN it offers a <b>suspicion-level</b> heuristic only — it can flag the GAN-like signature but cannot confirm it without the trained model, which doesn't run in a browser. It does <b>not</b> reliably detect adaptive methods like HILL, UNIWARD or J-UNIWARD. Detecting those takes trained neural models, which do not run in a browser — so this tool does not detect them at all. That is a real limit, not a temporary one: <b>absence of detection here is not evidence that an image is clean.</b> If you need that level of analysis, use a dedicated steganalysis toolbox such as <b>Aletheia</b>, by Daniel Lerch (MIT, <code>github.com/daniellerch/aletheia</code>).",
+    helpS6c: "On the steganography side, the tool reliably detects <b>LSB Replacement</b> (via RS/WS) and plaintext or weakly-hidden messages. For neural methods like SteganoGAN it offers a <b>suspicion-level</b> heuristic only — it can flag a GAN-like signature but cannot confirm it without a trained model. Models like these can run in browsers through WASM/WebGPU; this offline single-file build simply <b>does not ship them</b>. It does <b>not</b> reliably detect adaptive methods like HILL, UNIWARD or J-UNIWARD because the specialised models needed for that work are not included. <b>Absence of detection here is not evidence that an image is clean.</b> If you need that level of analysis, use a dedicated steganalysis toolbox such as <b>Aletheia</b>, by Daniel Lerch (MIT, <code>github.com/daniellerch/aletheia</code>).",
     // Footer
     footerCredit: "Designed by RASC and developed by JOI",
     footerOpensource: "Free software under GPL-3.0 &middot; source at <code>github.com/rickschaves/stegostudio</code>",
@@ -2823,6 +2845,11 @@ const I18N = {
     // Decoder — payload robusto
     rbDecFound: "Mensagem recuperada dos coeficientes do JPEG (modo mais resistente).",
     rbDecDamaged: "Há um payload do modo mais resistente nesta imagem, mas ele não sobreviveu ao caminho. A imagem provavelmente foi redimensionada, ou recomprimida mais de uma vez.",
+    rbDecLocked: "Um payload do modo resistente foi confirmado, mas esta chave não abriu o conteúdo cifrado.",
+    rbDecNeedsKey: "Um payload do modo resistente foi confirmado — informe a chave para abrir o conteúdo cifrado.",
+    rbDecContentError: "Um payload do modo resistente foi confirmado, mas o conteúdo interno não pôde ser decodificado.",
+    flagRobustLocked: "payload do modo resistente confirmado, conteúdo cifrado não aberto",
+    flagRobustContentError: "payload do modo resistente confirmado, conteúdo interno ilegível",
     tagline1: "Esteganografia em pixels e em coeficientes JPEG, com AES-256 opcional",
     tagline2: "Análise forense integrada · Exportação JSON",
     helpBtn: "[?] Como funciona",
@@ -2882,7 +2909,7 @@ const I18N = {
     encKeyHint: "Se informada, a mensagem será cifrada com AES-256-GCM antes de ser embutida.",
     encKeyWarn: "⚠ Sem senha a mensagem fica em texto puro nas duas imagens — quem a encontrar consegue ler.",
     decoyToggle: "Segunda mensagem (negação plausível)",
-    decoyToggleHint: "Se alguém forçar você a entregar a senha desta imagem, você pode entregar uma diferente. Essa segunda senha revela uma mensagem inofensiva, enquanto sua mensagem real permanece protegida.",
+    decoyToggleHint: "Se alguém forçar você a entregar a senha desta imagem, você pode entregar uma diferente. Essa segunda senha revela uma mensagem inofensiva, enquanto sua mensagem real permanece protegida. Quando qualquer uma das senhas válidas recupera um payload STEGO·STUDIO, o Analyzer informa deliberadamente o mesmo estado público de evidência e não rotula qual camada interna foi aberta.",
     decoyMsgLabel: "// mensagem alternativa",
     decoyMsgPlaceholder: "Uma mensagem plausível e inofensiva…",
     decoyKeyLabel: "// senha alternativa",
@@ -2924,6 +2951,8 @@ const I18N = {
     fieldImageAnalyze: "// imagem para análise",
     dropHintDec2: "Arraste, clique ou <span class=\"dh\">cole (Ctrl+V)</span><br>qualquer imagem suspeita ou codificada<br><span class=\"dh\">PNG · BMP · WEBP · JPEG · qualquer formato</span>",
     decKeyHint2: "Necessária apenas se a mensagem foi cifrada. A análise forense roda independente da chave.",
+    decKeyFlashMissing: "Esta mensagem cifrada precisa de uma chave para ser aberta.",
+    decKeyFlashWrong: "A chave informada não abriu a mensagem cifrada.",
     exportHint: "📄 Exporte o relatório completo em JSON e envie para sua IA de preferência — Claude, ChatGPT, Gemini — para uma interpretação investigativa mais aprofundada dos resultados.",
     exportBtn: "⬇ EXPORTAR RELATÓRIO JSON",
     resultTitle: "RESULTADO",
@@ -3168,6 +3197,10 @@ const I18N = {
     flagArtificialNoise: "ruído artificial",
     flagSuspiciousAlpha: "canal alpha suspeito",
     flagRareClusters: "clusters de cor rara",
+    payloadRecoveredWithKey: "recuperado com a senha informada",
+    headerFoundNoContent: "confirmado com a senha — conteúdo não recuperado",
+    flagStudioExtracted: "payload STEGO·STUDIO extraído",
+    flagStudioHeaderOnly: "header STEGO·STUDIO localizado, conteúdo não recuperado",
     flagStudioHeader: "header STEGO·STUDIO detectado",
     flagLSBR: "LSB Replacement detectado (RS+WS)",
     flagLSBRPossible: "possível LSB Replacement",
@@ -3175,9 +3208,9 @@ const I18N = {
     flagNeuralConfirmed: "modelos neurais confirmam esteganografia",
     flagNeuralLikely: "modelos neurais sugerem esteganografia",
     flagNeuralArtifact: "sinal neural provavelmente artefato de compressão (ignorado)",
-    flagNeuralUncertainAI: "sinal neural não confiável em imagem IA certificada por C2PA",
+    flagNeuralUncertainAI: "sinal neural não confiável em imagem que declara origem em IA (C2PA)",
     flagNeuralVectorFP: "sinal neural provavelmente falso positivo de cover chapado/vetorial (inconclusivo)",
-    flagC2PAExplained: "sinais consistentes com conteúdo IA certificado por C2PA — não contam como esteganografia (inconclusivo)",
+    flagC2PAExplained: "sinais consistentes com conteúdo que declara origem em IA (C2PA) — não contam como esteganografia (inconclusivo)",
     flagStegoMimicsAI: "nota: a esteganografia pode fazer uma foto real parecer sintética — um score \"sintético\" alto aqui pode ser causado pelos dados ocultos, não por geração por IA",
     rowRSAttack: "Ataque RS (taxa)",
     rowWSAttack: "Ataque WS (taxa)",
@@ -3188,7 +3221,7 @@ const I18N = {
     rowNeuralStego: "Teste de embedding neural",
     neuralMaybe: "⚠ possível (assinatura tipo GAN)",
     neuralNo: "✓ negativo (sem assinatura neural)",
-    neuralNote: "Apenas suspeita — não é prova. Os planos LSB dos três canais estão quase idênticos (similaridade de entropia {ent}) e a energia de alta frequência é muito simétrica entre os canais ({hf}). Esse padrão é compatível com esteganografia neural (ex.: SteganoGAN), que espalha a mensagem pelos 3 canais. Mas também pode aparecer em algumas imagens texturizadas ou sintéticas. Confirmar exigiria o modelo neural original, que não roda no navegador.",
+    neuralNote: "Apenas suspeita — não é prova. Os planos LSB dos três canais estão quase idênticos (similaridade de entropia {ent}) e a energia de alta frequência é muito simétrica entre os canais ({hf}). Esse padrão é compatível com esteganografia neural (ex.: SteganoGAN), que espalha a mensagem pelos 3 canais. Mas também pode aparecer em algumas imagens texturizadas ou sintéticas. Confirmar exigiria um modelo treinado especializado. Modelos desse tipo podem rodar no navegador via WASM/WebGPU; esta build offline de arquivo único é que não os embarca.",
     // Pipeline progress steps
     stepMetaEXIF: "Metadados & EXIF",
     stepStrings: "Strings & bytes brutos",
@@ -3437,6 +3470,8 @@ const I18N = {
     interpStudioHeader: "Header \"STEGO\\0\" confirmado nos LSBs — {bytes} bytes de payload estruturado. Esta imagem foi codificada pelo STEGO·STUDIO.",
     interpStudioDeepHeader: "Texto oculto recuperado por investigação profunda. Foi identificado o header \"{hdr}\" antes da mensagem — uma assinatura de protocolo de outra ferramenta. Mesmo sem registro deste protocolo, o investigador localizou e extraiu a mensagem analisando os bits menos significativos diretamente.",
     interpStudioDeepNoHeader: "Texto oculto recuperado por investigação profunda, sem header proprietário reconhecível. A imagem foi codificada por uma ferramenta de terceiros usando esteganografia LSB. O investigador localizou e extraiu a mensagem analisando os bits menos significativos diretamente.",
+    interpStudioExtracted: "A mensagem oculta foi localizada e lida com a senha informada. É a confirmação mais forte que existe: o payload não foi apenas suspeitado, foi recuperado.",
+    interpStudioHeaderOnly: "Um header STEGO·STUDIO foi localizado com a senha informada, então há mensagem presente — mas o conteúdo não pôde ser remontado. O corpo provavelmente está danificado, truncado, ou foi alterado depois de escrito.",
     interpStudioCipher: "Os LSBs apresentam aleatoriedade estatística compatível com dados cifrados, mas nenhum texto legível foi recuperado. Pode haver uma mensagem criptografada — forneça a chave para tentar decodificar.",
     interpStudioNone: "Nenhum protocolo de esteganografia detectado. A imagem não parece conter mensagem oculta nos LSBs, ou foi codificada com um método que não deixa rastros detectáveis sem a chave.",
     // Origin signals — Photo
@@ -3507,7 +3542,7 @@ const I18N = {
     helpS1b: "Tudo roda 100% no seu navegador. Nenhuma imagem ou dado é enviado para servidores.",
     helpSecDecTitle: "O Decoder — o que ele lê, e o que não lê",
     helpDecA: "Não existe um passo separado de \"decodificar\". O único botão de análise identifica o formato real pelos próprios bytes do arquivo, roda a análise forense e tenta a extração com todos os motores disponíveis. Quando o resultado aparece, tudo isso já aconteceu.",
-    helpDecB: "<b>O que ele lê:</b><ul><li><b>O protocolo do próprio STEGO·STUDIO</b> — em PNG e outros formatos sem perda, com ou sem senha.</li><li><b>O modo mais resistente do STEGO·STUDIO</b> — nos coeficientes do JPEG, com ou sem senha.</li><li><b>OpenStego</b> — LSB aleatorizado em PNG.</li><li><b>Steghide</b> — em BMP e em JPEG (coeficientes DCT), incluindo a cifragem AES-256 dele.</li><li><b>OutGuess</b> — em JPEG (coeficientes DCT), inclusive sem senha, que é o padrão dele.</li><li><b>Investigador profundo</b> — quando não há cabeçalho conhecido, varre a imagem em busca de texto legível. É uma busca, não uma garantia.</li></ul>",
+    helpDecB: "<b>O que ele lê:</b><ul><li><b>O protocolo do próprio STEGO·STUDIO</b> — em PNG e outros formatos sem perda, com ou sem senha.</li><li><b>O modo mais resistente do STEGO·STUDIO</b> — nos coeficientes do JPEG, com ou sem senha.</li><li><b>OpenStego</b> — LSB aleatorizado em PNG.</li><li><b>Steghide</b> — em JPEG (coeficientes DCT). O caminho BMP dele não está integrado aqui, e das muitas cifras que ele oferece só a padrão (rijndael-128/CBC) e a ausência de cifra são lidas; as demais são nomeadas, não decifradas.</li><li><b>OutGuess</b> — em JPEG (coeficientes DCT), inclusive sem senha, que é o padrão dele.</li><li><b>Investigador profundo</b> — quando não há cabeçalho conhecido, varre a imagem em busca de texto legível. É uma busca, não uma garantia.</li></ul>",
     helpDecC: "<b>O que ele não lê, e por quê:</b><ul><li><b>F5 (Westfeld)</b> — um marco na literatura acadêmica, mas raro na prática e caro por construção: ele precisa embaralhar a imagem inteira antes de conseguir ler o primeiro bit, o que custaria segundos em toda foto analisada, inclusive nas limpas. O motor chegou a ser construído e validado, e está guardado. Se um dia entrar, entra como ação explícita, nunca automática.</li><li><b>Qualquer coisa trancada pela senha de outra ferramenta</b> — uma mensagem do OpenStego cifrada com AES, por exemplo, é detectada e reportada, mas decifrar exige o próprio OpenStego e a senha certa. Sem ela, o conteúdo é indistinguível de ruído — e isso é o projeto funcionando, não uma falha.</li></ul>",
     helpDecD: "<b>Limites honestos:</b><ul><li><b>Em JPEG não existe LSB aproveitável.</b> A compressão reescreve os bits menos significativos, então o que se lesse ali seria ruído do codec, não mensagem. Num JPEG, só fazem sentido os métodos de coeficiente DCT.</li><li><b>O teste do chi-quadrado nos coeficientes DCT é indicador fraco, não detector.</b> Ele pega embutimento ingênuo de alta taxa, mas ferramentas que espalham um payload pequeno passam direto por ele. Ausência de sinal nunca é atestado de limpeza.</li></ul>",
     helpS2Title: "Esteganografia LSB",
@@ -3539,7 +3574,7 @@ const I18N = {
     helpS6Title: "Limitações",
     helpS6a: "Esta é uma ferramenta <b>heurística</b>, não um classificador definitivo. Ela analisa propriedades estatísticas e metadados, sem rede neural. Nada roda em servidor: se um método exige modelo treinado, esta ferramenta não o detecta.",
     helpS6b: "Casos difíceis: imagens recomprimidas por redes sociais (que apagam metadados e alteram pixels), fotos muito editadas, e imagens de IA de última geração que imitam ruído de câmera. Use os resultados como <b>indício investigativo</b>, cruzando com outras evidências — não como prova isolada.",
-    helpS6c: "No lado da esteganografia, a ferramenta detecta com confiança o <b>LSB Replacement</b> (via RS/WS) e mensagens em texto puro ou fracamente ocultas. Para métodos neurais como o SteganoGAN ela oferece apenas uma heurística de <b>nível de suspeita</b> — consegue sinalizar a assinatura tipo GAN, mas não confirmá-la sem o modelo treinado, que não roda no navegador. Ela <b>não</b> detecta com confiabilidade métodos adaptativos como HILL, UNIWARD ou J-UNIWARD. Detectá-los exige modelos neurais treinados, que não rodam em navegador — então esta ferramenta simplesmente não os detecta. É um limite real, não temporário: <b>a ausência de detecção aqui não é evidência de que a imagem esteja limpa.</b> Se você precisa desse nível de análise, use um toolbox dedicado de esteganálise como o <b>Aletheia</b>, de Daniel Lerch (MIT, <code>github.com/daniellerch/aletheia</code>).",
+    helpS6c: "No lado da esteganografia, a ferramenta detecta com confiança o <b>LSB Replacement</b> (via RS/WS) e mensagens em texto puro ou fracamente ocultas. Para métodos neurais como o SteganoGAN ela oferece apenas uma heurística de <b>nível de suspeita</b> — consegue sinalizar uma assinatura tipo GAN, mas não confirmá-la sem um modelo treinado. Modelos desse tipo podem rodar no navegador via WASM/WebGPU; esta build offline de arquivo único é que <b>não os embarca</b>. Ela <b>não</b> detecta com confiabilidade métodos adaptativos como HILL, UNIWARD ou J-UNIWARD porque não inclui os modelos especializados necessários. <b>A ausência de detecção aqui não é evidência de que a imagem esteja limpa.</b> Se você precisa desse nível de análise, use um toolbox dedicado de esteganálise como o <b>Aletheia</b>, de Daniel Lerch (MIT, <code>github.com/daniellerch/aletheia</code>).",
     footerCredit: "Idealizado por RASC e desenvolvido por JOI",
     footerOpensource: "Software livre sob GPL-3.0 &middot; código em <code>github.com/rickschaves/stegostudio</code>",
   }
@@ -3589,6 +3624,9 @@ function applyTranslations() {
 function setLang(lang) {
   LANG = lang;
   applyTranslations();
+  // Se um aviso de chave está ativo, applyTranslations restaura a hint padrão;
+  // reaplica o texto do aviso no novo idioma sem reiniciar o timer.
+  if (typeof refreshKeyFlashText === 'function') refreshKeyFlashText();
   const btnEn = document.getElementById('lang-en');
   const btnPt = document.getElementById('lang-pt');
   if (btnEn && btnPt) {
@@ -3599,11 +3637,17 @@ function setLang(lang) {
   redrawTerminals();
   // Re-renderiza os resultados da análise (módulos, badges, nomes) no novo idioma.
   // Os módulos são HTML gerado dinamicamente, então precisam ser refeitos.
-  if (lastRenderArgs) {
+  // Não ressuscitar relatório antigo: se `lastRenderArgs` é de uma geração
+  // anterior, uma análise nova já invalidou aquele resultado. Trocar de idioma
+  // no meio da análise faria o relatório da imagem A reaparecer sob o preview
+  // da imagem B — a mesma corrida que o snapshot resolve no outro caminho.
+  if (lastRenderArgs && lastRenderArgs.gen === analysisGeneration) {
     const resultsVisible = document.getElementById('results-area')?.classList.contains('visible');
     renderResults(lastRenderArgs.report, lastRenderArgs.decodedMsg, lastRenderArgs.decodeStatus);
     // renderResults pode togglar visibilidade; preserva o estado que estava
-    if (resultsVisible) document.getElementById('results-area')?.classList.add('visible');
+    // Simétrico: renderResults() TORNA visível, então o ramo `false` precisa
+    // existir. Só havia o `add`, e a função não preservava o que dizia preservar.
+    document.getElementById('results-area')?.classList.toggle('visible', !!resultsVisible);
   }
 }
 
@@ -3660,6 +3704,66 @@ function hideHelpModal() {
 // CHANGELOG = era semver (v2.10+). CHANGELOG_LEGACY = versões pré-semver (≤ v2.9.1),
 // exibidas com sufixo "— Legacy". O divisor entre os dois é renderizado em renderChangelog.
 const CHANGELOG = [
+  { ver:'v2.42.16', date:'2026-08-14', title:{en:'2.42 closure: evidence strength no longer drops when evidence grows',pt:'Fechamento 2.42: a força da evidência não cai quando a evidência aumenta'}, items:[
+    {t:'fix', en:'<b>Adding an active header match can no longer make Threat weaker than the same image with only its passive header.</b> The visible label still follows the most specific protocol state, while strong-evidence gating now follows the raw evidence strength independently.', pt:'<b>Adicionar uma correspondência ativa de header não pode mais deixar o Threat mais fraco do que a mesma imagem com apenas o header passivo.</b> O rótulo visível continua seguindo o estado de protocolo mais específico, enquanto o portão de evidência forte agora segue a força bruta de forma independente.'},
+    {t:'chg', en:'<b>CHECK 16 now locks the monotonicity case that exposed the v2.42.15 regression, and CHECK 18 closes three more mutation gaps.</b> Native evidence is consumed directly from the pure resolver, top-level report writes are ratcheted by property, and valid-password status statements must be byte-identical rather than merely contain the same substring.', pt:'<b>O CHECK 16 agora trava o caso de monotonicidade que expôs a regressão da v2.42.15, e o CHECK 18 fecha mais três lacunas de mutação.</b> A evidência nativa é consumida diretamente do resolver puro, escritas top-level em report são catracadas por propriedade, e os statements de status de senha válida precisam ser byte-idênticos em vez de apenas conterem o mesmo trecho.'},
+    {t:'chg', en:'<b>Project handoff and review documents now carry an explicit defensive-security authorization context.</b> This makes the scope clear in new chats and independent reviews without changing product behaviour.', pt:'<b>Os documentos de passagem de bastão e revisão agora carregam contexto explícito de autorização e segurança defensiva.</b> Isso deixa o escopo claro em novos chats e auditorias independentes sem alterar o comportamento do produto.'},
+  ]},
+  { ver:'v2.42.15', date:'2026-08-14', title:{en:'Final 2.42 hardening: one evidence state, honest robust JPEG errors',pt:'Fechamento do hardening 2.42: uma evidência única e erros honestos no JPEG robusto'}, items:[
+    {t:'fix', en:'<b>Threat, Protocol, the explanatory note and the offline-limit note now resolve the same native evidence state.</b> Mixed passive/active header cases can no longer describe the same finding with different labels.', pt:'<b>Threat, Protocolo, a nota explicativa e a nota de limitação offline agora resolvem o mesmo estado de evidência nativa.</b> Casos mistos de header passivo/ativo não podem mais descrever o mesmo achado com rótulos diferentes.'},
+    {t:'fix', en:'<b>Confirmed sturdier-mode JPEG evidence is no longer erased when the inner encrypted or compressed content cannot be opened.</b> The report keeps a confirmed locked/content-error state instead of falling through to “nothing found”.', pt:'<b>Evidência confirmada do modo JPEG resistente não é mais apagada quando o conteúdo interno cifrado ou comprimido não pode ser aberto.</b> O relatório mantém um estado confirmado de conteúdo bloqueado/ilegível em vez de cair em “nada encontrado”.'},
+    {t:'fix', en:'<b>Password feedback now resets deterministically and no longer depends on colour alone.</b> Repeated flashes share one timer, Clear removes the state, and the key icon plus the visible hint text change together with the orange outline.', pt:'<b>O aviso de senha agora é limpo de forma determinística e não depende somente de cor.</b> Flashes repetidos compartilham um único timer, Limpar remove o estado, e o ícone da chave mais o texto visível mudam junto com o contorno laranja.'},
+    {t:'chg', en:'<b>CHECK 16 covers all eight combinations of the three native evidence flags, and CHECK 18 gained a handler-wide ratchet.</b> New writes to report.studio/decodeStatus or post-close mutation now force deliberate review instead of slipping through gaps between text windows.', pt:'<b>O CHECK 16 cobre as oito combinações das três flags de evidência nativa, e o CHECK 18 ganhou uma catraca para o handler inteiro.</b> Novas escritas em report.studio/decodeStatus ou mutações após o fechamento agora exigem revisão consciente em vez de passarem por espaços entre janelas de texto.'},
+  ]},
+  { ver:'v2.42.14', date:'2026-08-14', title:{en:'Wrong-key highlight now frames the whole password field',pt:'Destaque de chave incorreta agora contorna o campo inteiro'}, items:[
+    {t:'fix', en:'<b>The wrong-key flash now highlights the password control as one complete field.</b> The effect used to be applied to the inner input, whose parent clips overflow; that left only two vertical orange lines visible. The flash now targets the outer key-field wrapper, producing the intended full rectangular outline without changing decoder logic.', pt:'<b>O destaque de chave incorreta agora envolve o controle de senha como um campo único.</b> O efeito era aplicado ao input interno, cujo contêiner recorta o overflow; por isso apareciam apenas duas linhas verticais laranja. O flash agora é aplicado ao contêiner externo do campo, produzindo o contorno retangular completo sem alterar a lógica do Decoder.'},
+  ]},
+  { ver:'v2.42.13', date:'2026-08-14', title:{en:'Cross-check cleanup: one evidence order everywhere',pt:'Limpeza pós-revisão: uma ordem de evidência em todas as superfícies'}, items:[
+    {t:'fix', en:'<b>Wrong-key feedback is now provisional everywhere a valid extraction may still happen later.</b> Three header-path failures still flashed the key field before the alternate layer and third-party engines had finished. With a supplied key they now wait for the same final gate as the generic decoder; missing-key prompts remain immediate.', pt:'<b>O aviso de chave incorreta agora é provisório em todo caminho no qual uma extração válida ainda pode acontecer depois.</b> Três falhas na rota do header ainda faziam o campo de chave piscar antes de a camada alternativa e os motores de terceiros terminarem. Com chave informada, agora aguardam o mesmo portão final do decodificador genérico; avisos de chave ausente continuam imediatos.'},
+    {t:'fix', en:'<b>Threat and Protocol now describe the strongest native evidence with the same precedence.</b> When a passive header and an authenticated extraction coexisted, Protocol said “extracted” while Threat mentioned only the header. The score was unchanged, but the wording diverged. Authenticated extraction now wins in both.', pt:'<b>Threat e Protocolo agora descrevem a evidência nativa mais forte com a mesma precedência.</b> Quando um header passivo e uma extração autenticada coexistiam, Protocolo dizia “extraído” enquanto Threat mencionava apenas o header. O score era o mesmo, mas o texto divergia. Extração autenticada agora vence nos dois.'},
+    {t:'fix', en:'<b>An authenticated extraction no longer hides the payload size when a public header also exposed it.</b> The route-neutral recovery text stays intact, with the already-public byte count appended when available.', pt:'<b>Uma extração autenticada não esconde mais o tamanho do payload quando um header público também o revelou.</b> O texto neutro de recuperação continua intacto, com a contagem de bytes já pública acrescentada quando disponível.'},
+    {t:'chg', en:'<b>CHECK 18 now guards the pipeline, not just the helper it is supposed to use.</b> It asserts the production call site, keeps a single native-promotion gate, and ratchets writes in the final evidence/status region. Three mutations from the independent review that previously stayed green now fail. The synthetic carrier test also names its true scope: MODE_B stealth through the production PNG codec; browser fallback formats remain F17 work.', pt:'<b>O CHECK 18 agora protege o pipeline, não apenas o helper que ele deveria usar.</b> Ele exige o call site de produção, mantém um único portão de promoção nativa e cria uma catraca para escritas na região final de evidência/status. Três mutações da revisão independente que antes permaneciam verdes agora falham. O teste de portadora sintética também nomeia seu escopo real: MODE_B furtivo pelo codec PNG de produção; formatos de fallback do navegador continuam trabalho da F17.'},
+    {t:'fix', en:'<b>One live English quick-guide sentence still referred to the removed Pro server.</b> It now matches the Portuguese text and the current offline product: adaptive methods are not reliably detected by this build.', pt:'<b>Uma frase viva do guia rápido em inglês ainda citava o servidor Pro removido.</b> Agora ela corresponde ao português e ao produto offline atual: métodos adaptativos não são detectados com confiabilidade por esta build.'},
+  ]},
+  { ver:'v2.42.12', date:'2026-08-14', title:{en:'Independent review closed two remaining layer distinguishers',pt:'Revisão independente fechou dois distinguidores restantes entre as camadas'}, items:[
+    {t:'fix', en:'<b>A valid alternate password no longer makes the key field flash as if the password were wrong.</b> The generic decoder used to give that warning before the alternate layer had its turn. The warning is now provisional and only appears after every applicable extraction route has failed.', pt:'<b>Uma senha alternativa válida não faz mais o campo de chave piscar como se a senha estivesse errada.</b> O decodificador genérico dava esse aviso antes de a camada alternativa ter sua chance. Agora o aviso é provisório e só aparece depois que todas as rotas de extração aplicáveis falham.'},
+    {t:'fix', en:'<b>A message recovered by another tool can no longer inherit STEGO·STUDIO extraction status from a native header that matched earlier but failed to decode.</b> Header match and payload recovery are now kept as local operation facts until the final evidence state is resolved.', pt:'<b>Uma mensagem recuperada por outra ferramenta não pode mais herdar o estado de extração STEGO·STUDIO de um header nativo que havia casado antes, mas falhou ao decodificar.</b> Correspondência de header e recuperação de payload agora ficam como fatos locais da operação até a evidência final ser resolvida.'},
+    {t:'chg', en:'<b>The F1 regression check now crosses a real PNG carrier.</b> A deterministic 64×64 image with transparency is encoded with both native layers, serialized to PNG, reopened and decoded with both passwords. The protocol renderer now follows the same evidence precedence as its state resolver, and the remaining neural-model browser overclaim was corrected.', pt:'<b>A regressão da F1 agora atravessa uma portadora PNG real.</b> Uma imagem determinística de 64×64 com transparência recebe as duas camadas nativas, é serializada em PNG, reaberta e decodificada com as duas senhas. O renderer de protocolo agora segue a mesma precedência de evidência do resolvedor de estado, e a afirmação restante sobre modelos neurais no navegador foi corrigida.'},
+  ]},
+  { ver:'v2.42.11', date:'2026-08-14', title:{en:'Two valid passwords no longer reveal which layer they opened',pt:'Duas senhas válidas não revelam mais qual camada abriram'}, items:[
+    {t:'fix', en:'<b>The two-message mode could betray which password had opened which layer.</b> Both passwords still recovered their messages correctly, but only the main route was promoted to a confirmed STEGO·STUDIO extraction in the Analyzer. The alternate route is deliberately headerless and validates through AES-GCM, so its message appeared while Threat and Protocol stayed at the same level as a wrong password. A successful native recovery now becomes one public state regardless of the internal route, and the report does not publish a decoy/tail-layer marker.', pt:'<b>O modo de duas mensagens podia denunciar qual senha havia aberto qual camada.</b> As duas senhas continuavam recuperando suas mensagens corretamente, mas só a rota principal era promovida a extração confirmada do STEGO·STUDIO no Analyzer. A rota alternativa não tem header de propósito e valida pelo AES-GCM, então a mensagem aparecia enquanto Threat e Protocolo ficavam no mesmo nível de uma senha errada. Uma recuperação nativa bem-sucedida agora vira um único estado público independentemente da rota interna, e o relatório não publica marcador de decoy/camada de cauda.'},
+    {t:'fix', en:'<b>A recovered alternate message no longer makes the protocol panel claim that a header was found.</b> That sentence was true for the main route and false for the alternate one. The panel now says only what both successful routes prove: a STEGO·STUDIO payload was recovered with the supplied password.', pt:'<b>Uma mensagem alternativa recuperada não faz mais o painel de protocolo afirmar que um header foi encontrado.</b> Essa frase era verdadeira para a rota principal e falsa para a alternativa. O painel agora diz apenas o que as duas rotas bem-sucedidas provam: um payload STEGO·STUDIO foi recuperado com a senha informada.'},
+    {t:'add', en:'<b>The regression harness gained a real v2.29.0 layered test vector.</b> Instead of generating a fresh sample with today\'s code, it uses the original AES-GCM bytes extracted from a historical image. The alternate password must recover “Mensagem alternativa”, while the other valid image password and a wrong password must be rejected by that layer. The build now runs 18 invariants.', pt:'<b>O harness de regressão ganhou um vetor real de camadas da v2.29.0.</b> Em vez de gerar uma amostra nova com o código atual, ele usa os bytes AES-GCM originais extraídos de uma imagem histórica. A senha alternativa precisa recuperar “Mensagem alternativa”, enquanto a outra senha válida da imagem e uma senha errada precisam ser rejeitadas por essa camada. O build agora roda 18 invariantes.'},
+  ]},
+  { ver:'v2.42.10', date:'2026-08-13', title:{en:'The interface locks during analysis on purpose now',pt:'A interface trava durante a análise de propósito agora'}, items:[
+    {t:'chg', en:'<b>While an analysis runs, everything that could change it is now deliberately locked.</b> It already behaved that way, but only by accident: the work occupies the browser so thoroughly that clicks and pasted images were simply never noticed. That is not a promise — it would quietly disappear the day the analysis becomes smoother or moves to a background thread, and interaction would return without anyone choosing it. Loading an image, editing the password, clearing, and switching language now wait for the analysis to finish, and say so rather than appearing to ignore you.', pt:'<b>Enquanto uma análise roda, tudo que poderia alterá-la fica deliberadamente travado.</b> Já se comportava assim, mas por acidente: o trabalho ocupa o navegador de tal forma que cliques e imagens coladas simplesmente não eram percebidos. Isso não é uma promessa — sumiria no dia em que a análise ficasse mais fluida ou fosse para uma thread de fundo, e a interação voltaria sem ninguém ter escolhido. Carregar imagem, editar a senha, limpar e trocar de idioma agora aguardam a análise terminar, e dizem isso em vez de parecer que estão ignorando você.'},
+    {t:'fix', en:'<b>Pasting an image with Ctrl+V followed a separate path that did not invalidate a running analysis.</b> Dragging a file in and pasting one were two copies of the same loading routine, and only the first had been taught to discard results in flight. There is now a single entry point that both use, and a build check refuses any future path that bypasses it. Two smaller repairs travel with it: finishing an analysis no longer re-enables the Analyse button without checking whether an image is actually loaded, and re-analysing the same image now supersedes the previous report instead of sharing its identity.', pt:'<b>Colar uma imagem com Ctrl+V seguia um caminho separado que não invalidava a análise em andamento.</b> Arrastar um arquivo e colar um eram duas cópias da mesma rotina de carregamento, e só a primeira havia sido ensinada a descartar resultados em voo. Agora existe um ponto de entrada único que os dois usam, e uma checagem de build recusa qualquer caminho futuro que o contorne. Dois reparos menores vêm junto: terminar uma análise não reabilita mais o botão Analisar sem conferir se há imagem carregada, e reanalisar a mesma imagem agora substitui o relatório anterior em vez de compartilhar a identidade dele.'},
+    {t:'fix', en:'<b>The build was reporting its own size in characters and calling them bytes.</b> The file contains accented text and symbols, which occupy more than one byte each, so the number shown after every build was smaller than the file actually on disk — by about nineteen thousand bytes. It now reports both, labelled correctly. Encoder timings were also extended to cover the stealth self-check and the sturdier JPEG, which happen after the main work and are part of what you wait for.', pt:'<b>O build reportava o próprio tamanho em caracteres e os chamava de bytes.</b> O arquivo contém texto acentuado e símbolos, que ocupam mais de um byte cada, então o número exibido após cada build era menor que o arquivo realmente em disco — cerca de dezenove mil bytes menor. Agora reporta os dois, rotulados corretamente. Os tempos do codificador também passaram a cobrir a autoverificação de furtividade e o JPEG resistente, que acontecem depois do trabalho principal e fazem parte do que você espera.'},
+  ]},
+  { ver:'v2.42.9', date:'2026-08-13', title:{en:'Loading a new image mid-analysis showed the old one\u2019s results',pt:'Carregar imagem nova no meio da análise mostrava o resultado da antiga'}, items:[
+    {t:'fix', en:'<b>If you loaded a second image while the first was still being analysed, the preview changed but the results that appeared belonged to the previous image.</b> An analysis takes several seconds and reads the current image repeatedly along the way, so swapping the image underneath it left the two halves describing different files. Each analysis now works from a copy taken when it started, and checks before showing anything whether it is still the current one — if not, it finishes quietly and shows nothing. Changing the language mid-analysis could bring the old results back the same way, and no longer does.', pt:'<b>Se você carregasse uma segunda imagem enquanto a primeira ainda era analisada, o preview mudava mas os resultados que apareciam eram da imagem anterior.</b> Uma análise leva alguns segundos e consulta a imagem atual várias vezes no caminho, então trocar a imagem por baixo dela deixava as duas metades descrevendo arquivos diferentes. Cada análise agora trabalha a partir de uma cópia tirada quando começou, e confere antes de exibir qualquer coisa se ainda é a corrente — se não for, termina em silêncio e não mostra nada. Trocar o idioma no meio da análise trazia os resultados antigos de volta pelo mesmo caminho, e não traz mais.'},
+    {t:'fix', en:'<b>A file that could not be read was being reported as a file with no camera metadata.</b> Those are different things, and the second one feeds the origin classifier — so a read failure was quietly becoming evidence about the image. The report now distinguishes not read from read and empty.', pt:'<b>Um arquivo que não pôde ser lido era reportado como um arquivo sem metadados de câmera.</b> São coisas diferentes, e a segunda alimenta o classificador de origem — então uma falha de leitura virava, em silêncio, evidência sobre a imagem. O relatório agora distingue não lido de lido e vazio.'},
+    {t:'add', en:'<b>The encoder now records how long each of its stages takes.</b> A report of it feeling slower could not be checked against anything, and nothing in recent versions changed the encoding itself. Rather than guess at an optimisation, the timings are available in the browser console as <code>__encTimings</code> so a real comparison can be made first.', pt:'<b>O codificador agora registra quanto tempo cada estágio dele leva.</b> Um relato de que estava mais lento não podia ser conferido contra nada, e nada nas versões recentes mudou a codificação em si. Em vez de chutar uma otimização, os tempos ficam disponíveis no console do navegador como <code>__encTimings</code> para que uma comparação real possa ser feita antes.'},
+  ]},
+  { ver:'v2.42.8', date:'2026-08-13', title:{en:'A frozen progress bar and a note that argued with itself',pt:'Uma barra travada e uma nota que discordava de si mesma'}, items:[
+    {t:'fix', en:'<b>Analysing a second time could leave the progress bar stuck forever with nothing in the console.</b> Reading the file was wrapped in a promise that waited only for success — if the read failed, no error was raised, nothing was logged, and the wait simply never ended. That is why the failure looked like a freeze rather than a fault. File reading now reports failure, cancellation and silence alike, gives up after a minute rather than waiting indefinitely, and a second analysis cannot start while one is still running.', pt:'<b>Analisar uma segunda vez podia deixar a barra de progresso travada para sempre, sem nada no console.</b> A leitura do arquivo estava embrulhada numa promessa que esperava apenas pelo sucesso — se a leitura falhasse, nenhum erro era levantado, nada era registrado, e a espera simplesmente não terminava. É por isso que a falha parecia um congelamento e não um defeito. A leitura de arquivo agora reporta falha, cancelamento e silêncio igualmente, desiste após um minuto em vez de esperar indefinidamente, e uma segunda análise não começa enquanto uma ainda está rodando.'},
+    {t:'fix', en:'<b>The protocol panel showed the recovered message and, just below it, said no readable text had been recovered.</b> Three separate places describe the same finding — the threat tags, the panel heading, and its explanatory note — and each learned about confirmed extraction at a different time, so the last one was still describing the old state. All three now read the same source, and a build check compares them against each other so they cannot drift apart again.', pt:'<b>O painel de protocolo mostrava a mensagem recuperada e, logo abaixo, dizia que nenhum texto legível havia sido recuperado.</b> Três lugares distintos descrevem o mesmo achado — as tags de ameaça, o título do painel e a nota explicativa — e cada um aprendeu sobre extração confirmada em momento diferente, então o último ainda descrevia o estado antigo. Os três agora leem a mesma fonte, e uma checagem de build os compara entre si para que não voltem a divergir.'},
+  ]},
+  { ver:'v2.42.7', date:'2026-08-12', title:{en:'Two panels disagreeing about the same message',pt:'Dois painéis discordando sobre a mesma mensagem'}, items:[
+    {t:'fix', en:'<b>With the right password, one panel said a payload had been extracted while the panel below called the protocol undetermined.</b> Both were describing the same file at the same moment. The Protocol panel only ever consulted the passive scan, which runs without your password and cannot see a payload whose header is hidden — so once the password revealed one, that panel had no idea and fell back to guessing. It now reads the same evidence the threat score does, ordered by strength, and distinguishes a header confirmed with your password from one merely spotted without it.', pt:'<b>Com a senha certa, um painel dizia que um payload havia sido extraído enquanto o painel logo abaixo chamava o protocolo de indeterminado.</b> Os dois descreviam o mesmo arquivo no mesmo instante. O painel Protocolo consultava apenas a varredura passiva, que roda sem a sua senha e não enxerga payload de cabeçalho escondido — então, quando a senha revelava um, aquele painel não sabia de nada e voltava a adivinhar. Agora ele lê a mesma evidência que o score de ameaça lê, ordenada por força, e distingue um cabeçalho confirmado com a sua senha de um apenas avistado sem ela.'},
+  ]},
+  { ver:'v2.42.6', date:'2026-08-12', title:{en:'Finding the header is not the same as reading the message',pt:'Achar o cabeçalho não é o mesmo que ler a mensagem'}, items:[
+    {t:'fix', en:'<b>The report could announce an extracted payload when nothing had been read.</b> The previous version started counting an extraction the moment the hidden header was located, but six different outcomes still end with no message: a corrupted body failing its authentication check, an encrypted payload with no password given, decompression failing. In all of them you would have been told a payload was extracted while the screen showed nothing. There are now two distinct findings — a header was found, and a message was recovered — with the second recorded only after a message actually survives. The sturdier JPEG mode always drew this line; the ordinary path now does too.', pt:'<b>O relatório podia anunciar payload extraído quando nada havia sido lido.</b> A versão anterior passava a contar extração no instante em que o cabeçalho oculto era localizado, mas seis desfechos diferentes ainda terminam sem mensagem: um corpo corrompido reprovando na verificação de autenticidade, um payload cifrado sem senha informada, a descompressão falhando. Em todos eles você seria informado de que um payload foi extraído enquanto a tela não mostrava nada. Agora são dois achados distintos — um cabeçalho foi encontrado, e uma mensagem foi recuperada — e o segundo só é registrado depois que uma mensagem de fato sobrevive. O modo resistente do JPEG sempre traçou essa linha; o caminho comum agora também.'},
+  ]},
+  { ver:'v2.42.5', date:'2026-08-12', title:{en:'Two things the analysis was getting wrong',pt:'Duas coisas que a análise estava errando'}, items:[
+    {t:'fix', en:'<b>Recovering a hidden message no longer leaves the threat score unchanged.</b> In lossless images the passive scan looks for a message without your password, so a payload whose header is masked stays invisible to it — and the score came out identical whether the password was right or wrong, even with the full message on screen. Actually reading a message is the strongest evidence there is, stronger than any statistic, and it now counts as such. The sturdier JPEG mode already did this; the ordinary path had been left out.', pt:'<b>Recuperar uma mensagem oculta não deixa mais o score de ameaça igual ao que era.</b> Em imagens sem perda a varredura passiva procura mensagem sem a sua senha, então um payload de cabeçalho mascarado permanece invisível para ela — e o score saía idêntico com senha certa ou errada, mesmo com a mensagem inteira na tela. Ler uma mensagem de fato é a evidência mais forte que existe, mais forte que qualquer estatística, e agora pesa como tal. O modo resistente do JPEG já fazia isso; o caminho comum tinha ficado de fora.'},
+    {t:'fix', en:'<b>An image with no hidden message could reach the maximum threat score.</b> The tool knows that AI-generated files carry provenance data which produces statistical noise resembling steganography, and it has a rule to discount those signals. But the switch that turned the rule off was itself wired to two of those very signals, so on exactly the files the rule was written for, it never ran. A clean certified image scored 100 and announced a possible encrypted message. The switch now responds only to structural evidence — a header, an extracted payload, data past the end of the file — so a genuine hidden message still overrides the discount, while noise alone no longer does.', pt:'<b>Uma imagem sem mensagem oculta podia atingir o score máximo de ameaça.</b> A ferramenta sabe que arquivos gerados por IA carregam dados de proveniência que produzem ruído estatístico parecido com esteganografia, e tem uma regra para descontar esses sinais. Mas o interruptor que desligava a regra estava ligado a dois desses mesmos sinais, então justamente nos arquivos para os quais a regra foi escrita ela nunca rodava. Uma imagem certificada e limpa marcava 100 e anunciava possível mensagem cifrada. O interruptor agora responde só a evidência estrutural — um cabeçalho, um payload extraído, dados após o fim do arquivo — de modo que uma mensagem oculta real continua vencendo o desconto, e ruído sozinho não.'},
+    {t:'fix', en:'<b>Two smaller repairs.</b> The exported report printed a placeholder instead of the image proportion it had already calculated. And the invisible element that catches a pasted image was marked as hidden from screen readers while still receiving keyboard focus, which leaves someone using one with no idea where they are.', pt:'<b>Dois reparos menores.</b> O relatório exportado imprimia um marcador de lugar em vez da proporção da imagem que ele já havia calculado. E o elemento invisível que captura uma imagem colada estava marcado como oculto para leitores de tela enquanto ainda recebia o foco do teclado, o que deixa quem usa um deles sem saber onde está.'},
+  ]},
+  { ver:'v2.42.4', date:'2026-08-11', title:{en:'The help was promising something the tool cannot do',pt:'A ajuda prometia algo que a ferramenta não faz'}, items:[
+    {t:'fix', en:'<b>The help said this tool reads Steghide files in BMP. It does not.</b> The BMP method was written and tested, but never wired up: a canvas hands over pixels top to bottom while Steghide reads them bottom to top, which shifts every position it looks at. So anyone opening a Steghide BMP here was told nothing was found — and could reasonably have concluded the file was clean. The help now says JPEG only, and admits that of the many ciphers Steghide offers, only its default is decrypted; the others are named rather than read.', pt:'<b>A ajuda dizia que esta ferramenta lê arquivos Steghide em BMP. Não lê.</b> O método BMP foi escrito e testado, mas nunca ligado: o canvas entrega os pixels de cima para baixo e o Steghide os lê de baixo para cima, o que desloca cada posição que ele procura. Então quem abrisse um BMP do Steghide aqui era informado de que nada foi encontrado — e poderia razoavelmente concluir que o arquivo estava limpo. A ajuda agora diz apenas JPEG, e admite que das muitas cifras que o Steghide oferece só a padrão é decifrada; as demais são nomeadas, não lidas.'},
+    {t:'chg', en:'<b>The status line at the bottom of each panel no longer builds any markup.</b> It used to be handed a formatted snippet and immediately take it apart again to recover the text inside — twice rewritten to do that more safely, when the honest fix was to stop doing it. Two of the three places that write there pass an error message, which can carry text drawn from the file being examined. It now receives plain words and a colour, and a build check keeps it that way.', pt:'<b>A linha de status no rodapé de cada painel não monta mais marcação nenhuma.</b> Ela recebia um trecho formatado e imediatamente o desmontava para recuperar o texto de dentro — reescrita duas vezes para fazer isso com mais segurança, quando a correção honesta era parar de fazer. Duas das três chamadas passam uma mensagem de erro, que pode carregar texto vindo do arquivo em exame. Agora ela recebe palavras simples e uma cor, e uma checagem de build mantém assim.'},
+  ]},
   { ver:'v2.42.3', date:'2026-08-11', title:{en:'Fewer doors, and an honest page about what this tool can read',pt:'Menos portas, e uma página honesta sobre o que a ferramenta consegue ler'}, items:[
     {t:'chg', en:'<b>Six of the places where file data could have become page markup are gone.</b> Five were only clearing a panel, which needed no markup at all, and one was building throwaway elements purely to strip tags out of a string \u2014 that now happens in an inert document where nothing can load or run. Twenty-five remain, and the build refuses to let that number grow. None of this fixes a live flaw; it removes ground where the next one could stand.', pt:'<b>Seis dos lugares onde dado de arquivo poderia virar marcação da página deixaram de existir.</b> Cinco apenas limpavam um painel, o que não exigia marcação nenhuma, e um construía elementos descartáveis só para extrair o texto de dentro de uma string \u2014 isso agora acontece num documento inerte, onde nada carrega nem executa. Restam vinte e cinco, e o build não deixa esse número crescer. Nada disso conserta uma falha viva; retira o terreno onde a próxima poderia se apoiar.'},
     {t:'add', en:'<b>A page now states exactly what this tool can and cannot read from other steganography tools.</b> Saying "supports Steghide" would be misleading: Steghide can encrypt with eighteen algorithms across seven modes, and this decoder implements two of those combinations \u2014 which means even its default cipher fails in six of its seven modes. That is measured against the real program, not estimated. The page also records that OpenStego payloads written with its own encryption are identified but not decrypted, and that F5 is only ever guessed at, never extracted.', pt:'<b>Uma página agora diz exatamente o que esta ferramenta consegue e não consegue ler de outras ferramentas de esteganografia.</b> Dizer "suporta Steghide" seria enganoso: o Steghide cifra com dezoito algoritmos em sete modos, e este decodificador implementa duas dessas combinações \u2014 o que significa que mesmo a cifra padrão dele falha em seis dos sete modos. Isso foi medido contra o programa real, não estimado. A página também registra que payloads do OpenStego escritos com a criptografia dele são identificados mas não decifrados, e que o F5 é apenas suposto, nunca extraído.'},
@@ -4258,13 +4362,14 @@ document.getElementById('btn-clear-dec').addEventListener('click', () => {
       ? t('dlgClearAnalysisWarn')
       : t('dlgClearAnalysisSafe'),
     () => {
+      bumpAnalysisGeneration();   // limpar também invalida análise em voo
       decID = null; decFile = null; decFmt = null; lastReport = null; lastRenderArgs = null;
       document.getElementById('dec-prev').src = '';
       document.getElementById('dec-pw').style.display = 'none';
       document.getElementById('dec-hint').style.display = 'flex';
       document.getElementById('dec-file').value = '';
       const dk = document.getElementById('dec-key');
-      dk.value = ''; dk.style.boxShadow = ''; dk.placeholder = t('keyPlaceholder');
+      dk.value = ''; clearKeyFlash();
       resetStatus('dec-status');
       document.getElementById('results-area').classList.remove('visible');
       document.getElementById('export-wrap').classList.remove('visible');
@@ -7615,20 +7720,19 @@ function escapeHTML(s) {
 }
 
 // setStatus compatível — uma única linha digitada
-function setStatus(id, html, cls) {
-  // Extrai o texto puro do HTML para digitá-lo caractere a caractere.
-  // Antes usava `div.innerHTML = html` num nó solto — funciona, mas constrói
-  // nós reais a partir de uma string que pode carregar conteúdo do arquivo
-  // analisado. O DOMParser monta um documento INERTE: nada é buscado, nada é
-  // executado, e o resultado é o mesmo. Um sink de innerHTML a menos (CHECK 13).
-  const text = new DOMParser().parseFromString(String(html), 'text/html')
-                 .body.textContent || '';
-  // Detecta classe pelo span original se não passada
-  if (!cls) {
-    const m = html.match(/class="(ok|err|warn|info)"/);
-    cls = m ? m[1] : null;
-  }
-  termWrite(id, [{text, cls}]);
+// Escreve UMA linha de status. Recebe TEXTO e classe — nunca HTML.
+//
+// Já foi `div.innerHTML = html` num nó solto, depois `DOMParser`, ambos só para
+// extrair o texto de dentro de uma string. A revisão externa perguntou qual dos
+// dois era melhor e a resposta foi: nenhum. Os três chamadores sempre passaram
+// `<span class="ok|err">…</span>` — markup montado aqui mesmo, imediatamente
+// desmontado ali. Dois deles interpolam `e.message`, que pode carregar conteúdo
+// do arquivo analisado.
+//
+// Texto puro elimina a classe inteira de problema: não há parser, não há DOM
+// intermediário, não há o que sanitizar.
+function setStatus(id, text, cls) {
+  termWrite(id, [{ text: String(text), cls: cls || null }]);
 }
 
 // Status "trabalhando" com AMPULHETA ANIMADA. O terminal digita texto puro e
@@ -7738,14 +7842,41 @@ function decStatusLoaded(fmt, w, h, size) {
   termWrite('dec-status', build());
 }
 
-// Destaca o campo de chave quando uma mensagem cifrada é encontrada sem chave
-function flashKey() {
+// Destaca o campo de chave sem depender só de cor. O aviso usa três canais:
+// contorno, ícone ⚠ e texto visível abaixo do campo. Um único timer é mantido;
+// chamadas consecutivas reiniciam o período em vez de deixarem timers competindo.
+let keyFlashTimer = null;
+let keyFlashReason = null;
+function clearKeyFlash() {
+  if (keyFlashTimer !== null) { clearTimeout(keyFlashTimer); keyFlashTimer = null; }
   const k = document.getElementById('dec-key');
-  if (!k) return;
-  k.style.boxShadow = '0 0 0 2px var(--dec)';
-  const orig = k.placeholder;
-  k.placeholder = '⚠ Insira a chave para decodificar';
-  setTimeout(() => { k.style.boxShadow=''; k.placeholder=orig; }, 5000);
+  const field = k?.closest('.key-field');
+  const icon = field?.querySelector('.key-icon');
+  const hint = document.getElementById('dec-key-hint');
+  if (field) field.classList.remove('key-flash');
+  if (icon) icon.textContent = '🔑';
+  if (hint) hint.textContent = t('decKeyHint2');
+  if (k) k.placeholder = t('keyPlaceholder');
+  keyFlashReason = null;
+}
+function refreshKeyFlashText() {
+  if (!keyFlashReason) return;
+  const hint = document.getElementById('dec-key-hint');
+  if (hint) hint.textContent = t(keyFlashReason === 'wrong' ? 'decKeyFlashWrong' : 'decKeyFlashMissing');
+}
+function flashKey(reason='missing') {
+  clearKeyFlash();
+  keyFlashReason = reason;
+  const k = document.getElementById('dec-key');
+  const field = k?.closest('.key-field');
+  const icon = field?.querySelector('.key-icon');
+  const hint = document.getElementById('dec-key-hint');
+  if (!k || !field) return;
+  field.classList.add('key-flash');
+  if (icon) icon.textContent = '⚠';
+  refreshKeyFlashText();
+  if (!k.value) k.placeholder = '⚠ ' + t('keyPlaceholder');
+  keyFlashTimer = setTimeout(clearKeyFlash, 5000);
 }
 // Verifica se bytes brutos têm ratio de ASCII puro (usado para LSB raw / extração genérica)
 function printable(bytes) {
@@ -8111,24 +8242,7 @@ document.addEventListener('paste', async e => {
     }, r => showLoadError('enc', r));
   } else {
     flashDrop('dec-drop');
-    decFile = f;
-    let magic=null; try{ magic=new Uint8Array(await f.slice(0,16).arrayBuffer()); }catch(_){}
-    decFmt = classifyFormat(f, magic);
-    loadToCanvas(f, (id, w, h, src) => {
-      decID = id;
-      document.getElementById('dec-prev').src = src;
-      document.getElementById('dec-pw').style.display = 'block';
-      document.getElementById('dec-hint').style.display = 'none';
-      document.getElementById('dec-info').textContent = `${w}×${h} · ${fmtBytes(f.size)}`;
-      const b = document.getElementById('dec-fbadge');
-      b.textContent = decFmt.ext;
-      const colors = {lossless:'255,107,53', lossy:'255,179,0', palette:'100,180,255'};
-      const c = colors[decFmt.cat];
-      b.style.cssText = `background:rgba(${c},0.15);color:rgb(${c});border:1px solid rgba(${c},0.3)`;
-      decStatusLoaded(decFmt,w,h,f.size);
-      document.getElementById('btn-analyze').disabled = false;
-      clearDecKey();
-    }, r => showLoadError('dec', r));
+    await loadDecoderFile(f);   // mesmo ingresso do drop: bump + busy-state
   }
 });
 
@@ -8172,12 +8286,64 @@ setupDrop('enc-drop','enc-file', file=>{
 });
 
 // ── DECODE DROP ──
+// ── BUSY-STATE EXPLÍCITO DO ANALYZER ─────────────────────────────────────────
+// DECISÃO DE PRODUTO (13/08/2026). Hoje a interface já parece bloqueada durante
+// a análise, mas por acidente: a thread principal fica ocupada e o navegador
+// engole cliques e Ctrl+V. Isso não é contrato — some no dia em que o pipeline
+// ceder a thread, ganhar um `await` mais longo ou migrar para Web Worker, e a
+// interação concorrente volta sem ninguém decidir por isso.
+//
+// A partir daqui o bloqueio é DELIBERADO e sobrevive a mudanças de arquitetura.
+//
+// Não substitui `analysisGeneration` nem os snapshots: são duas camadas, uma de
+// UX e outra de estado interno, ambas intencionais.
+let _analysisBusy = false;
+function isAnalysisBusy(){ return _analysisBusy; }
+function setAnalysisBusy(v) {
+  _analysisBusy = !!v;
+  const alvos = ['dec-file','dec-key','btn-analyze','dec-clear','lang-en','lang-pt'];
+  for (const id of alvos) {
+    const el = document.getElementById(id);
+    if (el) { el.disabled = _analysisBusy; el.setAttribute('aria-disabled', String(_analysisBusy)); }
+  }
+  const dz = document.getElementById('dec-drop');
+  if (dz) {
+    dz.classList.toggle('busy', _analysisBusy);
+    dz.setAttribute('aria-busy', String(_analysisBusy));
+  }
+  const painel = document.getElementById('panel-dec');
+  if (painel) painel.setAttribute('aria-busy', String(_analysisBusy));
+  if (!_analysisBusy) checkDecReady();   // ao liberar, recalcula em vez de habilitar cego
+}
+
 let decID=null, decFile=null, decFmt=null;
-setupDrop('dec-drop','dec-file', async file=>{
-  decFile=file;
+// ── IDENTIDADE DA OPERAÇÃO ───────────────────────────────────────────────────
+// A análise é assíncrona e longa. `decID`/`decFile`/`decFmt` podem trocar no
+// meio dela — o smoke da v2.42.8 reproduziu: carregar a imagem B enquanto a
+// análise de A rodava deixava o preview em B e o RESULTADO em A. A guarda
+// `_analisando` só impede um segundo clique; não protege a operação viva.
+// Toda troca de imagem incrementa este contador. A análise tira um snapshot no
+// início e, antes de publicar qualquer coisa, confere se ainda é a corrente.
+let analysisGeneration = 0;
+function bumpAnalysisGeneration(){ analysisGeneration++; }
+
+// ── INGRESSO ÚNICO DE IMAGEM NO DECODER ──────────────────────────────────────
+// Havia DOIS caminhos duplicados — `setupDrop` e o `paste` global — e o segundo
+// não incrementava a geração. Ou seja, a correção da corrida A→B foi aplicada a
+// uma superfície e a irmã ficou para trás (quarta vez que esse padrão aparece
+// no projeto). Hoje o defeito fica mascarado porque a thread principal ocupada
+// engole o Ctrl+V durante a análise; qualquer `await` mais longo ou um Worker
+// futuro o traria de volta.
+//
+// Agora existe UM ponto de entrada. Acrescentar um terceiro caminho sem passar
+// por aqui é o que o CHECK 17 impede.
+async function loadDecoderFile(file) {
+  if (isAnalysisBusy()) return;          // busy-state: ver setAnalysisBusy
+  bumpAnalysisGeneration();              // invalida qualquer análise em voo
+  decFile = file;
   // sniff de magic bytes → detecção robusta (pega .jfif, MIME errado, etc.)
   let magic=null; try{ magic=new Uint8Array(await file.slice(0,16).arrayBuffer()); }catch(_){}
-  decFmt=classifyFormat(file, magic);
+  decFmt = classifyFormat(file, magic);
   loadToCanvas(file,(id,w,h,src)=>{
     decID=id;
     document.getElementById('dec-prev').src=src;
@@ -8190,10 +8356,11 @@ setupDrop('dec-drop','dec-file', async file=>{
     const c=colors[decFmt.cat];
     b.style.cssText=`background:rgba(${c},0.15);color:rgb(${c});border:1px solid rgba(${c},0.3)`;
     decStatusLoaded(decFmt,w,h,file.size);
-    document.getElementById('btn-analyze').disabled=false;
+    checkDecReady();
     clearDecKey();
   }, r => showLoadError('dec', r));
-});
+}
+setupDrop('dec-drop','dec-file', loadDecoderFile);
 
 // ── BOTÃO LIMPAR SENHA + LIMPEZA AUTOMÁTICA (Decoder) ──
 // O "x" só aparece quando há senha digitada (campo vazio fica limpo). Ao
@@ -8202,7 +8369,45 @@ setupDrop('dec-drop','dec-file', async file=>{
 function clearDecKey() {
   const k = document.getElementById('dec-key');
   if (k) { k.value = ''; updateDecKeyClear(); }
+  if (typeof clearKeyFlash === 'function') clearKeyFlash();
 }
+// ── INSTRUMENTAÇÃO DO ENCODE ────────────────────────────────────────────────
+// O Rick relatou o Encoder "mais lento" nas builds recentes. O histórico
+// v2.42.5–v2.42.8 não tem nenhuma mudança deliberada no núcleo de encode que
+// justifique isso — as alterações foram em Threat, protocolo, renderer e
+// leitura de arquivo do ANALYZER. Logo: é percepção até ser medida.
+//
+// Isto NÃO otimiza nada. Só registra o tempo de cada estágio para que a
+// diferença, se existir, aponte para um deles em vez de virar palpite.
+// Ver no console:  window.__encTimings
+const __encT = { marcas: [], t0: 0 };
+function encMark(nome) {
+  const agora = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+  if (!__encT.marcas.length) __encT.t0 = agora;
+  __encT.marcas.push({ nome, ms: +(agora - __encT.t0).toFixed(1) });
+}
+function encTimingsReset(){ __encT.marcas = []; __encT.t0 = 0; }
+// `coreTotal` para no PNG; `uiReadyTotal` vai até o botão sair de "Trabalhando".
+// A revisão apontou que o flush anterior parava antes da self-analysis de
+// furtividade e da geração do JPEG resistente — ou seja, media menos do que o
+// usuário percebe entre clicar e a ferramenta terminar.
+function encTimingsFlush(final) {
+  const m = __encT.marcas;
+  if (m.length < 2) return null;
+  const fases = m.slice(1).map((x, i) => ({ fase: x.nome, ms: +(x.ms - m[i].ms).toFixed(1) }));
+  const png = m.find(x => x.nome === 'png:out');
+  const out = {
+    coreTotal:    png ? png.ms : null,                 // até o PNG pronto
+    uiReadyTotal: final ? m[m.length-1].ms : null,     // até a UI liberar
+    total: m[m.length-1].ms, fases,
+  };
+  try {
+    window.__encTimings = out;
+    if (final) console.info('[encode] core ' + out.coreTotal + 'ms · ui-ready ' + out.uiReadyTotal + 'ms', fases);
+  } catch(_) {}
+  return out;
+}
+
 function updateDecKeyClear() {
   const k = document.getElementById('dec-key');
   const x = document.getElementById('dec-key-clear');
@@ -8211,7 +8416,7 @@ function updateDecKeyClear() {
 (function setupDecKeyClear(){
   const k = document.getElementById('dec-key');
   const x = document.getElementById('dec-key-clear');
-  if (k) k.addEventListener('input', updateDecKeyClear);
+  if (k) k.addEventListener('input', () => { updateDecKeyClear(); if (typeof clearKeyFlash === 'function') clearKeyFlash(); });
   if (x) x.addEventListener('click', () => { clearDecKey(); document.getElementById('dec-key').focus(); });
 })();
 
@@ -8416,9 +8621,11 @@ function resetEncOutputs() {
 document.getElementById('btn-encode').addEventListener('click',async ()=>{
   const _btn=document.getElementById('btn-encode'), _btnHtml=_btn.innerHTML;
   let _stopWork=()=>{};
-  const _restore=()=>{ _btn.disabled=false; _btn.classList.remove('working'); _btn.innerHTML=_btnHtml; _stopWork(); };
+  const _restore=()=>{ encMark('ui-ready'); encTimingsFlush(true);
+    _btn.disabled=false; _btn.classList.remove('working'); _btn.innerHTML=_btnHtml; _stopWork(); };
   _btn.disabled=true; _btn.classList.add('working');
   _btn.innerHTML='<span class="enc-spinner"></span>'+t('encWorking');
+  encTimingsReset();
   // Item 6: feedback IMEDIATO ao clicar — ampulheta animada no terminal e rolagem
   // até a área de saída ANTES do bloco pesado. Rola para uma âncora SEMPRE VISÍVEL:
   // no primeiro encode é o placeholder; ao recodificar a mesma imagem o placeholder
@@ -8449,10 +8656,14 @@ document.getElementById('btn-encode').addEventListener('click',async ()=>{
     let bodyBytes = new TextEncoder().encode(msg);
     let compressed = false;
     try {
+      encMark('deflate:in');
       const comp = await deflateBytes(bodyBytes);
+      encMark('deflate:out');
       if (comp.length < bodyBytes.length) { bodyBytes = comp; compressed = true; }
     } catch(_) { /* sem CompressionStream → segue sem comprimir */ }
+    encMark('crypto:in');
     const data = cipher ? await aesEncryptBytes(bodyBytes, key) : bodyBytes;
+    encMark('crypto:out');
     // AUTO-SELEÇÃO: o modo MAIS FURTIVO que couber (ou RGB se priorizar capacidade).
     const sel = selectEmbedMode(data.length*8, encOpaque, HEADER_BYTES*8, maxcap);
     if (!sel) {
@@ -8472,7 +8683,9 @@ document.getElementById('btn-encode').addEventListener('click',async ()=>{
     // Embedding e ESCRITA sem canvas: clona o cover limpo, embute, e remonta o
     // PNG na mão. Evita o farbling do toDataURL/getImageData (vide Brave Shields).
     const work = new ImageData(new Uint8ClampedArray(encID.data), encW, encH);
+    encMark('embed:in');
     embedLSB(work, payload, mode, key, adaptive, stealth, stcW);
+    encMark('embed:out');
     // ── NEGAÇÃO PLAUSÍVEL: se ativa, embute a mensagem-isca no FIM (Opção C). ──
     const decoyOn = document.getElementById('enc-decoy-toggle')?.checked;
     const decoyMsg = document.getElementById('enc-decoy-msg')?.value.trim() || '';
@@ -8488,7 +8701,10 @@ document.getElementById('btn-encode').addEventListener('click',async ()=>{
       decoyBitsUsed = await embedDecoyTail(work, decoyMsg, decoyKey, realUsedPx);
       decoyChars = decoyMsg.length;
     }
+    encMark('png:in');
     const pngBytes = await pngEncodeRGBA(encW, encH, work.data);
+    encMark('png:out');
+    encTimingsFlush(false);
     if (encOutURL && encOutURL.startsWith('blob:')) URL.revokeObjectURL(encOutURL);
     encOutURL = URL.createObjectURL(new Blob([pngBytes], { type: 'image/png' }));
     document.getElementById('enc-out-prev').src=encOutURL;
@@ -8529,7 +8745,7 @@ document.getElementById('btn-encode').addEventListener('click',async ()=>{
       <div class="stat-cols">${realCol}${decoyCol}</div>
       <div class="stat-impact"><span class="stat-key">${t('encStatVisualImpact')}</span><span class="stat-val sv-enc">${(bitsUsed/totalBits*100).toFixed(4)}%</span></div>`;
     _stopWork(); // para a ampulheta ANTES de escrever o sucesso (senão o timer sobrescreve)
-    setStatus('enc-status','<span class="ok">'+t('encSuccess').replace('{bytes}',payload.length)+(cipher?t('encSuffixCipher'):t('encSuffixPlain'))+'</span>');
+    setStatus('enc-status', t('encSuccess').replace('{bytes}',payload.length)+(cipher?t('encSuffixCipher'):t('encSuffixPlain')), 'ok');
     // #21 — auto-report de furtividade: mede a saída com o próprio arsenal.
     // Deferido para a imagem/infos aparecerem na hora; nunca quebra o encode.
     (function(){
@@ -8616,7 +8832,7 @@ document.getElementById('btn-encode').addEventListener('click',async ()=>{
         wrap.classList.add('visible');
       }, 60);
     })();
-  } catch(e) { _stopWork(); setStatus('enc-status','<span class="err">✗ '+e.message+'</span>'); _restore(); }
+  } catch(e) { _stopWork(); setStatus('enc-status','✗ '+e.message,'err'); _restore(); }
 });
 
 document.getElementById('btn-dl-rb').addEventListener('click',()=>{
@@ -8805,9 +9021,11 @@ function findC2PAContainers(bytes) {
 }
 
 async function parseC2PA(file) {
+  // Leitura via readFileBytes: falha vira rejeição, nunca promessa pendente.
+  const _bytes = await readFileBytes(file, 'parseC2PA');
   return new Promise(res => {
-    const r = new FileReader();
-    r.onload = e => {
+    const e = { target: { result: _bytes.buffer } };
+    (() => {
       const result = {
         found: false,
         manifestDetected: false,
@@ -8945,8 +9163,7 @@ async function parseC2PA(file) {
 
       } catch(_) {}
       res(result);
-    };
-    r.readAsArrayBuffer(file);
+    })();
   });
 }
 
@@ -8973,10 +9190,9 @@ async function runForensics(imageData, file, onProgress=()=>{}, sharedDec=null) 
 
   // M2: STRINGS
   onProgress(2, PIPELINE_STEPS[1]);
-  const strResult = await new Promise(res=>{
-    const r=new FileReader();
-    r.onload=e=>{
-      const bytes=new Uint8Array(e.target.result);
+  const strResult = await (async () => {
+    const bytes = await readFileBytes(file, 'strings');
+    {
       const text=new TextDecoder('utf-8',{fatal:false}).decode(bytes);
       const regex=/[\x20-\x7E]{6,}/g;
       let m,found=[],count=0;
@@ -9023,12 +9239,11 @@ async function runForensics(imageData, file, onProgress=()=>{}, sharedDec=null) 
           break;
         }
       }
-      res({count:found.length,interesting,adversarial,appendedData,appendedBytes,
+      return {count:found.length,interesting,adversarial,appendedData,appendedBytes,
         note:isLossy?t('noteStringsFiltered'):'',
-        _rawBytes:(fmt.ext==='JPEG'?bytes:null)});
-    };
-    r.readAsArrayBuffer(file);
-  });
+        _rawBytes:(fmt.ext==='JPEG'?bytes:null)};
+    }
+  })();
   report.strings=strResult;
 
   // ── F3-C: esteganálise DCT para JPEG (usa os bytes já lidos acima) ──
@@ -9122,6 +9337,12 @@ async function runForensics(imageData, file, onProgress=()=>{}, sharedDec=null) 
     const wsReliable = !lowComplexity;
     const wsDetect = wsMax > 0.15 && wsReliable;
     const lsbrDetected = rsDetect || (wsDetect && rsSoft);    // alta confiança
+    // lsbrStrong: SÓ o caminho do RS (>15%), que é o confiável. O caminho
+    // corroborado (WS>15% + RS>8%) fica de fora — o WS produz taxas altas em
+    // imagem limpa, e o próprio comentário acima diz que ele nunca decide
+    // sozinho. Nenhum limiar mudou aqui: é a mesma condição `rsDetect`,
+    // exposta separadamente para quem precisa distinguir os dois caminhos.
+    const lsbrStrong = rsDetect;
     const lsbrPossible = !lsbrDetected && (rsSoft || wsDetect); // baixa confiança
 
     // Heurística de embedding neural (SteganoGAN-like) — suspeita, não prova
@@ -9136,7 +9357,7 @@ async function runForensics(imageData, file, onProgress=()=>{}, sharedDec=null) 
       // Resultados dos ataques estruturais
       rsRate: (rsMax*100).toFixed(1)+'%',
       wsRate: (wsMax*100).toFixed(1)+'%',
-      lsbrDetected, lsbrPossible, wsReliable,
+      lsbrDetected, lsbrStrong, lsbrPossible, wsReliable,
       // Heurística neural
       neuralSuspect: neural.suspect,
       neuralEntSim: neural.entSim,
@@ -9211,9 +9432,20 @@ async function runForensics(imageData, file, onProgress=()=>{}, sharedDec=null) 
   report.gradients = analyzeGradients(imageData);
   onProgress(9, PIPELINE_STEPS[8]);
   report.chroma = analyzeChrominance(imageData);
-  report.exif  = await parseEXIF(file).catch(()=>({found:false,fields:{},aiSoftware:null,hasCamera:false,hasGPS:false,noExif:true}));
-  report.c2pa  = await parseC2PA(file).catch(()=>({found:false,manifestDetected:false,aiGenerator:null,ca:null,certDate:null,digitalSourceType:null,manifestPresent:false,signals:[],rawSoftware:null}));
-  if(!report.exif.found){
+  // ⚠️ "não li o arquivo" ≠ "li e não havia EXIF".
+  // O fallback antigo devolvia `noExif:true` também quando a LEITURA falhava, e
+  // esse campo alimenta o classificador de origem — uma falha de I/O virava
+  // evidência de "PNG sem metadados de câmera". A v2.42.8 agravou isso: antes a
+  // leitura travava (ruim e visível); depois passou a rejeitar, e a rejeição era
+  // engolida aqui como ausência (ruim e invisível).
+  report.exif  = await parseEXIF(file).catch(e=>({available:false,readError:String(e&&e.message||e),
+    found:false,fields:{},aiSoftware:null,hasCamera:false,hasGPS:false,noExif:false}));
+  report.c2pa  = await parseC2PA(file).catch(e=>({available:false,readError:String(e&&e.message||e),
+    found:false,manifestDetected:false,aiGenerator:null,ca:null,certDate:null,
+    digitalSourceType:null,manifestPresent:false,signals:[],rawSoftware:null}));
+  // `available===false` significa que a leitura falhou. Sem ler, não dá para
+  // afirmar ausência de EXIF — e `noExif` alimenta o score de origem.
+  if(!report.exif.found && report.exif.available !== false){
     report.exif.noExif = fmt.ext==='JPEG' || file.type==='image/png';
   }
 
@@ -9737,23 +9969,63 @@ function computeThreat(r) {
   const _printR = parseFloat(r.lsb?.printableRatio) || 0;
   const _realHiddenText = r.lsb?.available && r.lsb?.suspicious && r.lsb?.foundText &&
                           (r.lsb?.headerName || _printR > 70);
+  // ⚠️ v2.42.5 — hardStego só aceita evidência ESTRUTURAL ou de EXTRAÇÃO.
+  // Antes incluía `lsbrDetected` e `cipherSuspicion`, que são estatísticos e
+  // são justamente o que conteúdo C2PA/IA produz. Resultado: a supressão era
+  // desligada pelos próprios sinais que ela existe para suprimir — circular.
+  // Medido numa imagem C2PA limpa: threat 100, e zerar o C2PA não mudava nada,
+  // porque a supressão nunca chegava a rodar.
+  //   • `lsbrStrong` (RS>15% sozinho) fica — é o caminho confiável do RS.
+  //   • o caminho corroborado (WS+RS fraco) sai — WS dá taxa alta sem stego.
+  //   • `cipherSuspicion` sai — uma janela de 512 bits com chi<3.84 entre ~39
+  //     janelas, sem correção para comparações múltiplas.
+  // Escotilha preservada: header, extração nativa, modo robusto, dado após EOF,
+  // stegomalware, RS≥25% e texto oculto real continuam desligando a supressão.
   const hardStego = !!(
     r.strings?.appendedData || r.studio?.hasHeader ||
+    r.studio?.nativeExtracted || r.studio?.nativeHeaderMatched ||
+    r.studio?.robust === true || r.studio?.robust === 'locked' ||
+    r.studio?.robust === 'content-error' ||
     (r.stegomalware||[]).some(m=>m.sev==='crit') ||
-    r.lsb?.lsbrDetected || (parseFloat(r.lsb?.rsRate)||0) >= 25 ||
-    r.lsb?.cipherSuspicion || _realHiddenText
+    r.lsb?.lsbrStrong || (parseFloat(r.lsb?.rsRate)||0) >= 25 ||
+    _realHiddenText
   );
   const c2paExplains = aiProvenC2PA && !hardStego; // sinais moles explicados pelo C2PA
   let c2paSuppressed = false; // algum sinal mole foi rebaixado por contexto C2PA?
 
   if(r.strings?.appendedData){score+=35;flags.push(t('flagDataAfterEOF'));hasStrongStego=true;}
-  if(r.studio?.hasHeader){score+=40;flags.push(t('flagStudioHeader'));hasStrongStego=true;}
+  // ── EVIDÊNCIA NATIVA — UMA fonte de precedência ──
+  // A redação vem do MESMO resolveProtocolState usado pelo badge/accordion. O peso
+  // continua refletindo a evidência bruta disponível: header passivo (+40) mantém
+  // seu peso mesmo quando uma tentativa ativa também localizou o header, mas a
+  // FLAG segue o nível mais forte/mais específico resolvido para não contradizer
+  // o painel Protocolo.
+  const studioLevel = resolveProtocolState(r).level;
+  const studioWeight = r.studio?.nativeExtracted ? 40
+    : r.studio?.hasHeader ? 40
+    : r.studio?.nativeHeaderMatched ? 20 : 0;
+  // A FORÇA vem da evidência bruta, não do rótulo resolvido. Um header passivo
+  // continua sendo evidência forte mesmo quando `headerOnly` vence a redação por
+  // ser mais específico. Separar estas duas decisões impede que ADICIONAR uma
+  // evidência ativa faça o Threat cair e apague sinais corroborantes da mesma imagem.
+  if(studioWeight >= 40) hasStrongStego = true;
+  if(studioLevel === 'extracted'){
+    score+=studioWeight; flags.push(t('flagStudioExtracted'));
+  } else if(studioLevel === 'headerOnly'){
+    score+=studioWeight; flags.push(t('flagStudioHeaderOnly'));
+  } else if(studioLevel === 'passive'){
+    score+=studioWeight; flags.push(t('flagStudioHeader'));
+  }
   // ── MODO ROBUSTO (F4): o payload foi EXTRAÍDO dos coeficientes DCT ──
   // Extração real é a evidência mais forte que existe — mais forte que qualquer
   // estatística. Sem isto, a ferramenta lia a mensagem e ainda dizia "ameaça 0".
   // 'damaged' é INDÍCIO, não confirmação: o cabeçalho sobreviveu, o corpo não.
   if(r.studio?.robust === true){
     score+=40; flags.push(t('flagRobustPayload')); hasStrongStego=true;
+  } else if(r.studio?.robust === 'locked'){
+    score+=30; flags.push(t('flagRobustLocked')); hasStrongStego=true;
+  } else if(r.studio?.robust === 'content-error'){
+    score+=30; flags.push(t('flagRobustContentError')); hasStrongStego=true;
   } else if(r.studio?.robust === 'damaged'){
     score+=20; flags.push(t('flagRobustDamaged'));
   } else if(r.studio?.robustSignature?.suspeito){
@@ -9793,7 +10065,13 @@ function computeThreat(r) {
   }
 
   // Ataques estruturais RS/WS detectaram LSB Replacement — evidência forte e específica.
-  if(isLossless&&r.lsb?.lsbrDetected){score+=45;flags.push(t('flagLSBR'));hasStrongStego=true;}
+  if(isLossless&&r.lsb?.lsbrDetected){
+    // O caminho corroborado (WS + RS fraco) é estatístico; numa imagem com
+    // manifesto C2PA ele é explicável pelo próprio conteúdo. O caminho forte
+    // (RS>15%) nunca é suprimido.
+    if(!r.lsb?.lsbrStrong && c2paExplains){ c2paSuppressed = true; }
+    else { score+=45;flags.push(t('flagLSBR'));hasStrongStego=true; }
+  }
   else if(isLossless&&r.lsb?.lsbrPossible){
     if(c2paExplains){ c2paSuppressed = true; }
     else { score+=15;flags.push(t('flagLSBRPossible')); }
@@ -9904,7 +10182,14 @@ function computeSynth(r) {
   // Usa os sinais já calculados no módulo AI do report
   const ai = r.ai;
   if (!ai) return {score:0, level:'—', flags:[]};
-  const flags = ai.signals.map(s => s.labelKey ? t(s.labelKey) : (s.label||''));
+  // labelVars precisa ser interpolado aqui também. A UI já fazia; este caminho
+  // não, e o relatório exportado saía com o placeholder cru ("Proporção exata
+  // {ratio}") enquanto o próprio sinal carregava ratio:"2:3" ao lado.
+  const flags = ai.signals.map(s => {
+    let txt = s.labelKey ? t(s.labelKey) : (s.label||'');
+    if (s.labelVars) for (const [k,v] of Object.entries(s.labelVars)) txt = txt.replace(`{${k}}`, escapeHTML(v));
+    return txt;
+  });
   const level = ai.level || '—';
   return {score: Math.min(ai.score, 100), level, flags};
 }
@@ -9958,13 +10243,22 @@ function interpretModule(key, r) {
   }
 
   if(key==='studio') {
-    if(r.studio.hasHeader) return t('interpStudioHeader').replace('{bytes}', r.studio.payloadBytes);
-    if(r.studio.deepScan && r.lsb?.foundText) {
+    // ⚠️ UMA das superfícies do mesmo estado. A v2.42.5 ensinou o Threat a usar a
+    // evidência ativa; a v2.42.7 ensinou o badge do Protocolo. Esta nota ficou
+    // para trás e continuava lendo só `hasHeader`, então com a senha certa a
+    // tela mostrava "decifrado com chave ✓" logo acima de "nenhum texto legível
+    // foi recuperado — forneça a chave". Agora as três derivam de
+    // `resolveProtocolState`, que é a fonte única também para a nota offline.
+    const proto = resolveProtocolState(r);
+    if(proto.level === 'extracted')   return t('interpStudioExtracted');
+    if(proto.level === 'headerOnly')  return t('interpStudioHeaderOnly');
+    if(proto.level === 'passive')     return t('interpStudioHeader').replace('{bytes}', r.studio.payloadBytes);
+    if(proto.level === 'generic') {
       const hdr = r.studio.headerName || r.lsb?.headerName;
       if (hdr) return t('interpStudioDeepHeader').replace('{hdr}', hdr);
       return t('interpStudioDeepNoHeader');
     }
-    if(r.lsb?.cipherSuspicion) return t('interpStudioCipher');
+    if(proto.level === 'cipher')      return t('interpStudioCipher');
     return t('interpStudioNone');
   }
 
@@ -9975,6 +10269,39 @@ function interpretModule(key, r) {
 // ════════════════════════════════════════
 //  PROGRESS INDICATOR
 // ════════════════════════════════════════
+// ─────────────────────────────────────────────────────────────────────────────
+//  LEITURA DE ARQUIVO À PROVA DE TRAVAMENTO
+//
+//  Havia três `new FileReader()` neste módulo e **nenhum `onerror`**. Cada um
+//  vivia dentro de `new Promise(res => { r.onload = …; r.readAsArrayBuffer(f) })`
+//  — se a leitura falhasse, `onload` nunca disparava, a promessa nunca resolvia
+//  e o pipeline parava para sempre. Sem exceção e sem log: **console limpo e
+//  barra congelada**, que é exatamente o sintoma do smoke da v2.42.7 (travou em
+//  20%, "Strings & bytes brutos", console sem uma linha).
+//
+//  Este helper fecha as três saídas — erro, cancelamento e silêncio. O timeout
+//  existe porque `onerror` cobre a falha declarada, não a leitura que
+//  simplesmente nunca volta.
+// ─────────────────────────────────────────────────────────────────────────────
+const FILE_READ_TIMEOUT_MS = 60000;
+
+function readFileBytes(file, rotulo='arquivo') {
+  return new Promise((resolve, reject) => {
+    let feito = false;
+    const uma = fn => (...a) => { if (feito) return; feito = true; clearTimeout(tm); fn(...a); };
+    const r = new FileReader();
+    const tm = setTimeout(uma(() => {
+      try { r.abort(); } catch(_) {}
+      reject(new Error('fileReadTimeout:' + rotulo));
+    }), FILE_READ_TIMEOUT_MS);
+    r.onload  = uma(e => resolve(new Uint8Array(e.target.result)));
+    r.onerror = uma(() => reject(new Error('fileReadError:' + rotulo)));
+    r.onabort = uma(() => reject(new Error('fileReadAborted:' + rotulo)));
+    try { r.readAsArrayBuffer(file); }
+    catch (_) { uma(() => reject(new Error('fileReadThrew:' + rotulo)))(); }
+  });
+}
+
 const PIPELINE_STEPS = [
   'stepMetaEXIF',
   'stepStrings',
@@ -10009,9 +10336,11 @@ function setProgress(step, label) {
 //  EXIF PARSER (leve, browser-only)
 // ════════════════════════════════════════
 async function parseEXIF(file) {
+  // Leitura via readFileBytes: falha vira rejeição, nunca promessa pendente.
+  const _bytes = await readFileBytes(file, 'parseEXIF');
   return new Promise(res => {
-    const r = new FileReader();
-    r.onload = e => {
+    const e = { target: { result: _bytes.buffer } };
+    (() => {
       const buf = e.target.result;
       const view = new DataView(buf);
       const result = {found: false, fields: {}, aiSoftware: null, hasCamera: false, hasGPS: false};
@@ -10135,8 +10464,7 @@ async function parseEXIF(file) {
         }
       } catch(_) {}
       res(result);
-    };
-    r.readAsArrayBuffer(file);
+    })();
   });
 }
 
@@ -10575,6 +10903,31 @@ function renderLeakModule(r){
   renderModule('leak','\u229e',t('leakModuleName'),susp?t('badgeSuspicious'):t('badgeNormal'),susp?'mb-warn':'mb-ok',body);
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+//  ESTADO DO PROTOCOLO — função PURA, fonte única para UI e testes
+//
+//  Existia como cadeia de `if` dentro do renderer, consultando só `hasHeader`.
+//  `hasHeader` vem do M7, que roda SEM senha: um payload furtivo fica invisível
+//  para ele. Resultado observado em smoke test real: com a senha certa a tela
+//  mostrava "payload STEGO·STUDIO extraído" no Threat e, logo abaixo,
+//  "Indeterminado (possível cifra)" no Protocolo. A mesma evidência, dois
+//  veredictos opostos — exatamente o que este projeto não pode fazer.
+//
+//  Precedência por FORÇA DA EVIDÊNCIA, do mais forte ao mais fraco. Ser função
+//  pura é o que permite o teste exercitar a lógica real em vez de reimplementá-la.
+// ─────────────────────────────────────────────────────────────────────────────
+function resolveProtocolState(r) {
+  const st = r.studio;
+  if (!st?.available)        return { level:'na',        name:'—',                       badge:t('badgeNA'),            cls:'mb-scan' };
+  if (st.nativeExtracted)    return { level:'extracted', name:'STEGO·STUDIO',            badge:'STEGO·STUDIO',          cls:'mb-crit' };
+  if (st.nativeHeaderMatched)return { level:'headerOnly',name:'STEGO·STUDIO',            badge:'STEGO·STUDIO',          cls:'mb-crit' };
+  if (st.hasHeader)          return { level:'passive',   name:'STEGO·STUDIO',            badge:'STEGO·STUDIO',          cls:'mb-crit' };
+  if (st.deepScan && r.lsb?.foundText)
+                             return { level:'generic',   name:t('protoNameGeneric'),     badge:t('protoBadgeGeneric'),  cls:'mb-crit' };
+  if (r.lsb?.cipherSuspicion)return { level:'cipher',    name:t('protoNameUndetermined'),badge:t('protoBadgeCipher'),   cls:'mb-warn' };
+  return                            { level:'none',      name:t('protoNameNone'),        badge:t('protoBadgeNone'),     cls:'mb-ok' };
+}
+
 // ── F9 fatia 2: impressão digital de FERRAMENTA ──────────────────────────────
 // Regra de projeto (a mesma da v2.33.1): CONFIRMADO e INDÍCIO são níveis
 // visivelmente distintos, e a distinção NÃO pode depender de cor. Cada item
@@ -10647,17 +11000,18 @@ function renderResults(r, decodedMsg, decodeStatus) {
     tFlags.map(f=>`<span class="score-flag threat">${f}</span>`).join('');
 
   // ── Nota de limitação do modo offline ──
-  // Aparece quando: (1) o modo Pro está indisponível (sem backend neural),
-  // (2) a análise LSB foi possível (lossless), e (3) há sinal de suspeita
-  // parcial — anomalia LSB ou algum threat — MAS sem mensagem real confirmada
-  // (sem header). Comunica que métodos adaptativos (LSBM/HILL) podem passar
-  // despercebidos no offline, sem alterar nenhum número. Não polui imagens
-  // claramente limpas (threat 0 sem anomalia) nem casos já confirmados.
+  // QUARTA superfície do mesmo estado. Só faz sentido quando há suspeita parcial
+  // sem qualquer evidência confirmada. Não pode aparecer ao lado de payload nativo
+  // extraído, header confirmado, motor de terceiro identificado ou modo robusto
+  // confirmado/danificado — nesses casos já sabemos que existe stego.
   const offNote = document.getElementById('offline-limit-note');
   if (offNote) {
     const lsbPossible = !!r.lsb?.available;
     const partialSuspicion = !!r.lsb?.suspicious || tScore > 0;
-    const noConfirmedMsg = !r.studio?.hasHeader;
+    const protoLevel = resolveProtocolState(r).level;
+    const nativeConfirmed = ['extracted','headerOnly','passive'].includes(protoLevel);
+    const otherConfirmed = !!r.studio?.thirdParty || !!r.studio?.robust;
+    const noConfirmedMsg = !nativeConfirmed && !otherConfirmed;
     if (lsbPossible && partialSuspicion && noConfirmedMsg) {
       offNote.textContent = t('offlineLimitNote');
       offNote.style.display = 'block';
@@ -10721,28 +11075,8 @@ function renderResults(r, decodedMsg, decodeStatus) {
   renderGroupHeader(t('groupSteg'), 'stego');
 
   // Protocolo
-  let protoName, protoBadge, protoClass;
-  if (!r.studio?.available) {
-    protoName = '—';
-    protoBadge = t('badgeNA');
-    protoClass = 'mb-scan';
-  } else if (r.studio.hasHeader) {
-    protoName = 'STEGO·STUDIO';
-    protoBadge = 'STEGO·STUDIO';
-    protoClass = 'mb-crit';
-  } else if (r.studio.deepScan && r.lsb?.foundText) {
-    protoName = t('protoNameGeneric');
-    protoBadge = t('protoBadgeGeneric');
-    protoClass = 'mb-crit';
-  } else if (r.lsb?.cipherSuspicion) {
-    protoName = t('protoNameUndetermined');
-    protoBadge = t('protoBadgeCipher');
-    protoClass = 'mb-warn';
-  } else {
-    protoName = t('protoNameNone');
-    protoBadge = t('protoBadgeNone');
-    protoClass = 'mb-ok';
-  }
+  const proto = resolveProtocolState(r);
+  const protoName = proto.name, protoBadge = proto.badge, protoClass = proto.cls;
 
   let stBody='';
   if(!r.studio?.available){
@@ -10753,8 +11087,22 @@ function renderResults(r, decodedMsg, decodeStatus) {
     // deixava a nota do painel DCT apontando para uma linha que não aparecia.
     stBody+=row(t('rowDecodeStatus'), decodeStatus||'—');
   } else {
-    stBody=row(t('rowProtocolDetected'), protoName, r.studio.hasHeader||r.studio.deepScan?'finding-crit':'');
-    if(r.studio.hasHeader){
+    const protoForte = proto.level==='extracted'||proto.level==='headerOnly'||proto.level==='passive';
+    stBody=row(t('rowProtocolDetected'), protoName, protoForte||r.studio.deepScan?'finding-crit':'');
+    // A ordem aqui precisa seguir resolveProtocolState: evidência de extração
+    // autenticada vence o header passivo. Assim um payload extraído não perde a
+    // linha neutra de recuperação só porque a mesma imagem também expõe header.
+    if(proto.level==='extracted'){
+      // Uma extração bem-sucedida pode vir do payload principal OU da camada
+      // alternativa F1. Não revelar a rota: mostrar apenas a evidência comum.
+      const recoveredDetail = r.studio.hasHeader && r.studio.payloadBytes
+        ? t('payloadRecoveredWithKey') + ' · ' + r.studio.payloadBytes + ' bytes'
+        : t('payloadRecoveredWithKey');
+      stBody+=row(t('rowPayload'), recoveredDetail, 'finding-crit');
+    } else if(proto.level==='headerOnly'){
+      stBody+=row(t('rowHeader'), t('headerFoundNoContent'), 'finding-crit');
+    } else if(r.studio.hasHeader){
+      // Caminho passivo: o M7 leu o header sem senha, então sabe o tamanho.
       stBody+=row(t('rowHeader'), t('modeChannelBHeader'), 'finding-crit');
       stBody+=row(t('rowPayload'), r.studio.payloadBytes+' bytes', 'finding-crit');
     }
@@ -11094,9 +11442,57 @@ function renderResults(r, decodedMsg, decodeStatus) {
 
 
 /* ---------- src/main.js ---------- */
+// Decide se a MENSAGEM FINAL veio de uma rota nativa autenticada.
+// É função pura de propósito: o harness consegue exercitar a MESMA regra usada
+// em produção, inclusive o caso em que um header nativo foi visto mas quem acabou
+// produzindo `decodedMsg` foi um motor de terceiro. `headerMatched` não promove
+// extração sozinho; ele continua servindo apenas ao estado `headerOnly`.
+function resolveNativeEvidence({ decodedMsg, nativeHeaderMatched=false, nativePayloadRecovered=false, nativeLayerRecovered=false }) {
+  if (decodedMsg && (nativePayloadRecovered || nativeLayerRecovered)) return { level:'extracted' };
+  if (nativeHeaderMatched) return { level:'headerOnly' };
+  return { level:'none' };
+}
+
+// Normaliza uma extração nativa bem-sucedida para UM estado público.
+// `nativeHeaderMatched` é útil apenas enquanto temos "header localizado, conteúdo
+// não recuperado". Depois que uma mensagem nativa sobrevive à consolidação, a
+// evidência pública passa a ser `nativeExtracted` independentemente da rota que
+// a encontrou. Isso evita que a camada alternativa da F1 revele, pelo relatório,
+// qual das duas senhas válidas abriu qual caminho interno.
+function markNativeExtracted(report) {
+  const studio = {...(report.studio || {}), nativeExtracted:true};
+  delete studio.nativeHeaderMatched;
+  report.studio = studio;
+  return studio;
+}
+
+let _analisando = false;   // guarda de reentrância — ver comentário abaixo
 document.getElementById('btn-analyze').addEventListener('click', async ()=>{
   if(!decID||!decFile) return;
-  const key=document.getElementById('dec-key').value;
+  // O botão é desabilitado logo abaixo e reabilitado no `finally`, o que já
+  // impede o duplo clique normal. Esta guarda cobre o caso em que a análise
+  // anterior NÃO chegou ao finally — foi exatamente o que o smoke da v2.42.7
+  // produziu: pipeline preso, botão travado, e qualquer caminho que o
+  // reabilitasse dispararia uma segunda execução sobre estado pela metade.
+  if(_analisando) return;
+  _analisando = true;
+  setAnalysisBusy(true);   // contrato de interação, não efeito colateral da thread
+
+  // ── SNAPSHOT ──
+  // A partir daqui a execução usa SÓ estas cópias. Se a imagem trocar no meio,
+  // a análise termina coerente consigo mesma (tudo de A) em vez de misturar o
+  // arquivo de A com o preview de B — e o portão `obsoleta()` impede que ela
+  // publique qualquer coisa.
+  // Geração NOVA por OPERAÇÃO, não por imagem. Reanalisar a mesma imagem
+  // precisa invalidar o relatório anterior — senão `lastRenderArgs` da execução
+  // passada continua com a mesma geração e o guard de idioma não morde.
+  bumpAnalysisGeneration();
+  const run     = analysisGeneration;
+  const runID   = decID;
+  const runFile = decFile;
+  const runFmt  = decFmt;
+  const key     = document.getElementById('dec-key').value;
+  const obsoleta = () => run !== analysisGeneration;
   document.getElementById('results-area').classList.remove('visible');
   document.getElementById('export-wrap').classList.remove('visible');
   document.getElementById('btn-analyze').disabled=true;
@@ -11112,20 +11508,31 @@ document.getElementById('btn-analyze').addEventListener('click', async ()=>{
     // null e cada consumidor faz o próprio tratamento — inclusive a mensagem
     // amigável do Analyzer, que depende de decodificar para saber o motivo.
     let sharedDec=null, jpegBytes=null;
-    if(decFmt && decFmt.ext==='JPEG' && decFile){
+    if(runFmt && runFmt.ext==='JPEG' && runFile){
       try{
-        jpegBytes=new Uint8Array(await decFile.arrayBuffer());
+        jpegBytes=new Uint8Array(await runFile.arrayBuffer());
         sharedDec=decodeJpegCoefficients(jpegBytes);
       }catch(_){ sharedDec=null; }
     }
-    const report = await runForensics(decID, decFile, setProgress, sharedDec);
+    const report = await runForensics(runID, runFile, setProgress, sharedDec);
     // report.format foi corrigido por magic bytes (pega .jfif, MIME errado, etc.)
     // — tem precedência sobre o decFmt detectado no upload (só por extensão).
-    const fmt = report.format || decFmt;
+    const fmt = report.format || runFmt;
 
     // Decode attempt
     let decodedMsg=null, decodeStatus=t('decStatusNoStudio');
     let decodedFromDeepScan=false; // true quando a msg veio da investigação profunda (pode ser ruído)
+    // As duas rotas nativas usam flags LOCAIS simétricas. `nativeHeaderMatched`
+    // fica no relatório como evidência estrutural, mas nunca é usado para provar
+    // que a mensagem final veio do nosso protocolo. Isso evita contaminação por
+    // um motor de terceiro que rode depois de uma falha do payload nativo.
+    let nativeHeaderMatched=false;
+    let nativePayloadRecovered=false;
+    let nativeLayerRecovered=false;
+    // A rota genérica pode concluir provisoriamente "chave não revelou texto"
+    // antes da sonda F1. Adiamos o efeito visual até TODAS as rotas terminarem:
+    // uma senha alternativa válida não pode piscar como senha errada por 5 s.
+    let pendingKeyFlash=false;
     const isLossless=fmt&&fmt.cat==='lossless';
 
     if(!isLossless){
@@ -11135,13 +11542,13 @@ document.getElementById('btn-analyze').addEventListener('click', async ()=>{
       // coeficientes DCT. Lê os bytes crus do arquivo e tenta o motor Steghide
       // (com a senha informada, ou sem senha). Uma extração real tem precedência
       // sobre a mensagem padrão de "indisponível".
-      if(fmt.ext==='JPEG' && decFile){
+      if(fmt.ext==='JPEG' && runFile){
         try{
           // F7: reusa os bytes e os coeficientes obtidos no topo do fluxo.
           // Se o arquivo só foi reconhecido como JPEG pelo relatório (o decFmt
           // do upload pode divergir em casos de borda), faz o trabalho aqui,
           // exatamente como antes — o caminho autônomo continua íntegro.
-          const bytes = jpegBytes || new Uint8Array(await decFile.arrayBuffer());
+          const bytes = jpegBytes || new Uint8Array(await runFile.arrayBuffer());
           let dec = sharedDec;
           if(!dec){ try{ dec=decodeJpegCoefficients(bytes); }catch(_){ } }
           // ── MODO ROBUSTO (F4) — tentado ANTES dos motores de terceiros ──
@@ -11152,20 +11559,46 @@ document.getElementById('btn-analyze').addEventListener('click', async ()=>{
           try{
             const rb = robustExtract(bytes, key);
             if(rb.status === 'ok'){
+              // O envelope robusto já foi confirmado (magic + CRC + RS). Daqui em
+              // diante uma falha do conteúdo NÃO pode apagar essa evidência nem
+              // cair no status genérico "nada encontrado". Isso importa também
+              // para arquivos hostis/malformados em que a senha do plano externo e
+              // a senha AES interna não sejam a mesma, mesmo que nosso Encoder use
+              // uma única senha para as duas camadas.
               const p = rb.payload, modeByte = p[5];
               const len = p[6] | (p[7]<<8) | (p[8]<<16) | (p[9]<<24);
               const comp = !!(modeByte & FLAG_COMPRESSED);
-              let body = p.slice(10, 10 + len), plain = null;
-              if(isAesPayload(body)){
-                if(key.length > 0) plain = await aesDecryptBytes(body, key);
-              } else plain = body;
-              if(plain && comp){ try{ plain = await inflateBytes(plain); }catch(_){ plain = null; } }
+              const body = p.slice(10, 10 + len);
+              const aesBody = isAesPayload(body);
+              let plain = null, contentState = 'ok';
+              if(aesBody){
+                if(key.length > 0){
+                  try{ plain = await aesDecryptBytes(body, key); }
+                  catch(_){ contentState = 'locked'; }
+                } else {
+                  contentState = 'needsKey';
+                }
+              } else {
+                plain = body;
+              }
+              if(plain && comp){
+                try{ plain = await inflateBytes(plain); }
+                catch(_){ plain = null; contentState = 'contentError'; }
+              }
               if(plain){
                 decodedMsg = new TextDecoder().decode(plain).slice(0,5000);
                 decodeStatus = t('rbDecFound');
                 report.studio = {...report.studio, robust:true, robustCorrected:rb.errosCorrigidos};
-              } else if(isAesPayload(body)){
-                decodeStatus = t('decStatusShuffledNeedsKey'); flashKey();
+              } else if(contentState === 'locked'){
+                decodeStatus = t('rbDecLocked');
+                report.studio = {...report.studio, robust:'locked', robustCorrected:rb.errosCorrigidos};
+              } else if(contentState === 'needsKey'){
+                decodeStatus = t('rbDecNeedsKey');
+                report.studio = {...report.studio, robust:'locked', robustCorrected:rb.errosCorrigidos};
+                flashKey('missing');
+              } else {
+                decodeStatus = t('rbDecContentError');
+                report.studio = {...report.studio, robust:'content-error', robustCorrected:rb.errosCorrigidos};
               }
             } else if(rb.status === 'damaged'){
               decodeStatus = t('rbDecDamaged');
@@ -11194,7 +11627,7 @@ document.getElementById('btn-analyze').addEventListener('click', async ()=>{
         // módulo logo acima. Troca por algo que informa de fato: quais motores
         // foram tentados e qual foi o resultado.
         if(!decodedMsg){
-          decodeStatus=t('decStatusJpegNoneFound');
+          if(!report.studio?.robust) decodeStatus=t('decStatusJpegNoneFound');
           // F9 fatia 2 — CONFIRMADO sem extração. O magic do Steghide vive em
           // posições derivadas da senha: se ele bate, é prova de que o arquivo é
           // Steghide, mesmo sem conseguirmos ler o conteúdo. Só roda aqui, no
@@ -11212,15 +11645,26 @@ document.getElementById('btn-analyze').addEventListener('click', async ()=>{
           // comum, porque o sistema recodifica a imagem ao colar. A dica aparece
           // exatamente para quem colou em vez de salvar o arquivo.
           try{ const sig=robustSignature(sharedDec);
-               if(sig && sig.suspeito) decodeStatus=t('decStatusRobustLostPaste'); }catch(_){}
+               if(!report.studio?.robust && sig && sig.suspeito) decodeStatus=t('decStatusRobustLostPaste'); }catch(_){}
         }
       }
     } else {
-      const studioPayload=extractLSBStudio(decID,key);
+      const studioPayload=extractLSBStudio(runID,key);
       if(studioPayload && studioPayload.needsPassword){
         // Corpo embaralhado por senha, mas nenhuma senha foi informada.
-        decodeStatus=t('decStatusShuffledNeedsKey');decodedMsg=null;flashKey();
+        decodeStatus=t('decStatusShuffledNeedsKey');decodedMsg=null;flashKey('missing');
       } else if(studioPayload){
+        // Header do STEGO·STUDIO LOCALIZADO com a senha. O M7 do forensics roda
+        // sem senha e não enxerga payload furtivo, então é aqui que isso precisa
+        // ser registrado — sem isso o threat fica idêntico com senha certa e
+        // errada.
+        //
+        // ⚠️ Isto é evidência ESTRUTURAL, não extração. Seis ramos abaixo ainda
+        // podem terminar com `decodedMsg=null`: GCM falhando em corpo corrompido,
+        // payload cifrado sem senha, inflate falhando. A confirmação de extração
+        // é gravada só depois, quando existe mensagem de verdade — mesma
+        // distinção que o modo robusto já faz entre `true` e `'damaged'`.
+        nativeHeaderMatched=true;
         const comp = !!studioPayload.compressed;
         const isAes = isAesPayload(studioPayload);
         // Descomprime se o flag FLAG_COMPRESSED estiver setado; null se falhar.
@@ -11237,8 +11681,9 @@ document.getElementById('btn-analyze').addEventListener('click', async ()=>{
             if(bytes!==null){
               decodedMsg=new TextDecoder('utf-8',{fatal:false}).decode(bytes);
               decodeStatus=t('decStatusDecryptedKey');
+              nativePayloadRecovered=true;
             } else {
-              decodeStatus=t('decStatusCipherWrongKey');decodedMsg=null;flashKey();
+              decodeStatus=t('decStatusCipherWrongKey');decodedMsg=null;pendingKeyFlash=true;
             }
           } else if(comp){
             // Comprimido mas não cifrado: a chave é ignorada (compressão ≠ cripto).
@@ -11246,38 +11691,40 @@ document.getElementById('btn-analyze').addEventListener('click', async ()=>{
             if(bytes!==null && isReadableText(bytes)>0.7){
               decodedMsg=new TextDecoder('utf-8',{fatal:false}).decode(bytes);
               decodeStatus=t('decStatusPlainKeyIgnored');
+              nativePayloadRecovered=true;
             } else {
-              decodeStatus=t('decStatusCipherWrongKey');decodedMsg=null;flashKey();
+              decodeStatus=t('decStatusCipherWrongKey');decodedMsg=null;pendingKeyFlash=true;
             }
           } else {
             // Não-AES e não comprimido → tenta XOR legado; senão texto puro.
             let attempt=decryptXOR(studioPayload,key);
             if(isReadableText(new TextEncoder().encode(attempt))<=0.7) attempt=null;
             if(attempt!==null){
-              decodedMsg=attempt;decodeStatus=t('decStatusDecryptedKey');
+              decodedMsg=attempt;decodeStatus=t('decStatusDecryptedKey');nativePayloadRecovered=true;
             } else {
               const plain=new TextDecoder('utf-8',{fatal:false}).decode(studioPayload);
-              if(isReadableText(studioPayload)>0.7){decodedMsg=plain;decodeStatus=t('decStatusPlainKeyIgnored');}
-              else{decodeStatus=t('decStatusCipherWrongKey');decodedMsg=null;flashKey();}
+              if(isReadableText(studioPayload)>0.7){decodedMsg=plain;decodeStatus=t('decStatusPlainKeyIgnored');nativePayloadRecovered=true;}
+              else{decodeStatus=t('decStatusCipherWrongKey');decodedMsg=null;pendingKeyFlash=true;}
             }
           }
         } else {
           // Sem chave: se for payload AES, avisa que precisa de senha.
           if(isAes){
-            decodeStatus=t('decStatusCipherFound');decodedMsg=null;flashKey();
+            decodeStatus=t('decStatusCipherFound');decodedMsg=null;flashKey('missing');
           } else {
             const bytes=await inflateIfNeeded(studioPayload);
             if(bytes!==null && isReadableText(bytes)>0.7){
               decodedMsg=new TextDecoder('utf-8',{fatal:false}).decode(bytes);
               decodeStatus=t('decStatusPlainNoCipher');
+              nativePayloadRecovered=true;
             } else {
-              decodeStatus=t('decStatusCipherFound');decodedMsg=null;flashKey();
+              decodeStatus=t('decStatusCipherFound');decodedMsg=null;flashKey('missing');
             }
           }
         }
       } else {
-        const maxBytes=Math.min(Math.floor(decID.width*decID.height/8),8000);
-        const generic=extractLSBRaw(decID,maxBytes);
+        const maxBytes=Math.min(Math.floor(runID.width*runID.height/8),8000);
+        const generic=extractLSBRaw(runID,maxBytes);
         const hasC2PA=report.c2pa?.found||report.c2pa?.manifestDetected;
 
         // Com chave: tenta decifrar os bytes brutos (AES novo ou XOR legado)
@@ -11294,7 +11741,7 @@ document.getElementById('btn-analyze').addEventListener('click', async ()=>{
             decodeStatus=t('decStatusDecryptedVia').replace('{mode}',translateMode(generic.mode));
           } else {
             decodeStatus=t('decStatusKeyNoText');
-            decodedMsg=null; flashKey();
+            decodedMsg=null; pendingKeyFlash=true;
           }
         }
         // Sem chave: usa o investigador de janela deslizante
@@ -11346,11 +11793,12 @@ document.getElementById('btn-analyze').addEventListener('click', async ()=>{
     // sem falsa leitura. Rodada só quando lossless (LSB só existe aí).
     if(isLossless && key.length>0 && !decodedMsg){
       let decoyMsg=null;
-      try{ decoyMsg=await extractDecoyTail(decID,key); }catch(_){ decoyMsg=null; }
+      try{ decoyMsg=await extractDecoyTail(runID,key); }catch(_){ decoyMsg=null; }
       if(decoyMsg!==null){
         decodedMsg=decoyMsg;
         decodeStatus=t('decStatusDecryptedKey');
         decodedFromDeepScan=false; // veio de camada válida (GCM autenticado), não é ruído
+        nativeLayerRecovered=true; // local: não exporta qual camada/rota venceu
       }
     }
 
@@ -11361,7 +11809,7 @@ document.getElementById('btn-analyze').addEventListener('click', async ()=>{
     // sobre ruído especulativo de deep scan.
     if(isLossless && (!decodedMsg || decodedFromDeepScan)){
       let osRes=null;
-      try{ osRes=await osDecodeMessage(decID,key); }catch(_){ osRes=null; }
+      try{ osRes=await osDecodeMessage(runID,key); }catch(_){ osRes=null; }
       if(osRes){
         if(osRes.text!==null){
           decodedMsg=osRes.text.slice(0,5000);
@@ -11385,11 +11833,39 @@ document.getElementById('btn-analyze').addEventListener('click', async ()=>{
       decodedMsg = c0.decodedMsg;
       decodeStatus = c0.decodeStatus;
     }
+    // Extração nativa CONFIRMADA: a mensagem FINAL precisa ter vindo de uma das
+    // duas rotas nativas que registraram recuperação local. `nativeHeaderMatched`
+    // NÃO entra neste portão: um header pode ter casado e falhado, e depois um
+    // OpenStego legítimo pode fornecer `decodedMsg`. Nesse caso o estado correto é
+    // headerOnly + terceiro, nunca nativeExtracted.
+    // A decisão é consumida DIRETAMENTE da função pura. Não existe variável
+    // intermediária de nível que uma refatoração posterior possa sobrescrever entre
+    // a regra testada e o portão que publica a evidência.
+    if (resolveNativeEvidence({decodedMsg, nativeHeaderMatched, nativePayloadRecovered, nativeLayerRecovered}).level === 'extracted') {
+      markNativeExtracted(report);
+    } else if (resolveNativeEvidence({decodedMsg, nativeHeaderMatched, nativePayloadRecovered, nativeLayerRecovered}).level === 'headerOnly') {
+      // Só publica a evidência do header DEPOIS que todas as rotas terminaram.
+      // Assim ela não contamina a autoria de uma mensagem recuperada por terceiro.
+      report.studio = {...report.studio, nativeHeaderMatched:true};
+    }
+
+    // Só agora sabemos se o aviso provisório de chave realmente deve aparecer.
+    // Uma extração F1 ou de terceiro bem-sucedida cancela o flash; identificação
+    // de ferramenta de terceiro também cancela, porque "insira a chave" seria
+    // um conselho enganoso se a limitação for do nosso decoder.
+    if (pendingKeyFlash && !decodedMsg && !report.studio?.thirdParty) flashKey('wrong');
+
+    // ── PORTÃO ──
+    // Última chance antes de publicar. Se a imagem trocou durante os awaits,
+    // este resultado é da imagem ANTERIOR: descartar em silêncio é o correto,
+    // porque exibi-lo ao lado do preview novo é pior que não exibir nada.
+    // Nada abaixo daqui é gravado ou renderizado se a execução ficou obsoleta.
+    if (obsoleta()) return;
 
     report.stegomalware = decodedMsg ? detectStegomalware(decodedMsg) : [];
     lastReport={timestamp:new Date().toISOString(),threat:computeThreat(report),synth:computeSynth(report),origin:report.origin,decodedMsg,decodeStatus,modules:report};
     // Guarda os argumentos do render para poder refazê-lo ao trocar de idioma
-    lastRenderArgs = {report, decodedMsg, decodeStatus};
+    lastRenderArgs = {report, decodedMsg, decodeStatus, gen: run};
     renderResults(report,decodedMsg,decodeStatus);
     // Rola até o topo dos resultados para o usuário ver os scores imediatamente,
     // sem precisar rolar manualmente. Funciona tanto no scroll da coluna direita
@@ -11427,10 +11903,15 @@ document.getElementById('btn-analyze').addEventListener('click', async ()=>{
     termWrite('dec-status', buildComplete());
 
   } catch(e) {
-    setStatus('dec-status','<span class="err">✗ Erro: '+e.message+'</span>');
+    setStatus('dec-status','✗ Erro: '+e.message,'err');
     console.error('STEGO·STUDIO erro:', e);
   } finally {
-    document.getElementById('btn-analyze').disabled=false;
+    _analisando = false;
+    // setAnalysisBusy(false) libera a UI e JÁ recalcula o botão pelo estado
+    // real. A linha `disabled=false` que existia aqui desfazia esse cálculo no
+    // instante seguinte — uma execução obsoleta terminando reabilitava o botão
+    // mesmo sem imagem carregada.
+    setAnalysisBusy(false);
   }
 });
 
@@ -11439,7 +11920,7 @@ document.getElementById('btn-analyze').addEventListener('click', async ()=>{
 // ════════════════════════════════════════
 document.getElementById('btn-export-json').addEventListener('click',()=>{
   if(!lastReport) return;
-  const payload={_tool:'STEGO·STUDIO v2.42.3',_schema:'forensic-report-v2',
+  const payload={_tool:'STEGO·STUDIO v2.42.16',_schema:'forensic-report-v2',
     _hint:t('exportHintJSON'),
     ...lastReport};
   const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});

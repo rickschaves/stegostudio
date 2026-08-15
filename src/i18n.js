@@ -41,6 +41,11 @@ const I18N = {
     // Decoder — payload robusto
     rbDecFound: "Message recovered from the JPEG coefficients (sturdier mode).",
     rbDecDamaged: "There is a sturdier-mode payload in this image, but it did not survive the trip. The image was probably resized, or recompressed more than once.",
+    rbDecLocked: "A sturdier-mode payload was confirmed, but this key did not open its encrypted content.",
+    rbDecNeedsKey: "A sturdier-mode payload was confirmed — enter its key to open the encrypted content.",
+    rbDecContentError: "A sturdier-mode payload was confirmed, but its inner content could not be decoded.",
+    flagRobustLocked: "sturdier-mode payload confirmed, encrypted content not opened",
+    flagRobustContentError: "sturdier-mode payload confirmed, inner content unreadable",
     // Header
     tagline1: "Steganography in pixels and in JPEG coefficients, with optional AES-256",
     tagline2: "Integrated forensic analysis · JSON export",
@@ -103,7 +108,7 @@ const I18N = {
     encKeyHint: "If set, the message will be encrypted with AES-256-GCM before embedding.",
     encKeyWarn: "⚠ Without a key the message stays as plaintext in both images — whoever finds it can read it.",
     decoyToggle: "Second message (plausible deniability)",
-    decoyToggleHint: "If someone forces you to hand over this image's password, you can give a different one. That second password reveals a harmless message, while your real message stays protected.",
+    decoyToggleHint: "If someone forces you to hand over this image's password, you can give a different one. That second password reveals a harmless message, while your real message stays protected. When either valid password recovers a STEGO·STUDIO payload, the Analyzer deliberately reports the same public evidence state and does not label which internal layer was opened.",
     decoyMsgLabel: "// alternate message",
     decoyMsgPlaceholder: "A plausible, harmless message…",
     decoyKeyLabel: "// alternate password",
@@ -139,13 +144,15 @@ const I18N = {
     decGuide3: "<b>3.</b> If the image holds an encrypted message, enter the <b>key</b> and analyze again to decode it. The key is also what reveals <b>Stealth-mode</b> messages — their header is encrypted, so without it they're indistinguishable from noise. Plaintext messages are recovered automatically, no key needed. The Decoder also reads <b>OpenStego</b>, <b>Steghide</b> and <b>OutGuess</b> images — including Steghide in JPEG (DCT domain) with AES — automatically without a password, or with the password when provided.",
     decGuide4: "<b>4.</b> The <b>Origin probability</b> estimates whether the image is a photo, screenshot, digital art or AI-generated. These are independent scores — several can be high. The highest is the most likely origin.",
     decGuide5: "<b>5.</b> Open the <b>indicators</b> to see the technical details of each signal and understand why each score was assigned.",
-    decGuideAdaptive: "⚠ Some methods leave only faint structural traces. <b>Adaptive</b> stego and LSB matching can keep the Threat Score modest even when a message is present — the neural <b>Pro</b> analysis (when the server is online) catches these better. A low score is not a guarantee the image is clean.",
+    decGuideAdaptive: "⚠ Some methods leave only faint structural traces. <b>Adaptive</b> stego and LSB matching can keep the Threat Score modest even when a message is present — this build does not reliably detect those methods. A low score is not a guarantee the image is clean.",
     decGuideTip: "ℹ The origin classification is heuristic, not definitive proof. Scores close to each other indicate the tool could not determine the origin with certainty.",
     analyzeBtn: "ANALYZE IMAGE",
     decPlaceholder: "Load an image and click Analyze to see results.",
     fieldImageAnalyze: "// image to analyze",
     dropHintDec2: "Drag, click or <span class=\"dh\">paste (Ctrl+V)</span><br>any suspicious or encoded image<br><span class=\"dh\">PNG · BMP · WEBP · JPEG · any format</span>",
     decKeyHint2: "Only needed if the message was encrypted. The forensic analysis runs independently of the key.",
+    decKeyFlashMissing: "This encrypted message needs a key before it can be opened.",
+    decKeyFlashWrong: "The supplied key did not open the encrypted message.",
     exportHint: "📄 Export the full report as JSON and send it to your preferred AI — Claude, ChatGPT, Gemini — for a deeper investigative interpretation of the results.",
     exportBtn: "⬇ EXPORT JSON REPORT",
     // Results
@@ -393,6 +400,10 @@ const I18N = {
     flagArtificialNoise: "artificial noise",
     flagSuspiciousAlpha: "suspicious alpha channel",
     flagRareClusters: "rare color clusters",
+    payloadRecoveredWithKey: "recovered with the supplied password",
+    headerFoundNoContent: "confirmed with the password — content not recovered",
+    flagStudioExtracted: "STEGO·STUDIO payload extracted",
+    flagStudioHeaderOnly: "STEGO·STUDIO header found, content not recovered",
     flagStudioHeader: "STEGO·STUDIO header detected",
     flagLSBR: "LSB Replacement detected (RS+WS)",
     flagLSBRPossible: "possible LSB Replacement",
@@ -413,7 +424,7 @@ const I18N = {
     rowNeuralStego: "Neural embedding test",
     neuralMaybe: "⚠ possible (GAN-like signature)",
     neuralNo: "✓ negative (no neural signature)",
-    neuralNote: "Suspicion only — not proof. The LSB planes of the three channels are nearly identical (entropy similarity {ent}) and the high-frequency energy is very symmetric across channels ({hf}). This pattern is compatible with neural steganography (e.g. SteganoGAN), which spreads the payload across all 3 channels. But it can also appear in some textured or synthetic images. Confirming it would require the original neural model, which doesn't run in the browser.",
+    neuralNote: "Suspicion only — not proof. The LSB planes of the three channels are nearly identical (entropy similarity {ent}) and the high-frequency energy is very symmetric across channels ({hf}). This pattern is compatible with neural steganography (e.g. SteganoGAN), which spreads the payload across all 3 channels. But it can also appear in some textured or synthetic images. Confirming it would require a specialised trained model. Models of this kind can run in browsers through WASM/WebGPU; this offline single-file build simply doesn't ship them.",
     // Pipeline progress steps
     stepMetaEXIF: "Metadata & EXIF",
     stepStrings: "Strings & raw bytes",
@@ -662,6 +673,8 @@ const I18N = {
     interpStudioHeader: "\"STEGO\\0\" header confirmed in the LSBs — {bytes} bytes of structured payload. This image was encoded by STEGO·STUDIO.",
     interpStudioDeepHeader: "Hidden text recovered by deep investigation. The header \"{hdr}\" was identified before the message — a protocol signature from another tool. Even without a record of this protocol, the investigator located and extracted the message by analyzing the least significant bits directly.",
     interpStudioDeepNoHeader: "Hidden text recovered by deep investigation, with no recognizable proprietary header. The image was encoded by a third-party tool using LSB steganography. The investigator located and extracted the message by analyzing the least significant bits directly.",
+    interpStudioExtracted: "The hidden message was located and read with the password you supplied. This is the strongest confirmation available: the payload was not merely suspected, it was recovered.",
+    interpStudioHeaderOnly: "A STEGO·STUDIO header was located with the password you supplied, so a message is definitely present — but its content could not be reassembled. The body is most likely damaged, truncated, or was altered after being written.",
     interpStudioCipher: "The LSBs show statistical randomness consistent with encrypted data, but no readable text was recovered. There may be an encrypted message — provide the key to attempt decoding.",
     interpStudioNone: "No steganography protocol detected. The image does not appear to contain a hidden message in the LSBs, or was encoded with a method that leaves no detectable traces without the key.",
     // Origin signals — Photo
@@ -735,7 +748,7 @@ const I18N = {
     helpS1b: "Everything runs 100% in your browser. No image or data is sent to any server.",
     helpSecDecTitle: "The Decoder — what it reads, and what it doesn't",
     helpDecA: "There is no separate \"decode\" step. The single analyse button identifies the real format from the file's own bytes, runs the forensic analysis and attempts extraction with every available engine. By the time the results appear, all of that has already happened.",
-    helpDecB: "<b>What it reads:</b><ul><li><b>STEGO·STUDIO's own protocol</b> — in PNG and other lossless formats, with or without a password.</li><li><b>STEGO·STUDIO's sturdier mode</b> — in the JPEG coefficients, with or without a password.</li><li><b>OpenStego</b> — randomised LSB in PNG.</li><li><b>Steghide</b> — in BMP and in JPEG (DCT coefficients), including its AES-256 encryption.</li><li><b>OutGuess</b> — in JPEG (DCT coefficients), including with no password, which is its default.</li><li><b>Deep investigator</b> — when there is no known header, it sweeps the image for readable text. A search, not a guarantee.</li></ul>",
+    helpDecB: "<b>What it reads:</b><ul><li><b>STEGO·STUDIO's own protocol</b> — in PNG and other lossless formats, with or without a password.</li><li><b>STEGO·STUDIO's sturdier mode</b> — in the JPEG coefficients, with or without a password.</li><li><b>OpenStego</b> — randomised LSB in PNG.</li><li><b>Steghide</b> — in JPEG (DCT coefficients). Its BMP path is not integrated here, and of its many cipher options only the default (rijndael-128/CBC) and no-encryption are read; other ciphers are named, not decrypted.</li><li><b>OutGuess</b> — in JPEG (DCT coefficients), including with no password, which is its default.</li><li><b>Deep investigator</b> — when there is no known header, it sweeps the image for readable text. A search, not a guarantee.</li></ul>",
     helpDecC: "<b>What it does not read, and why:</b><ul><li><b>F5 (Westfeld)</b> — a landmark in the academic literature, but rare in practice and expensive by construction: it must shuffle the entire image before it can read the first bit, which would cost seconds on every photo analysed, including clean ones. The engine has been built and validated, and is kept on the shelf. If it ever ships, it will be an explicit action, never an automatic one.</li><li><b>Anything locked behind someone else's password</b> — an OpenStego message encrypted with AES, for example, is detected and reported, but decrypting it requires OpenStego itself and the right password. Without it the content is indistinguishable from noise, and that is by design.</li></ul>",
     helpDecD: "<b>Honest limits:</b><ul><li><b>JPEG has no usable LSB.</b> Compression rewrites the least significant bits, so anything read there would be codec noise rather than a message. In a JPEG, only DCT-coefficient methods make sense.</li><li><b>The DCT chi-square test is a weak indicator, not a detector.</b> It catches naive high-rate embedding, but tools that spread a small payload walk straight past it. Absence of a signal is never a clean bill of health.</li></ul>",
     helpS2Title: "LSB steganography",
@@ -767,7 +780,7 @@ const I18N = {
     helpS6Title: "Limitations",
     helpS6a: "This is a <b>heuristic</b> tool, not a definitive classifier. It analyzes statistical properties and metadata, with no neural network. Nothing runs on a server: if a method needs a trained model, this tool does not detect it.",
     helpS6b: "Hard cases: images recompressed by social media (which erase metadata and alter pixels), heavily edited photos, and latest-generation AI images that mimic camera noise. Use the results as <b>investigative evidence</b>, cross-referencing with other evidence — not as standalone proof.",
-    helpS6c: "On the steganography side, the tool reliably detects <b>LSB Replacement</b> (via RS/WS) and plaintext or weakly-hidden messages. For neural methods like SteganoGAN it offers a <b>suspicion-level</b> heuristic only — it can flag the GAN-like signature but cannot confirm it without the trained model, which doesn't run in a browser. It does <b>not</b> reliably detect adaptive methods like HILL, UNIWARD or J-UNIWARD. Detecting those takes trained neural models, which do not run in a browser — so this tool does not detect them at all. That is a real limit, not a temporary one: <b>absence of detection here is not evidence that an image is clean.</b> If you need that level of analysis, use a dedicated steganalysis toolbox such as <b>Aletheia</b>, by Daniel Lerch (MIT, <code>github.com/daniellerch/aletheia</code>).",
+    helpS6c: "On the steganography side, the tool reliably detects <b>LSB Replacement</b> (via RS/WS) and plaintext or weakly-hidden messages. For neural methods like SteganoGAN it offers a <b>suspicion-level</b> heuristic only — it can flag a GAN-like signature but cannot confirm it without a trained model. Models like these can run in browsers through WASM/WebGPU; this offline single-file build simply <b>does not ship them</b>. It does <b>not</b> reliably detect adaptive methods like HILL, UNIWARD or J-UNIWARD because the specialised models needed for that work are not included. <b>Absence of detection here is not evidence that an image is clean.</b> If you need that level of analysis, use a dedicated steganalysis toolbox such as <b>Aletheia</b>, by Daniel Lerch (MIT, <code>github.com/daniellerch/aletheia</code>).",
     // Footer
     footerCredit: "Designed by RASC and developed by JOI",
     footerOpensource: "Free software under GPL-3.0 &middot; source at <code>github.com/rickschaves/stegostudio</code>",
@@ -814,6 +827,11 @@ const I18N = {
     // Decoder — payload robusto
     rbDecFound: "Mensagem recuperada dos coeficientes do JPEG (modo mais resistente).",
     rbDecDamaged: "Há um payload do modo mais resistente nesta imagem, mas ele não sobreviveu ao caminho. A imagem provavelmente foi redimensionada, ou recomprimida mais de uma vez.",
+    rbDecLocked: "Um payload do modo resistente foi confirmado, mas esta chave não abriu o conteúdo cifrado.",
+    rbDecNeedsKey: "Um payload do modo resistente foi confirmado — informe a chave para abrir o conteúdo cifrado.",
+    rbDecContentError: "Um payload do modo resistente foi confirmado, mas o conteúdo interno não pôde ser decodificado.",
+    flagRobustLocked: "payload do modo resistente confirmado, conteúdo cifrado não aberto",
+    flagRobustContentError: "payload do modo resistente confirmado, conteúdo interno ilegível",
     tagline1: "Esteganografia em pixels e em coeficientes JPEG, com AES-256 opcional",
     tagline2: "Análise forense integrada · Exportação JSON",
     helpBtn: "[?] Como funciona",
@@ -873,7 +891,7 @@ const I18N = {
     encKeyHint: "Se informada, a mensagem será cifrada com AES-256-GCM antes de ser embutida.",
     encKeyWarn: "⚠ Sem senha a mensagem fica em texto puro nas duas imagens — quem a encontrar consegue ler.",
     decoyToggle: "Segunda mensagem (negação plausível)",
-    decoyToggleHint: "Se alguém forçar você a entregar a senha desta imagem, você pode entregar uma diferente. Essa segunda senha revela uma mensagem inofensiva, enquanto sua mensagem real permanece protegida.",
+    decoyToggleHint: "Se alguém forçar você a entregar a senha desta imagem, você pode entregar uma diferente. Essa segunda senha revela uma mensagem inofensiva, enquanto sua mensagem real permanece protegida. Quando qualquer uma das senhas válidas recupera um payload STEGO·STUDIO, o Analyzer informa deliberadamente o mesmo estado público de evidência e não rotula qual camada interna foi aberta.",
     decoyMsgLabel: "// mensagem alternativa",
     decoyMsgPlaceholder: "Uma mensagem plausível e inofensiva…",
     decoyKeyLabel: "// senha alternativa",
@@ -915,6 +933,8 @@ const I18N = {
     fieldImageAnalyze: "// imagem para análise",
     dropHintDec2: "Arraste, clique ou <span class=\"dh\">cole (Ctrl+V)</span><br>qualquer imagem suspeita ou codificada<br><span class=\"dh\">PNG · BMP · WEBP · JPEG · qualquer formato</span>",
     decKeyHint2: "Necessária apenas se a mensagem foi cifrada. A análise forense roda independente da chave.",
+    decKeyFlashMissing: "Esta mensagem cifrada precisa de uma chave para ser aberta.",
+    decKeyFlashWrong: "A chave informada não abriu a mensagem cifrada.",
     exportHint: "📄 Exporte o relatório completo em JSON e envie para sua IA de preferência — Claude, ChatGPT, Gemini — para uma interpretação investigativa mais aprofundada dos resultados.",
     exportBtn: "⬇ EXPORTAR RELATÓRIO JSON",
     resultTitle: "RESULTADO",
@@ -1159,6 +1179,10 @@ const I18N = {
     flagArtificialNoise: "ruído artificial",
     flagSuspiciousAlpha: "canal alpha suspeito",
     flagRareClusters: "clusters de cor rara",
+    payloadRecoveredWithKey: "recuperado com a senha informada",
+    headerFoundNoContent: "confirmado com a senha — conteúdo não recuperado",
+    flagStudioExtracted: "payload STEGO·STUDIO extraído",
+    flagStudioHeaderOnly: "header STEGO·STUDIO localizado, conteúdo não recuperado",
     flagStudioHeader: "header STEGO·STUDIO detectado",
     flagLSBR: "LSB Replacement detectado (RS+WS)",
     flagLSBRPossible: "possível LSB Replacement",
@@ -1166,9 +1190,9 @@ const I18N = {
     flagNeuralConfirmed: "modelos neurais confirmam esteganografia",
     flagNeuralLikely: "modelos neurais sugerem esteganografia",
     flagNeuralArtifact: "sinal neural provavelmente artefato de compressão (ignorado)",
-    flagNeuralUncertainAI: "sinal neural não confiável em imagem IA certificada por C2PA",
+    flagNeuralUncertainAI: "sinal neural não confiável em imagem que declara origem em IA (C2PA)",
     flagNeuralVectorFP: "sinal neural provavelmente falso positivo de cover chapado/vetorial (inconclusivo)",
-    flagC2PAExplained: "sinais consistentes com conteúdo IA certificado por C2PA — não contam como esteganografia (inconclusivo)",
+    flagC2PAExplained: "sinais consistentes com conteúdo que declara origem em IA (C2PA) — não contam como esteganografia (inconclusivo)",
     flagStegoMimicsAI: "nota: a esteganografia pode fazer uma foto real parecer sintética — um score \"sintético\" alto aqui pode ser causado pelos dados ocultos, não por geração por IA",
     rowRSAttack: "Ataque RS (taxa)",
     rowWSAttack: "Ataque WS (taxa)",
@@ -1179,7 +1203,7 @@ const I18N = {
     rowNeuralStego: "Teste de embedding neural",
     neuralMaybe: "⚠ possível (assinatura tipo GAN)",
     neuralNo: "✓ negativo (sem assinatura neural)",
-    neuralNote: "Apenas suspeita — não é prova. Os planos LSB dos três canais estão quase idênticos (similaridade de entropia {ent}) e a energia de alta frequência é muito simétrica entre os canais ({hf}). Esse padrão é compatível com esteganografia neural (ex.: SteganoGAN), que espalha a mensagem pelos 3 canais. Mas também pode aparecer em algumas imagens texturizadas ou sintéticas. Confirmar exigiria o modelo neural original, que não roda no navegador.",
+    neuralNote: "Apenas suspeita — não é prova. Os planos LSB dos três canais estão quase idênticos (similaridade de entropia {ent}) e a energia de alta frequência é muito simétrica entre os canais ({hf}). Esse padrão é compatível com esteganografia neural (ex.: SteganoGAN), que espalha a mensagem pelos 3 canais. Mas também pode aparecer em algumas imagens texturizadas ou sintéticas. Confirmar exigiria um modelo treinado especializado. Modelos desse tipo podem rodar no navegador via WASM/WebGPU; esta build offline de arquivo único é que não os embarca.",
     // Pipeline progress steps
     stepMetaEXIF: "Metadados & EXIF",
     stepStrings: "Strings & bytes brutos",
@@ -1428,6 +1452,8 @@ const I18N = {
     interpStudioHeader: "Header \"STEGO\\0\" confirmado nos LSBs — {bytes} bytes de payload estruturado. Esta imagem foi codificada pelo STEGO·STUDIO.",
     interpStudioDeepHeader: "Texto oculto recuperado por investigação profunda. Foi identificado o header \"{hdr}\" antes da mensagem — uma assinatura de protocolo de outra ferramenta. Mesmo sem registro deste protocolo, o investigador localizou e extraiu a mensagem analisando os bits menos significativos diretamente.",
     interpStudioDeepNoHeader: "Texto oculto recuperado por investigação profunda, sem header proprietário reconhecível. A imagem foi codificada por uma ferramenta de terceiros usando esteganografia LSB. O investigador localizou e extraiu a mensagem analisando os bits menos significativos diretamente.",
+    interpStudioExtracted: "A mensagem oculta foi localizada e lida com a senha informada. É a confirmação mais forte que existe: o payload não foi apenas suspeitado, foi recuperado.",
+    interpStudioHeaderOnly: "Um header STEGO·STUDIO foi localizado com a senha informada, então há mensagem presente — mas o conteúdo não pôde ser remontado. O corpo provavelmente está danificado, truncado, ou foi alterado depois de escrito.",
     interpStudioCipher: "Os LSBs apresentam aleatoriedade estatística compatível com dados cifrados, mas nenhum texto legível foi recuperado. Pode haver uma mensagem criptografada — forneça a chave para tentar decodificar.",
     interpStudioNone: "Nenhum protocolo de esteganografia detectado. A imagem não parece conter mensagem oculta nos LSBs, ou foi codificada com um método que não deixa rastros detectáveis sem a chave.",
     // Origin signals — Photo
@@ -1498,7 +1524,7 @@ const I18N = {
     helpS1b: "Tudo roda 100% no seu navegador. Nenhuma imagem ou dado é enviado para servidores.",
     helpSecDecTitle: "O Decoder — o que ele lê, e o que não lê",
     helpDecA: "Não existe um passo separado de \"decodificar\". O único botão de análise identifica o formato real pelos próprios bytes do arquivo, roda a análise forense e tenta a extração com todos os motores disponíveis. Quando o resultado aparece, tudo isso já aconteceu.",
-    helpDecB: "<b>O que ele lê:</b><ul><li><b>O protocolo do próprio STEGO·STUDIO</b> — em PNG e outros formatos sem perda, com ou sem senha.</li><li><b>O modo mais resistente do STEGO·STUDIO</b> — nos coeficientes do JPEG, com ou sem senha.</li><li><b>OpenStego</b> — LSB aleatorizado em PNG.</li><li><b>Steghide</b> — em BMP e em JPEG (coeficientes DCT), incluindo a cifragem AES-256 dele.</li><li><b>OutGuess</b> — em JPEG (coeficientes DCT), inclusive sem senha, que é o padrão dele.</li><li><b>Investigador profundo</b> — quando não há cabeçalho conhecido, varre a imagem em busca de texto legível. É uma busca, não uma garantia.</li></ul>",
+    helpDecB: "<b>O que ele lê:</b><ul><li><b>O protocolo do próprio STEGO·STUDIO</b> — em PNG e outros formatos sem perda, com ou sem senha.</li><li><b>O modo mais resistente do STEGO·STUDIO</b> — nos coeficientes do JPEG, com ou sem senha.</li><li><b>OpenStego</b> — LSB aleatorizado em PNG.</li><li><b>Steghide</b> — em JPEG (coeficientes DCT). O caminho BMP dele não está integrado aqui, e das muitas cifras que ele oferece só a padrão (rijndael-128/CBC) e a ausência de cifra são lidas; as demais são nomeadas, não decifradas.</li><li><b>OutGuess</b> — em JPEG (coeficientes DCT), inclusive sem senha, que é o padrão dele.</li><li><b>Investigador profundo</b> — quando não há cabeçalho conhecido, varre a imagem em busca de texto legível. É uma busca, não uma garantia.</li></ul>",
     helpDecC: "<b>O que ele não lê, e por quê:</b><ul><li><b>F5 (Westfeld)</b> — um marco na literatura acadêmica, mas raro na prática e caro por construção: ele precisa embaralhar a imagem inteira antes de conseguir ler o primeiro bit, o que custaria segundos em toda foto analisada, inclusive nas limpas. O motor chegou a ser construído e validado, e está guardado. Se um dia entrar, entra como ação explícita, nunca automática.</li><li><b>Qualquer coisa trancada pela senha de outra ferramenta</b> — uma mensagem do OpenStego cifrada com AES, por exemplo, é detectada e reportada, mas decifrar exige o próprio OpenStego e a senha certa. Sem ela, o conteúdo é indistinguível de ruído — e isso é o projeto funcionando, não uma falha.</li></ul>",
     helpDecD: "<b>Limites honestos:</b><ul><li><b>Em JPEG não existe LSB aproveitável.</b> A compressão reescreve os bits menos significativos, então o que se lesse ali seria ruído do codec, não mensagem. Num JPEG, só fazem sentido os métodos de coeficiente DCT.</li><li><b>O teste do chi-quadrado nos coeficientes DCT é indicador fraco, não detector.</b> Ele pega embutimento ingênuo de alta taxa, mas ferramentas que espalham um payload pequeno passam direto por ele. Ausência de sinal nunca é atestado de limpeza.</li></ul>",
     helpS2Title: "Esteganografia LSB",
@@ -1530,7 +1556,7 @@ const I18N = {
     helpS6Title: "Limitações",
     helpS6a: "Esta é uma ferramenta <b>heurística</b>, não um classificador definitivo. Ela analisa propriedades estatísticas e metadados, sem rede neural. Nada roda em servidor: se um método exige modelo treinado, esta ferramenta não o detecta.",
     helpS6b: "Casos difíceis: imagens recomprimidas por redes sociais (que apagam metadados e alteram pixels), fotos muito editadas, e imagens de IA de última geração que imitam ruído de câmera. Use os resultados como <b>indício investigativo</b>, cruzando com outras evidências — não como prova isolada.",
-    helpS6c: "No lado da esteganografia, a ferramenta detecta com confiança o <b>LSB Replacement</b> (via RS/WS) e mensagens em texto puro ou fracamente ocultas. Para métodos neurais como o SteganoGAN ela oferece apenas uma heurística de <b>nível de suspeita</b> — consegue sinalizar a assinatura tipo GAN, mas não confirmá-la sem o modelo treinado, que não roda no navegador. Ela <b>não</b> detecta com confiabilidade métodos adaptativos como HILL, UNIWARD ou J-UNIWARD. Detectá-los exige modelos neurais treinados, que não rodam em navegador — então esta ferramenta simplesmente não os detecta. É um limite real, não temporário: <b>a ausência de detecção aqui não é evidência de que a imagem esteja limpa.</b> Se você precisa desse nível de análise, use um toolbox dedicado de esteganálise como o <b>Aletheia</b>, de Daniel Lerch (MIT, <code>github.com/daniellerch/aletheia</code>).",
+    helpS6c: "No lado da esteganografia, a ferramenta detecta com confiança o <b>LSB Replacement</b> (via RS/WS) e mensagens em texto puro ou fracamente ocultas. Para métodos neurais como o SteganoGAN ela oferece apenas uma heurística de <b>nível de suspeita</b> — consegue sinalizar uma assinatura tipo GAN, mas não confirmá-la sem um modelo treinado. Modelos desse tipo podem rodar no navegador via WASM/WebGPU; esta build offline de arquivo único é que <b>não os embarca</b>. Ela <b>não</b> detecta com confiabilidade métodos adaptativos como HILL, UNIWARD ou J-UNIWARD porque não inclui os modelos especializados necessários. <b>A ausência de detecção aqui não é evidência de que a imagem esteja limpa.</b> Se você precisa desse nível de análise, use um toolbox dedicado de esteganálise como o <b>Aletheia</b>, de Daniel Lerch (MIT, <code>github.com/daniellerch/aletheia</code>).",
     footerCredit: "Idealizado por RASC e desenvolvido por JOI",
     footerOpensource: "Software livre sob GPL-3.0 &middot; código em <code>github.com/rickschaves/stegostudio</code>",
   }
@@ -1580,6 +1606,9 @@ function applyTranslations() {
 function setLang(lang) {
   LANG = lang;
   applyTranslations();
+  // Se um aviso de chave está ativo, applyTranslations restaura a hint padrão;
+  // reaplica o texto do aviso no novo idioma sem reiniciar o timer.
+  if (typeof refreshKeyFlashText === 'function') refreshKeyFlashText();
   const btnEn = document.getElementById('lang-en');
   const btnPt = document.getElementById('lang-pt');
   if (btnEn && btnPt) {
@@ -1590,11 +1619,17 @@ function setLang(lang) {
   redrawTerminals();
   // Re-renderiza os resultados da análise (módulos, badges, nomes) no novo idioma.
   // Os módulos são HTML gerado dinamicamente, então precisam ser refeitos.
-  if (lastRenderArgs) {
+  // Não ressuscitar relatório antigo: se `lastRenderArgs` é de uma geração
+  // anterior, uma análise nova já invalidou aquele resultado. Trocar de idioma
+  // no meio da análise faria o relatório da imagem A reaparecer sob o preview
+  // da imagem B — a mesma corrida que o snapshot resolve no outro caminho.
+  if (lastRenderArgs && lastRenderArgs.gen === analysisGeneration) {
     const resultsVisible = document.getElementById('results-area')?.classList.contains('visible');
     renderResults(lastRenderArgs.report, lastRenderArgs.decodedMsg, lastRenderArgs.decodeStatus);
     // renderResults pode togglar visibilidade; preserva o estado que estava
-    if (resultsVisible) document.getElementById('results-area')?.classList.add('visible');
+    // Simétrico: renderResults() TORNA visível, então o ramo `false` precisa
+    // existir. Só havia o `add`, e a função não preservava o que dizia preservar.
+    document.getElementById('results-area')?.classList.toggle('visible', !!resultsVisible);
   }
 }
 

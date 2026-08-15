@@ -82,24 +82,7 @@ document.addEventListener('paste', async e => {
     }, r => showLoadError('enc', r));
   } else {
     flashDrop('dec-drop');
-    decFile = f;
-    let magic=null; try{ magic=new Uint8Array(await f.slice(0,16).arrayBuffer()); }catch(_){}
-    decFmt = classifyFormat(f, magic);
-    loadToCanvas(f, (id, w, h, src) => {
-      decID = id;
-      document.getElementById('dec-prev').src = src;
-      document.getElementById('dec-pw').style.display = 'block';
-      document.getElementById('dec-hint').style.display = 'none';
-      document.getElementById('dec-info').textContent = `${w}×${h} · ${fmtBytes(f.size)}`;
-      const b = document.getElementById('dec-fbadge');
-      b.textContent = decFmt.ext;
-      const colors = {lossless:'255,107,53', lossy:'255,179,0', palette:'100,180,255'};
-      const c = colors[decFmt.cat];
-      b.style.cssText = `background:rgba(${c},0.15);color:rgb(${c});border:1px solid rgba(${c},0.3)`;
-      decStatusLoaded(decFmt,w,h,f.size);
-      document.getElementById('btn-analyze').disabled = false;
-      clearDecKey();
-    }, r => showLoadError('dec', r));
+    await loadDecoderFile(f);   // mesmo ingresso do drop: bump + busy-state
   }
 });
 
@@ -143,12 +126,64 @@ setupDrop('enc-drop','enc-file', file=>{
 });
 
 // ── DECODE DROP ──
+// ── BUSY-STATE EXPLÍCITO DO ANALYZER ─────────────────────────────────────────
+// DECISÃO DE PRODUTO (13/08/2026). Hoje a interface já parece bloqueada durante
+// a análise, mas por acidente: a thread principal fica ocupada e o navegador
+// engole cliques e Ctrl+V. Isso não é contrato — some no dia em que o pipeline
+// ceder a thread, ganhar um `await` mais longo ou migrar para Web Worker, e a
+// interação concorrente volta sem ninguém decidir por isso.
+//
+// A partir daqui o bloqueio é DELIBERADO e sobrevive a mudanças de arquitetura.
+//
+// Não substitui `analysisGeneration` nem os snapshots: são duas camadas, uma de
+// UX e outra de estado interno, ambas intencionais.
+let _analysisBusy = false;
+function isAnalysisBusy(){ return _analysisBusy; }
+function setAnalysisBusy(v) {
+  _analysisBusy = !!v;
+  const alvos = ['dec-file','dec-key','btn-analyze','dec-clear','lang-en','lang-pt'];
+  for (const id of alvos) {
+    const el = document.getElementById(id);
+    if (el) { el.disabled = _analysisBusy; el.setAttribute('aria-disabled', String(_analysisBusy)); }
+  }
+  const dz = document.getElementById('dec-drop');
+  if (dz) {
+    dz.classList.toggle('busy', _analysisBusy);
+    dz.setAttribute('aria-busy', String(_analysisBusy));
+  }
+  const painel = document.getElementById('panel-dec');
+  if (painel) painel.setAttribute('aria-busy', String(_analysisBusy));
+  if (!_analysisBusy) checkDecReady();   // ao liberar, recalcula em vez de habilitar cego
+}
+
 let decID=null, decFile=null, decFmt=null;
-setupDrop('dec-drop','dec-file', async file=>{
-  decFile=file;
+// ── IDENTIDADE DA OPERAÇÃO ───────────────────────────────────────────────────
+// A análise é assíncrona e longa. `decID`/`decFile`/`decFmt` podem trocar no
+// meio dela — o smoke da v2.42.8 reproduziu: carregar a imagem B enquanto a
+// análise de A rodava deixava o preview em B e o RESULTADO em A. A guarda
+// `_analisando` só impede um segundo clique; não protege a operação viva.
+// Toda troca de imagem incrementa este contador. A análise tira um snapshot no
+// início e, antes de publicar qualquer coisa, confere se ainda é a corrente.
+let analysisGeneration = 0;
+function bumpAnalysisGeneration(){ analysisGeneration++; }
+
+// ── INGRESSO ÚNICO DE IMAGEM NO DECODER ──────────────────────────────────────
+// Havia DOIS caminhos duplicados — `setupDrop` e o `paste` global — e o segundo
+// não incrementava a geração. Ou seja, a correção da corrida A→B foi aplicada a
+// uma superfície e a irmã ficou para trás (quarta vez que esse padrão aparece
+// no projeto). Hoje o defeito fica mascarado porque a thread principal ocupada
+// engole o Ctrl+V durante a análise; qualquer `await` mais longo ou um Worker
+// futuro o traria de volta.
+//
+// Agora existe UM ponto de entrada. Acrescentar um terceiro caminho sem passar
+// por aqui é o que o CHECK 17 impede.
+async function loadDecoderFile(file) {
+  if (isAnalysisBusy()) return;          // busy-state: ver setAnalysisBusy
+  bumpAnalysisGeneration();              // invalida qualquer análise em voo
+  decFile = file;
   // sniff de magic bytes → detecção robusta (pega .jfif, MIME errado, etc.)
   let magic=null; try{ magic=new Uint8Array(await file.slice(0,16).arrayBuffer()); }catch(_){}
-  decFmt=classifyFormat(file, magic);
+  decFmt = classifyFormat(file, magic);
   loadToCanvas(file,(id,w,h,src)=>{
     decID=id;
     document.getElementById('dec-prev').src=src;
@@ -161,10 +196,11 @@ setupDrop('dec-drop','dec-file', async file=>{
     const c=colors[decFmt.cat];
     b.style.cssText=`background:rgba(${c},0.15);color:rgb(${c});border:1px solid rgba(${c},0.3)`;
     decStatusLoaded(decFmt,w,h,file.size);
-    document.getElementById('btn-analyze').disabled=false;
+    checkDecReady();
     clearDecKey();
   }, r => showLoadError('dec', r));
-});
+}
+setupDrop('dec-drop','dec-file', loadDecoderFile);
 
 // ── BOTÃO LIMPAR SENHA + LIMPEZA AUTOMÁTICA (Decoder) ──
 // O "x" só aparece quando há senha digitada (campo vazio fica limpo). Ao
@@ -173,7 +209,45 @@ setupDrop('dec-drop','dec-file', async file=>{
 function clearDecKey() {
   const k = document.getElementById('dec-key');
   if (k) { k.value = ''; updateDecKeyClear(); }
+  if (typeof clearKeyFlash === 'function') clearKeyFlash();
 }
+// ── INSTRUMENTAÇÃO DO ENCODE ────────────────────────────────────────────────
+// O Rick relatou o Encoder "mais lento" nas builds recentes. O histórico
+// v2.42.5–v2.42.8 não tem nenhuma mudança deliberada no núcleo de encode que
+// justifique isso — as alterações foram em Threat, protocolo, renderer e
+// leitura de arquivo do ANALYZER. Logo: é percepção até ser medida.
+//
+// Isto NÃO otimiza nada. Só registra o tempo de cada estágio para que a
+// diferença, se existir, aponte para um deles em vez de virar palpite.
+// Ver no console:  window.__encTimings
+const __encT = { marcas: [], t0: 0 };
+function encMark(nome) {
+  const agora = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+  if (!__encT.marcas.length) __encT.t0 = agora;
+  __encT.marcas.push({ nome, ms: +(agora - __encT.t0).toFixed(1) });
+}
+function encTimingsReset(){ __encT.marcas = []; __encT.t0 = 0; }
+// `coreTotal` para no PNG; `uiReadyTotal` vai até o botão sair de "Trabalhando".
+// A revisão apontou que o flush anterior parava antes da self-analysis de
+// furtividade e da geração do JPEG resistente — ou seja, media menos do que o
+// usuário percebe entre clicar e a ferramenta terminar.
+function encTimingsFlush(final) {
+  const m = __encT.marcas;
+  if (m.length < 2) return null;
+  const fases = m.slice(1).map((x, i) => ({ fase: x.nome, ms: +(x.ms - m[i].ms).toFixed(1) }));
+  const png = m.find(x => x.nome === 'png:out');
+  const out = {
+    coreTotal:    png ? png.ms : null,                 // até o PNG pronto
+    uiReadyTotal: final ? m[m.length-1].ms : null,     // até a UI liberar
+    total: m[m.length-1].ms, fases,
+  };
+  try {
+    window.__encTimings = out;
+    if (final) console.info('[encode] core ' + out.coreTotal + 'ms · ui-ready ' + out.uiReadyTotal + 'ms', fases);
+  } catch(_) {}
+  return out;
+}
+
 function updateDecKeyClear() {
   const k = document.getElementById('dec-key');
   const x = document.getElementById('dec-key-clear');
@@ -182,7 +256,7 @@ function updateDecKeyClear() {
 (function setupDecKeyClear(){
   const k = document.getElementById('dec-key');
   const x = document.getElementById('dec-key-clear');
-  if (k) k.addEventListener('input', updateDecKeyClear);
+  if (k) k.addEventListener('input', () => { updateDecKeyClear(); if (typeof clearKeyFlash === 'function') clearKeyFlash(); });
   if (x) x.addEventListener('click', () => { clearDecKey(); document.getElementById('dec-key').focus(); });
 })();
 
@@ -387,9 +461,11 @@ function resetEncOutputs() {
 document.getElementById('btn-encode').addEventListener('click',async ()=>{
   const _btn=document.getElementById('btn-encode'), _btnHtml=_btn.innerHTML;
   let _stopWork=()=>{};
-  const _restore=()=>{ _btn.disabled=false; _btn.classList.remove('working'); _btn.innerHTML=_btnHtml; _stopWork(); };
+  const _restore=()=>{ encMark('ui-ready'); encTimingsFlush(true);
+    _btn.disabled=false; _btn.classList.remove('working'); _btn.innerHTML=_btnHtml; _stopWork(); };
   _btn.disabled=true; _btn.classList.add('working');
   _btn.innerHTML='<span class="enc-spinner"></span>'+t('encWorking');
+  encTimingsReset();
   // Item 6: feedback IMEDIATO ao clicar — ampulheta animada no terminal e rolagem
   // até a área de saída ANTES do bloco pesado. Rola para uma âncora SEMPRE VISÍVEL:
   // no primeiro encode é o placeholder; ao recodificar a mesma imagem o placeholder
@@ -420,10 +496,14 @@ document.getElementById('btn-encode').addEventListener('click',async ()=>{
     let bodyBytes = new TextEncoder().encode(msg);
     let compressed = false;
     try {
+      encMark('deflate:in');
       const comp = await deflateBytes(bodyBytes);
+      encMark('deflate:out');
       if (comp.length < bodyBytes.length) { bodyBytes = comp; compressed = true; }
     } catch(_) { /* sem CompressionStream → segue sem comprimir */ }
+    encMark('crypto:in');
     const data = cipher ? await aesEncryptBytes(bodyBytes, key) : bodyBytes;
+    encMark('crypto:out');
     // AUTO-SELEÇÃO: o modo MAIS FURTIVO que couber (ou RGB se priorizar capacidade).
     const sel = selectEmbedMode(data.length*8, encOpaque, HEADER_BYTES*8, maxcap);
     if (!sel) {
@@ -443,7 +523,9 @@ document.getElementById('btn-encode').addEventListener('click',async ()=>{
     // Embedding e ESCRITA sem canvas: clona o cover limpo, embute, e remonta o
     // PNG na mão. Evita o farbling do toDataURL/getImageData (vide Brave Shields).
     const work = new ImageData(new Uint8ClampedArray(encID.data), encW, encH);
+    encMark('embed:in');
     embedLSB(work, payload, mode, key, adaptive, stealth, stcW);
+    encMark('embed:out');
     // ── NEGAÇÃO PLAUSÍVEL: se ativa, embute a mensagem-isca no FIM (Opção C). ──
     const decoyOn = document.getElementById('enc-decoy-toggle')?.checked;
     const decoyMsg = document.getElementById('enc-decoy-msg')?.value.trim() || '';
@@ -459,7 +541,10 @@ document.getElementById('btn-encode').addEventListener('click',async ()=>{
       decoyBitsUsed = await embedDecoyTail(work, decoyMsg, decoyKey, realUsedPx);
       decoyChars = decoyMsg.length;
     }
+    encMark('png:in');
     const pngBytes = await pngEncodeRGBA(encW, encH, work.data);
+    encMark('png:out');
+    encTimingsFlush(false);
     if (encOutURL && encOutURL.startsWith('blob:')) URL.revokeObjectURL(encOutURL);
     encOutURL = URL.createObjectURL(new Blob([pngBytes], { type: 'image/png' }));
     document.getElementById('enc-out-prev').src=encOutURL;
@@ -500,7 +585,7 @@ document.getElementById('btn-encode').addEventListener('click',async ()=>{
       <div class="stat-cols">${realCol}${decoyCol}</div>
       <div class="stat-impact"><span class="stat-key">${t('encStatVisualImpact')}</span><span class="stat-val sv-enc">${(bitsUsed/totalBits*100).toFixed(4)}%</span></div>`;
     _stopWork(); // para a ampulheta ANTES de escrever o sucesso (senão o timer sobrescreve)
-    setStatus('enc-status','<span class="ok">'+t('encSuccess').replace('{bytes}',payload.length)+(cipher?t('encSuffixCipher'):t('encSuffixPlain'))+'</span>');
+    setStatus('enc-status', t('encSuccess').replace('{bytes}',payload.length)+(cipher?t('encSuffixCipher'):t('encSuffixPlain')), 'ok');
     // #21 — auto-report de furtividade: mede a saída com o próprio arsenal.
     // Deferido para a imagem/infos aparecerem na hora; nunca quebra o encode.
     (function(){
@@ -587,7 +672,7 @@ document.getElementById('btn-encode').addEventListener('click',async ()=>{
         wrap.classList.add('visible');
       }, 60);
     })();
-  } catch(e) { _stopWork(); setStatus('enc-status','<span class="err">✗ '+e.message+'</span>'); _restore(); }
+  } catch(e) { _stopWork(); setStatus('enc-status','✗ '+e.message,'err'); _restore(); }
 });
 
 document.getElementById('btn-dl-rb').addEventListener('click',()=>{

@@ -12,13 +12,18 @@ official binaries; none of them ship the original code.
 
 ## Summary
 
-| Tool | PNG / BMP | JPEG | Encrypted payloads | Notes |
+| Tool | PNG / BMP | JPEG | Encrypted payloads | Validation basis |
 |---|---|---|---|---|
-| **STEGO·STUDIO** (own format) | full | full | full | AES-256-GCM, Argon2id |
-| **OpenStego** | read | — | **detected, not decrypted** | filename recovered |
-| **Steghide** | BMP not implemented | read | **2 of ~129 cipher/mode pairs** | tool confirmed even when decode fails |
-| **OutGuess 0.4** | — | read | RC4 as the tool uses it | |
-| **F5 (Westfeld)** | — | — | — | detected by encoder comment only |
+| **STEGO·STUDIO** (own format) | full | full | full | own round-trip; golden fixtures in `test/fixtures/legacy/` |
+| **OpenStego** | read | — | **detected, not decrypted** | real samples, validated when the engine was built |
+| **Steghide** | BMP not integrated | read | **2 of ~129 cipher/mode pairs** | official binary 0.5.1, **re-measured 2026-08-11** |
+| **OutGuess 0.4** | — | read | RC4 as the tool uses it | real samples when built, incl. a documented field case |
+| **F5 (Westfeld)** | — | — | — | prototype validated; integration suspended |
+
+The **Validation basis** column matters: only the Steghide row was re-measured in
+the session that produced this page. The others rest on validation done when each
+engine was written, recorded in the changelog. That is evidence, not assumption —
+but it is older, and you should know which is which.
 
 ---
 
@@ -56,8 +61,10 @@ password itself — the tool reports Steghide and names the exact pair that
 blocked it, for example `blowfish/CBC`. You then know to reach for the original
 tool rather than wondering whether the file is damaged.
 
-**BMP is not implemented.** Steghide's spatial-domain BMP path is understood but
-was not built; JPEG was prioritised because it is what turns up in practice.
+**BMP is not integrated.** The spatial-domain core exists and was validated, but
+it is not wired into the browser path: the canvas hands over pixels top-down
+while Steghide samples bottom-up, which changes the Selector's position mapping.
+JPEG was prioritised because it is what turns up in practice.
 
 ## OutGuess 0.4
 
@@ -76,16 +83,20 @@ cost/benefit grounds: rare in practice, expensive by construction.
 
 ## What none of this covers
 
-Detecting **adaptive** steganography — HILL, UNIWARD, J-UNIWARD — requires
-trained neural models, which do not run in a browser. This tool does not detect
-them at all, and finding nothing here is not evidence that an image is clean. For
-that, use a dedicated steganalysis toolbox such as
-[Aletheia](https://github.com/daniellerch/aletheia).
+Detecting **adaptive** steganography — HILL, UNIWARD, J-UNIWARD — generally
+requires specialised trained models. **STEGO·STUDIO does not ship those models
+in its offline single-file build**, so it does not detect these methods at all.
+Finding nothing here is not evidence that an image is clean.
+
+The limit is a product decision, not a limitation of the web platform: models
+can run in a browser via WebAssembly or WebGPU, at a cost in file size and
+complexity this build does not pay. For that work use a dedicated steganalysis
+toolbox such as [Aletheia](https://github.com/daniellerch/aletheia).
 
 Coverless schemes are outside detection by construction: nothing is modified, so
 there is no residual for any statistical test to measure.
 
 ---
 
-*Last measured against steghide 0.5.1 on 2026-08-11. Numbers here come from
-running the official binaries, not from documentation.*
+*Steghide figures measured against the official 0.5.1 binary on 2026-08-11, by
+running it — not from documentation. Other rows: see the Validation basis column.*

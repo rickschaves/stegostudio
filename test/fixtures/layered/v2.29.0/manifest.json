@@ -1,0 +1,22 @@
+{
+  "sourceVersion": "v2.29.0",
+  "sourceFile": "ambas_mensagens_real_com_senha_alternativa_com_senha_v2290.png",
+  "sourceSha256": "885b4aff302087d9f1b25b7039fb272a7580f03ce4cf17daa6ae30716e9bec55",
+  "sourceDimensions": [
+    2604,
+    4624
+  ],
+  "fixture": "decoy_tail.bin",
+  "fixtureBytes": 80,
+  "fixtureSha256": "c4523dbbde087a0244e642651e0e6612ee6fa6c3e2538f696c2e96620672e3a1",
+  "validAlternativePassword": "1424",
+  "expectedAlternativeText": "Mensagem alternativa",
+  "otherValidImagePassword": "2414",
+  "expectedOtherText": "Teste encode mensagem real v2.29.0",
+  "note": "Compact historical vectors extracted from the real v2.29.0 PNG. native_payload.bin is the original native AES-GCM payload recovered from the header route; decoy_tail.bin preserves the original tail-layer AES-GCM bytes. The 15.97 MB source image is intentionally not committed.",
+  "nativeFixture": "native_payload.bin",
+  "nativeFixtureBytes": 79,
+  "nativeFixtureSha256": "6c9a69e4a99d4a60a026c88158d7c0a119d22dd7f1dc6b5b932fbeda4a4e0c65",
+  "validNativePassword": "2414",
+  "expectedNativeText": "Teste encode mensagem real v2.29.0"
+}

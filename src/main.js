@@ -1,6 +1,54 @@
+// Decide se a MENSAGEM FINAL veio de uma rota nativa autenticada.
+// É função pura de propósito: o harness consegue exercitar a MESMA regra usada
+// em produção, inclusive o caso em que um header nativo foi visto mas quem acabou
+// produzindo `decodedMsg` foi um motor de terceiro. `headerMatched` não promove
+// extração sozinho; ele continua servindo apenas ao estado `headerOnly`.
+function resolveNativeEvidence({ decodedMsg, nativeHeaderMatched=false, nativePayloadRecovered=false, nativeLayerRecovered=false }) {
+  if (decodedMsg && (nativePayloadRecovered || nativeLayerRecovered)) return { level:'extracted' };
+  if (nativeHeaderMatched) return { level:'headerOnly' };
+  return { level:'none' };
+}
+
+// Normaliza uma extração nativa bem-sucedida para UM estado público.
+// `nativeHeaderMatched` é útil apenas enquanto temos "header localizado, conteúdo
+// não recuperado". Depois que uma mensagem nativa sobrevive à consolidação, a
+// evidência pública passa a ser `nativeExtracted` independentemente da rota que
+// a encontrou. Isso evita que a camada alternativa da F1 revele, pelo relatório,
+// qual das duas senhas válidas abriu qual caminho interno.
+function markNativeExtracted(report) {
+  const studio = {...(report.studio || {}), nativeExtracted:true};
+  delete studio.nativeHeaderMatched;
+  report.studio = studio;
+  return studio;
+}
+
+let _analisando = false;   // guarda de reentrância — ver comentário abaixo
 document.getElementById('btn-analyze').addEventListener('click', async ()=>{
   if(!decID||!decFile) return;
-  const key=document.getElementById('dec-key').value;
+  // O botão é desabilitado logo abaixo e reabilitado no `finally`, o que já
+  // impede o duplo clique normal. Esta guarda cobre o caso em que a análise
+  // anterior NÃO chegou ao finally — foi exatamente o que o smoke da v2.42.7
+  // produziu: pipeline preso, botão travado, e qualquer caminho que o
+  // reabilitasse dispararia uma segunda execução sobre estado pela metade.
+  if(_analisando) return;
+  _analisando = true;
+  setAnalysisBusy(true);   // contrato de interação, não efeito colateral da thread
+
+  // ── SNAPSHOT ──
+  // A partir daqui a execução usa SÓ estas cópias. Se a imagem trocar no meio,
+  // a análise termina coerente consigo mesma (tudo de A) em vez de misturar o
+  // arquivo de A com o preview de B — e o portão `obsoleta()` impede que ela
+  // publique qualquer coisa.
+  // Geração NOVA por OPERAÇÃO, não por imagem. Reanalisar a mesma imagem
+  // precisa invalidar o relatório anterior — senão `lastRenderArgs` da execução
+  // passada continua com a mesma geração e o guard de idioma não morde.
+  bumpAnalysisGeneration();
+  const run     = analysisGeneration;
+  const runID   = decID;
+  const runFile = decFile;
+  const runFmt  = decFmt;
+  const key     = document.getElementById('dec-key').value;
+  const obsoleta = () => run !== analysisGeneration;
   document.getElementById('results-area').classList.remove('visible');
   document.getElementById('export-wrap').classList.remove('visible');
   document.getElementById('btn-analyze').disabled=true;
@@ -16,20 +64,31 @@ document.getElementById('btn-analyze').addEventListener('click', async ()=>{
     // null e cada consumidor faz o próprio tratamento — inclusive a mensagem
     // amigável do Analyzer, que depende de decodificar para saber o motivo.
     let sharedDec=null, jpegBytes=null;
-    if(decFmt && decFmt.ext==='JPEG' && decFile){
+    if(runFmt && runFmt.ext==='JPEG' && runFile){
       try{
-        jpegBytes=new Uint8Array(await decFile.arrayBuffer());
+        jpegBytes=new Uint8Array(await runFile.arrayBuffer());
         sharedDec=decodeJpegCoefficients(jpegBytes);
       }catch(_){ sharedDec=null; }
     }
-    const report = await runForensics(decID, decFile, setProgress, sharedDec);
+    const report = await runForensics(runID, runFile, setProgress, sharedDec);
     // report.format foi corrigido por magic bytes (pega .jfif, MIME errado, etc.)
     // — tem precedência sobre o decFmt detectado no upload (só por extensão).
-    const fmt = report.format || decFmt;
+    const fmt = report.format || runFmt;
 
     // Decode attempt
     let decodedMsg=null, decodeStatus=t('decStatusNoStudio');
     let decodedFromDeepScan=false; // true quando a msg veio da investigação profunda (pode ser ruído)
+    // As duas rotas nativas usam flags LOCAIS simétricas. `nativeHeaderMatched`
+    // fica no relatório como evidência estrutural, mas nunca é usado para provar
+    // que a mensagem final veio do nosso protocolo. Isso evita contaminação por
+    // um motor de terceiro que rode depois de uma falha do payload nativo.
+    let nativeHeaderMatched=false;
+    let nativePayloadRecovered=false;
+    let nativeLayerRecovered=false;
+    // A rota genérica pode concluir provisoriamente "chave não revelou texto"
+    // antes da sonda F1. Adiamos o efeito visual até TODAS as rotas terminarem:
+    // uma senha alternativa válida não pode piscar como senha errada por 5 s.
+    let pendingKeyFlash=false;
     const isLossless=fmt&&fmt.cat==='lossless';
 
     if(!isLossless){
@@ -39,13 +98,13 @@ document.getElementById('btn-analyze').addEventListener('click', async ()=>{
       // coeficientes DCT. Lê os bytes crus do arquivo e tenta o motor Steghide
       // (com a senha informada, ou sem senha). Uma extração real tem precedência
       // sobre a mensagem padrão de "indisponível".
-      if(fmt.ext==='JPEG' && decFile){
+      if(fmt.ext==='JPEG' && runFile){
         try{
           // F7: reusa os bytes e os coeficientes obtidos no topo do fluxo.
           // Se o arquivo só foi reconhecido como JPEG pelo relatório (o decFmt
           // do upload pode divergir em casos de borda), faz o trabalho aqui,
           // exatamente como antes — o caminho autônomo continua íntegro.
-          const bytes = jpegBytes || new Uint8Array(await decFile.arrayBuffer());
+          const bytes = jpegBytes || new Uint8Array(await runFile.arrayBuffer());
           let dec = sharedDec;
           if(!dec){ try{ dec=decodeJpegCoefficients(bytes); }catch(_){ } }
           // ── MODO ROBUSTO (F4) — tentado ANTES dos motores de terceiros ──
@@ -56,20 +115,46 @@ document.getElementById('btn-analyze').addEventListener('click', async ()=>{
           try{
             const rb = robustExtract(bytes, key);
             if(rb.status === 'ok'){
+              // O envelope robusto já foi confirmado (magic + CRC + RS). Daqui em
+              // diante uma falha do conteúdo NÃO pode apagar essa evidência nem
+              // cair no status genérico "nada encontrado". Isso importa também
+              // para arquivos hostis/malformados em que a senha do plano externo e
+              // a senha AES interna não sejam a mesma, mesmo que nosso Encoder use
+              // uma única senha para as duas camadas.
               const p = rb.payload, modeByte = p[5];
               const len = p[6] | (p[7]<<8) | (p[8]<<16) | (p[9]<<24);
               const comp = !!(modeByte & FLAG_COMPRESSED);
-              let body = p.slice(10, 10 + len), plain = null;
-              if(isAesPayload(body)){
-                if(key.length > 0) plain = await aesDecryptBytes(body, key);
-              } else plain = body;
-              if(plain && comp){ try{ plain = await inflateBytes(plain); }catch(_){ plain = null; } }
+              const body = p.slice(10, 10 + len);
+              const aesBody = isAesPayload(body);
+              let plain = null, contentState = 'ok';
+              if(aesBody){
+                if(key.length > 0){
+                  try{ plain = await aesDecryptBytes(body, key); }
+                  catch(_){ contentState = 'locked'; }
+                } else {
+                  contentState = 'needsKey';
+                }
+              } else {
+                plain = body;
+              }
+              if(plain && comp){
+                try{ plain = await inflateBytes(plain); }
+                catch(_){ plain = null; contentState = 'contentError'; }
+              }
               if(plain){
                 decodedMsg = new TextDecoder().decode(plain).slice(0,5000);
                 decodeStatus = t('rbDecFound');
                 report.studio = {...report.studio, robust:true, robustCorrected:rb.errosCorrigidos};
-              } else if(isAesPayload(body)){
-                decodeStatus = t('decStatusShuffledNeedsKey'); flashKey();
+              } else if(contentState === 'locked'){
+                decodeStatus = t('rbDecLocked');
+                report.studio = {...report.studio, robust:'locked', robustCorrected:rb.errosCorrigidos};
+              } else if(contentState === 'needsKey'){
+                decodeStatus = t('rbDecNeedsKey');
+                report.studio = {...report.studio, robust:'locked', robustCorrected:rb.errosCorrigidos};
+                flashKey('missing');
+              } else {
+                decodeStatus = t('rbDecContentError');
+                report.studio = {...report.studio, robust:'content-error', robustCorrected:rb.errosCorrigidos};
               }
             } else if(rb.status === 'damaged'){
               decodeStatus = t('rbDecDamaged');
@@ -98,7 +183,7 @@ document.getElementById('btn-analyze').addEventListener('click', async ()=>{
         // módulo logo acima. Troca por algo que informa de fato: quais motores
         // foram tentados e qual foi o resultado.
         if(!decodedMsg){
-          decodeStatus=t('decStatusJpegNoneFound');
+          if(!report.studio?.robust) decodeStatus=t('decStatusJpegNoneFound');
           // F9 fatia 2 — CONFIRMADO sem extração. O magic do Steghide vive em
           // posições derivadas da senha: se ele bate, é prova de que o arquivo é
           // Steghide, mesmo sem conseguirmos ler o conteúdo. Só roda aqui, no
@@ -116,15 +201,26 @@ document.getElementById('btn-analyze').addEventListener('click', async ()=>{
           // comum, porque o sistema recodifica a imagem ao colar. A dica aparece
           // exatamente para quem colou em vez de salvar o arquivo.
           try{ const sig=robustSignature(sharedDec);
-               if(sig && sig.suspeito) decodeStatus=t('decStatusRobustLostPaste'); }catch(_){}
+               if(!report.studio?.robust && sig && sig.suspeito) decodeStatus=t('decStatusRobustLostPaste'); }catch(_){}
         }
       }
     } else {
-      const studioPayload=extractLSBStudio(decID,key);
+      const studioPayload=extractLSBStudio(runID,key);
       if(studioPayload && studioPayload.needsPassword){
         // Corpo embaralhado por senha, mas nenhuma senha foi informada.
-        decodeStatus=t('decStatusShuffledNeedsKey');decodedMsg=null;flashKey();
+        decodeStatus=t('decStatusShuffledNeedsKey');decodedMsg=null;flashKey('missing');
       } else if(studioPayload){
+        // Header do STEGO·STUDIO LOCALIZADO com a senha. O M7 do forensics roda
+        // sem senha e não enxerga payload furtivo, então é aqui que isso precisa
+        // ser registrado — sem isso o threat fica idêntico com senha certa e
+        // errada.
+        //
+        // ⚠️ Isto é evidência ESTRUTURAL, não extração. Seis ramos abaixo ainda
+        // podem terminar com `decodedMsg=null`: GCM falhando em corpo corrompido,
+        // payload cifrado sem senha, inflate falhando. A confirmação de extração
+        // é gravada só depois, quando existe mensagem de verdade — mesma
+        // distinção que o modo robusto já faz entre `true` e `'damaged'`.
+        nativeHeaderMatched=true;
         const comp = !!studioPayload.compressed;
         const isAes = isAesPayload(studioPayload);
         // Descomprime se o flag FLAG_COMPRESSED estiver setado; null se falhar.
@@ -141,8 +237,9 @@ document.getElementById('btn-analyze').addEventListener('click', async ()=>{
             if(bytes!==null){
               decodedMsg=new TextDecoder('utf-8',{fatal:false}).decode(bytes);
               decodeStatus=t('decStatusDecryptedKey');
+              nativePayloadRecovered=true;
             } else {
-              decodeStatus=t('decStatusCipherWrongKey');decodedMsg=null;flashKey();
+              decodeStatus=t('decStatusCipherWrongKey');decodedMsg=null;pendingKeyFlash=true;
             }
           } else if(comp){
             // Comprimido mas não cifrado: a chave é ignorada (compressão ≠ cripto).
@@ -150,38 +247,40 @@ document.getElementById('btn-analyze').addEventListener('click', async ()=>{
             if(bytes!==null && isReadableText(bytes)>0.7){
               decodedMsg=new TextDecoder('utf-8',{fatal:false}).decode(bytes);
               decodeStatus=t('decStatusPlainKeyIgnored');
+              nativePayloadRecovered=true;
             } else {
-              decodeStatus=t('decStatusCipherWrongKey');decodedMsg=null;flashKey();
+              decodeStatus=t('decStatusCipherWrongKey');decodedMsg=null;pendingKeyFlash=true;
             }
           } else {
             // Não-AES e não comprimido → tenta XOR legado; senão texto puro.
             let attempt=decryptXOR(studioPayload,key);
             if(isReadableText(new TextEncoder().encode(attempt))<=0.7) attempt=null;
             if(attempt!==null){
-              decodedMsg=attempt;decodeStatus=t('decStatusDecryptedKey');
+              decodedMsg=attempt;decodeStatus=t('decStatusDecryptedKey');nativePayloadRecovered=true;
             } else {
               const plain=new TextDecoder('utf-8',{fatal:false}).decode(studioPayload);
-              if(isReadableText(studioPayload)>0.7){decodedMsg=plain;decodeStatus=t('decStatusPlainKeyIgnored');}
-              else{decodeStatus=t('decStatusCipherWrongKey');decodedMsg=null;flashKey();}
+              if(isReadableText(studioPayload)>0.7){decodedMsg=plain;decodeStatus=t('decStatusPlainKeyIgnored');nativePayloadRecovered=true;}
+              else{decodeStatus=t('decStatusCipherWrongKey');decodedMsg=null;pendingKeyFlash=true;}
             }
           }
         } else {
           // Sem chave: se for payload AES, avisa que precisa de senha.
           if(isAes){
-            decodeStatus=t('decStatusCipherFound');decodedMsg=null;flashKey();
+            decodeStatus=t('decStatusCipherFound');decodedMsg=null;flashKey('missing');
           } else {
             const bytes=await inflateIfNeeded(studioPayload);
             if(bytes!==null && isReadableText(bytes)>0.7){
               decodedMsg=new TextDecoder('utf-8',{fatal:false}).decode(bytes);
               decodeStatus=t('decStatusPlainNoCipher');
+              nativePayloadRecovered=true;
             } else {
-              decodeStatus=t('decStatusCipherFound');decodedMsg=null;flashKey();
+              decodeStatus=t('decStatusCipherFound');decodedMsg=null;flashKey('missing');
             }
           }
         }
       } else {
-        const maxBytes=Math.min(Math.floor(decID.width*decID.height/8),8000);
-        const generic=extractLSBRaw(decID,maxBytes);
+        const maxBytes=Math.min(Math.floor(runID.width*runID.height/8),8000);
+        const generic=extractLSBRaw(runID,maxBytes);
         const hasC2PA=report.c2pa?.found||report.c2pa?.manifestDetected;
 
         // Com chave: tenta decifrar os bytes brutos (AES novo ou XOR legado)
@@ -198,7 +297,7 @@ document.getElementById('btn-analyze').addEventListener('click', async ()=>{
             decodeStatus=t('decStatusDecryptedVia').replace('{mode}',translateMode(generic.mode));
           } else {
             decodeStatus=t('decStatusKeyNoText');
-            decodedMsg=null; flashKey();
+            decodedMsg=null; pendingKeyFlash=true;
           }
         }
         // Sem chave: usa o investigador de janela deslizante
@@ -250,11 +349,12 @@ document.getElementById('btn-analyze').addEventListener('click', async ()=>{
     // sem falsa leitura. Rodada só quando lossless (LSB só existe aí).
     if(isLossless && key.length>0 && !decodedMsg){
       let decoyMsg=null;
-      try{ decoyMsg=await extractDecoyTail(decID,key); }catch(_){ decoyMsg=null; }
+      try{ decoyMsg=await extractDecoyTail(runID,key); }catch(_){ decoyMsg=null; }
       if(decoyMsg!==null){
         decodedMsg=decoyMsg;
         decodeStatus=t('decStatusDecryptedKey');
         decodedFromDeepScan=false; // veio de camada válida (GCM autenticado), não é ruído
+        nativeLayerRecovered=true; // local: não exporta qual camada/rota venceu
       }
     }
 
@@ -265,7 +365,7 @@ document.getElementById('btn-analyze').addEventListener('click', async ()=>{
     // sobre ruído especulativo de deep scan.
     if(isLossless && (!decodedMsg || decodedFromDeepScan)){
       let osRes=null;
-      try{ osRes=await osDecodeMessage(decID,key); }catch(_){ osRes=null; }
+      try{ osRes=await osDecodeMessage(runID,key); }catch(_){ osRes=null; }
       if(osRes){
         if(osRes.text!==null){
           decodedMsg=osRes.text.slice(0,5000);
@@ -289,11 +389,39 @@ document.getElementById('btn-analyze').addEventListener('click', async ()=>{
       decodedMsg = c0.decodedMsg;
       decodeStatus = c0.decodeStatus;
     }
+    // Extração nativa CONFIRMADA: a mensagem FINAL precisa ter vindo de uma das
+    // duas rotas nativas que registraram recuperação local. `nativeHeaderMatched`
+    // NÃO entra neste portão: um header pode ter casado e falhado, e depois um
+    // OpenStego legítimo pode fornecer `decodedMsg`. Nesse caso o estado correto é
+    // headerOnly + terceiro, nunca nativeExtracted.
+    // A decisão é consumida DIRETAMENTE da função pura. Não existe variável
+    // intermediária de nível que uma refatoração posterior possa sobrescrever entre
+    // a regra testada e o portão que publica a evidência.
+    if (resolveNativeEvidence({decodedMsg, nativeHeaderMatched, nativePayloadRecovered, nativeLayerRecovered}).level === 'extracted') {
+      markNativeExtracted(report);
+    } else if (resolveNativeEvidence({decodedMsg, nativeHeaderMatched, nativePayloadRecovered, nativeLayerRecovered}).level === 'headerOnly') {
+      // Só publica a evidência do header DEPOIS que todas as rotas terminaram.
+      // Assim ela não contamina a autoria de uma mensagem recuperada por terceiro.
+      report.studio = {...report.studio, nativeHeaderMatched:true};
+    }
+
+    // Só agora sabemos se o aviso provisório de chave realmente deve aparecer.
+    // Uma extração F1 ou de terceiro bem-sucedida cancela o flash; identificação
+    // de ferramenta de terceiro também cancela, porque "insira a chave" seria
+    // um conselho enganoso se a limitação for do nosso decoder.
+    if (pendingKeyFlash && !decodedMsg && !report.studio?.thirdParty) flashKey('wrong');
+
+    // ── PORTÃO ──
+    // Última chance antes de publicar. Se a imagem trocou durante os awaits,
+    // este resultado é da imagem ANTERIOR: descartar em silêncio é o correto,
+    // porque exibi-lo ao lado do preview novo é pior que não exibir nada.
+    // Nada abaixo daqui é gravado ou renderizado se a execução ficou obsoleta.
+    if (obsoleta()) return;
 
     report.stegomalware = decodedMsg ? detectStegomalware(decodedMsg) : [];
     lastReport={timestamp:new Date().toISOString(),threat:computeThreat(report),synth:computeSynth(report),origin:report.origin,decodedMsg,decodeStatus,modules:report};
     // Guarda os argumentos do render para poder refazê-lo ao trocar de idioma
-    lastRenderArgs = {report, decodedMsg, decodeStatus};
+    lastRenderArgs = {report, decodedMsg, decodeStatus, gen: run};
     renderResults(report,decodedMsg,decodeStatus);
     // Rola até o topo dos resultados para o usuário ver os scores imediatamente,
     // sem precisar rolar manualmente. Funciona tanto no scroll da coluna direita
@@ -331,10 +459,15 @@ document.getElementById('btn-analyze').addEventListener('click', async ()=>{
     termWrite('dec-status', buildComplete());
 
   } catch(e) {
-    setStatus('dec-status','<span class="err">✗ Erro: '+e.message+'</span>');
+    setStatus('dec-status','✗ Erro: '+e.message,'err');
     console.error('STEGO·STUDIO erro:', e);
   } finally {
-    document.getElementById('btn-analyze').disabled=false;
+    _analisando = false;
+    // setAnalysisBusy(false) libera a UI e JÁ recalcula o botão pelo estado
+    // real. A linha `disabled=false` que existia aqui desfazia esse cálculo no
+    // instante seguinte — uma execução obsoleta terminando reabilitava o botão
+    // mesmo sem imagem carregada.
+    setAnalysisBusy(false);
   }
 });
 
@@ -343,7 +476,7 @@ document.getElementById('btn-analyze').addEventListener('click', async ()=>{
 // ════════════════════════════════════════
 document.getElementById('btn-export-json').addEventListener('click',()=>{
   if(!lastReport) return;
-  const payload={_tool:'STEGO·STUDIO v2.42.3',_schema:'forensic-report-v2',
+  const payload={_tool:'STEGO·STUDIO v2.42.16',_schema:'forensic-report-v2',
     _hint:t('exportHintJSON'),
     ...lastReport};
   const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});

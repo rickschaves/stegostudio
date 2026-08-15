@@ -268,6 +268,11 @@ textarea.dec-t:focus { border-color:rgba(255,107,53,0.4); }
 }
 .key-field.enc-t:focus-within { border-color:rgba(0,255,179,0.4); }
 .key-field.dec-t:focus-within { border-color:rgba(255,107,53,0.4); }
+.key-field.key-flash,
+.key-field.dec-t.key-flash:focus-within {
+  border-color:var(--dec);
+  box-shadow:0 0 0 2px var(--dec);
+}
 .key-icon {
   padding:0 10px; font-size:0.75rem; color:var(--dim);
   border-right:1px solid var(--border); height:38px; display:flex; align-items:center;

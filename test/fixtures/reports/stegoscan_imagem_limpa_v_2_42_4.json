@@ -1,0 +1,385 @@
+{
+  "_tool": "STEGO·STUDIO v2.42.4",
+  "_schema": "forensic-report-v2",
+  "_hint": "Envie este arquivo para sua IA de preferência para análise aprofundada.",
+  "timestamp": "2026-08-13T01:15:31.313Z",
+  "threat": {
+    "score": 100,
+    "flags": [
+      "possível mensagem cifrada",
+      "LSB Replacement detectado (RS+WS)",
+      "strings suspeitas",
+      "clusters de cor rara"
+    ]
+  },
+  "synth": {
+    "score": 100,
+    "level": "ALTA",
+    "flags": [
+      "Manifesto C2PA declara origem em IA (assinatura não verificada)",
+      "Clusters de cor rara detectados",
+      "Entropia regional extremamente uniforme",
+      "Suavização moderada de bordas",
+      "Anomalias de crominância e saturação"
+    ]
+  },
+  "origin": {
+    "fotografia": 35,
+    "screenshot": 25,
+    "arte_digital": 25,
+    "sintetica": 100,
+    "topCategory": "sintetica",
+    "signals": {
+      "fotografia": [
+        {
+          "labelKey": "sigSensorNoise",
+          "weight": 20
+        },
+        {
+          "labelKey": "sigHighChroma",
+          "weight": 15
+        }
+      ],
+      "screenshot": [
+        {
+          "labelKey": "sigPNGNoCamera",
+          "weight": 15
+        },
+        {
+          "labelKey": "sigPNGNoMeta",
+          "weight": 10
+        }
+      ],
+      "arte_digital": [
+        {
+          "labelKey": "sigControlledChroma",
+          "weight": 15
+        },
+        {
+          "labelKey": "sigPNGNoCamera",
+          "weight": 10
+        }
+      ],
+      "sintetica": [
+        {
+          "labelKey": "sigC2PAConfirmed",
+          "weight": null
+        }
+      ]
+    }
+  },
+  "decodedMsg": null,
+  "decodeStatus": "nenhum conteúdo legível nos LSBs",
+  "modules": {
+    "format": {
+      "cat": "lossless",
+      "ext": "PNG",
+      "encOk": true
+    },
+    "metadata": {
+      "filename": "Carmen_Mendoza.png",
+      "size": "2.39 MB",
+      "type": "image/png",
+      "formatCategory": "lossless",
+      "width": 1122,
+      "height": 1402,
+      "pixels": 1573044,
+      "lastModified": "2026-08-06T19:19:41.874Z"
+    },
+    "strings": {
+      "count": 300,
+      "interesting": [
+        {
+          "str": "wbidb<svg width=\"716\" height=\"716\" viewBox=\"0 0 716 716\" fill=\"none\" xmlns=\"http://www.w3.org/2000/svg\">",
+          "type": "URL"
+        },
+        {
+          "str": "dnameigpt-imagegversionc2.0qdigitalSourceTypexFhttp://cv.iptc.org/newscodes/digitalsourcetype/trainedAlgorithmicMedia",
+          "type": "URL"
+        },
+        {
+          "str": "xMIIEFgoBAKCCBA8wggQLBgkrBgEFBQcwAQEEggP8MIID+DCBoqIWBBR7z0FvsvTOlbiGq8QBTbdKcuFewhgPMjAyNjA4MDUxNjQ4MDhaMHcwdTBNMAkGBSsOAwIaBQAEFD5MfI5QC4dscxW+r26X6hDulCDJBBTDsySWNJOhWepSGGueF+CputawTAIUUpQlB4G1aob5Mxd4cNaOre9iGkGAABgPMjAyNjA4MDUxNjQ4MDhaoBEYDzIwMjYwODEyMTY0ODA4WjAKBggqhkjOPQQDAgNJADBGAiEAylmJVuRdWOu0iCMB2AUq4mW6rCZ+RRPuO5opx1UIaMECIQD6baMFiKnDJUTS0Ey4qU0YFl6PqsUWJfTfT9NMUegHy6CCAvgwggL0MIIC8DCCAnegAwIBAgIUQ4R5NbInU36fP2pyUwWVaXfpGXQwCgYIKoZIzj0EAwMwgacxCzAJBgNVBAYTAlVTMREwDwYDVQQIDAhOZXcgWW9",
+          "type": "Base64 candidate"
+        },
+        {
+          "str": "MIIEVQoBAKCCBE4wggRKBgkrBgEFBQcwAQEEggQ7MIIENzCBoqIWBBTL2I42iiERcyy574oao2qevFNMQBgPMjAyNjA4MDUxNjQ3NTZaMHcwdTBNMAkGBSsOAwIaBQAEFIAg9bziJOltvNZvxhcpZXwkyPH9BBQD1V+vfoPlBB1ZgCdKNP9F/etJeAIUMOih8KWJQmvSuYJIR5kZ3BY3AsuAABgPMjAyNjA4MDUxNjQ3NTZaoBEYDzIwMjYwODEyMTY0NzU2WjAKBggqhkjOPQQDAwNpADBmAjEA8vjMBpmShFm+lE5FrD5cZdcqF7F8Fqe31tnPpkhumcQ/836jfv5PcwAixam/db3iAjEAhoOrniyDR1B986D9puDgpN2Sf6dDi6R063w1S9Ed7x7FnQUnKDrTprRNacIZWMhRoIIDFzCCAxMwggMPMIIClaADAgECAhQD0H00km1XGXDG2BSQTHPF0+Wb4DAKBggqhkjOPQQDAzCB",
+          "type": "Base64 candidate"
+        },
+        {
+          "str": "aZdnamenjumbf manifestcalgfsha256dhashX ;",
+          "type": "Base64 candidate"
+        },
+        {
+          "str": "ca@trufo.ai1+0)",
+          "type": "Email"
+        },
+        {
+          "str": "https://ocsp.trufo.ai0+",
+          "type": "URL"
+        },
+        {
+          "str": "https://ca.trufo.ai/c2pa-ca.crt03",
+          "type": "URL"
+        },
+        {
+          "str": "ca@trufo.ai1,0*",
+          "type": "Email"
+        },
+        {
+          "str": "ca@trufo.ai1+0)",
+          "type": "Email"
+        },
+        {
+          "str": "https://trufo.ai/cpcps0^",
+          "type": "URL"
+        },
+        {
+          "str": "https://ocsp.trufo.ai0+",
+          "type": "URL"
+        },
+        {
+          "str": "https://ca.trufo.ai/root-ca.crt0",
+          "type": "URL"
+        },
+        {
+          "str": "itstTokens",
+          "type": "Palavra-chave sensível"
+        },
+        {
+          "str": "20260805164808Z0w0u0M0",
+          "type": "Base64 candidate"
+        },
+        {
+          "str": "ca@trufo.ai1+0)",
+          "type": "Email"
+        },
+        {
+          "str": "ca@trufo.ai1\"0",
+          "type": "Email"
+        }
+      ],
+      "adversarial": [],
+      "appendedData": false,
+      "appendedBytes": 0,
+      "note": ""
+    },
+    "lsb": {
+      "available": true,
+      "chiR": "4.50",
+      "chiG": "57.89",
+      "chiB": "856.98",
+      "bestMode": "canal R",
+      "printableRatio": "34.8%",
+      "decodedSample": "�\u00006��s�#��\u0000�#$.c�\u0000\u0002�2�^x&{\u0003��\u000083\u0000\u0000\u0007��9�6\u0007y�\u001c@2�l\u0005���)\u0018U�ٓ\u0000\u0004\u0011�@}��?A���\u0019�w\u0001�\u0003��\u0011�\u0013���0\u0012M�z����͏�\u0000<��3�\u0000�\u00000���j��\u0001��`���@�",
+      "suspicious": true,
+      "foundText": null,
+      "headerName": null,
+      "cipherSuspicion": true,
+      "rsRate": "9.0%",
+      "wsRate": "40.3%",
+      "lsbrDetected": true,
+      "lsbrPossible": false,
+      "wsReliable": true,
+      "neuralSuspect": false,
+      "neuralEntSim": "99.9%",
+      "neuralHfSim": "76.3%",
+      "neuralAvgHF": "4.21"
+    },
+    "frequency": {
+      "spikes": 12,
+      "evenOddBias": "0.0660",
+      "biasAnomaly": false,
+      "biasReliable": true,
+      "biasLowComplexity": false,
+      "dominantRGB": [
+        0,
+        0,
+        0
+      ]
+    },
+    "entropy": {
+      "shannon": "12.7049",
+      "uniqueColors": 84312,
+      "avgNoise": "5.35",
+      "noiseAnomaly": false,
+      "noiseThreshold": 2,
+      "highEntropy": false
+    },
+    "color": {
+      "uniqueAlpha": 1,
+      "alphaAnomaly": false,
+      "partialAlpha": 0,
+      "rareClusters": 5,
+      "rareSuspicious": true,
+      "rareDetails": [
+        "RGB(152,128,96): 1564px",
+        "RGB(40,48,40): 1530px",
+        "RGB(152,136,112): 1484px",
+        "RGB(184,160,128): 1465px",
+        "RGB(32,40,32): 1454px"
+      ]
+    },
+    "studio": {
+      "hasHeader": false,
+      "payloadBytes": 0,
+      "shuffled": false,
+      "available": true,
+      "note": ""
+    },
+    "dct": {
+      "available": true,
+      "blockCount": 440,
+      "stdDev": "69.79",
+      "mean": "85.8",
+      "suspicious": false
+    },
+    "gradients": {
+      "available": true,
+      "totalEdges": 33266,
+      "sharpRatio": "15.6%",
+      "sharpEdges": 5202,
+      "softEdges": 28064,
+      "suspicious": true
+    },
+    "chroma": {
+      "available": true,
+      "avgSaturation": "24.8%",
+      "highSatRatio": "5.8%",
+      "cbVariance": "8.69",
+      "crVariance": "7.84",
+      "oversaturated": false,
+      "uniformChroma": true,
+      "suspicious": true
+    },
+    "exif": {
+      "found": false,
+      "fields": {},
+      "aiSoftware": null,
+      "hasCamera": false,
+      "hasGPS": false,
+      "noExif": true
+    },
+    "c2pa": {
+      "found": true,
+      "manifestDetected": true,
+      "aiGenerator": "Conteúdo gerado por IA (IPTC trainedAlgorithmicMedia)",
+      "ca": "Trufo.ai",
+      "certDate": "2026-08-05 16:48 UTC",
+      "digitalSourceType": "trainedAlgorithmicMedia",
+      "manifestPresent": true,
+      "signals": [
+        "Manifesto JUMBF/C2PA detectado nos bytes do arquivo",
+        "Gerador identificado: Conteúdo gerado por IA (IPTC trainedAlgorithmicMedia)",
+        "CA signatária: Trufo.ai",
+        "SVG watermark detectado nos bytes"
+      ],
+      "rawSoftware": "gpt-imagegversionc2.0qdigitalSourceTypexFhttp",
+      "hasSvg": true,
+      "svgLen": 2414,
+      "hasManifest": true,
+      "manifestLen": 24910,
+      "genName": "gpt-image",
+      "genVersion": "2.0",
+      "signerCN": "OpenAI Media Service"
+    },
+    "_regionalEntropyVar": 0.303563110652763,
+    "ai": {
+      "score": 100,
+      "level": "ALTA",
+      "signals": [
+        {
+          "labelKey": "aiLblC2PAConfirmed",
+          "detailKey": "aiDetC2PAConfirmed",
+          "detailVars": {
+            "extra": "Gerador: Conteúdo gerado por IA (IPTC trainedAlgorithmicMedia) · IPTC: trainedAlgorithmicMedia · CA: Trufo.ai · Certificado: 2026-08-05 16:48 UTC"
+          },
+          "level": "crit"
+        },
+        {
+          "labelKey": "aiLblRareClusters",
+          "detailKey": "aiDetRareClusters",
+          "detailVars": {
+            "count": 5
+          },
+          "level": "warn"
+        },
+        {
+          "labelKey": "aiLblEntropyExtreme",
+          "detailKey": "aiDetEntropyExtreme",
+          "detailVars": {
+            "spread": "0.30"
+          },
+          "level": "crit"
+        },
+        {
+          "labelKey": "aiLblEdgeModerate",
+          "detailKey": "aiDetEdgeModerate",
+          "detailVars": {
+            "ratio": "15.6%"
+          },
+          "level": "warn"
+        },
+        {
+          "labelKey": "aiLblChromaAnomalies",
+          "detailKey": "aiDetChromaAnomalies",
+          "detailVars": {
+            "detail": "crominância uniforme (Cb:8.69 Cr:7.84)"
+          },
+          "level": "warn"
+        }
+      ],
+      "formatCat": "lossless",
+      "formatExt": "PNG",
+      "cameraVeto": false,
+      "vectorArtVeto": false,
+      "digitalRenderVeto": false
+    },
+    "origin": {
+      "fotografia": 35,
+      "screenshot": 25,
+      "arte_digital": 25,
+      "sintetica": 100,
+      "topCategory": "sintetica",
+      "signals": {
+        "fotografia": [
+          {
+            "labelKey": "sigSensorNoise",
+            "weight": 20
+          },
+          {
+            "labelKey": "sigHighChroma",
+            "weight": 15
+          }
+        ],
+        "screenshot": [
+          {
+            "labelKey": "sigPNGNoCamera",
+            "weight": 15
+          },
+          {
+            "labelKey": "sigPNGNoMeta",
+            "weight": 10
+          }
+        ],
+        "arte_digital": [
+          {
+            "labelKey": "sigControlledChroma",
+            "weight": 15
+          },
+          {
+            "labelKey": "sigPNGNoCamera",
+            "weight": 10
+          }
+        ],
+        "sintetica": [
+          {
+            "labelKey": "sigC2PAConfirmed",
+            "weight": null
+          }
+        ]
+      }
+    },
+    "socialPipeline": null,
+    "stegomalware": []
+  }
+}

@@ -7,6 +7,765 @@
 
 ---
 
+## v2.42.16 — 2026-08-14
+**Fechamento do blocker da v2.42.15: força da evidência monotônica + catracas finais**
+
+A v2.42.15 passou no smoke manual, mas a rechecagem independente encontrou uma
+regressão conceitualmente importante no Threat: a mesma imagem podia cair de **70
+para 40** pontos quando o usuário adicionava uma senha errada. `headerOnly` passava
+a vencer a **redação** do estado e, acidentalmente, também desligava
+`hasStrongStego`, que vinha do header passivo já confirmado.
+
+- **Força separada da redação.** `resolveProtocolState()` continua escolhendo o
+  rótulo mais específico (`extracted > headerOnly > passive`), mas
+  `hasStrongStego` agora deriva da evidência bruta: `studioWeight >= 40` permanece
+  forte independentemente do rótulo. Adicionar evidência não pode reduzir o score
+  nem apagar corroboradores da mesma imagem.
+- **CHECK 16 ganhou o caso que faltava.** Um fixture sem `cipherSuspicion` compara
+  `{hasHeader}` com `{hasHeader,nativeHeaderMatched}` e exige score idêntico mais
+  preservação de ruído artificial, alta entropia e clusters raros. O fixture
+  anterior mascarava a regressão por outra via de `hasStrongStego`.
+- **CHECK 18 fechou N3′/V4/V3.** O fechamento consome `resolveNativeEvidence(...)`
+  diretamente, sem variável intermediária de nível; a catraca enumera todas as
+  propriedades top-level escritas em `report`; e os statements de status válido
+  são exigidos de forma exata para impedir sufixos invisíveis diferentes entre as
+  duas rotas F1.
+- **Contexto defensivo/autorizado documentado.** `SECURITY.md`, o mapa documental e
+  o Bastão agora deixam explícito que o projeto é open-source próprio e que
+  revisão/hardening/testes são autorizados e defensivos. Briefings futuros devem
+  repetir esse enquadramento.
+- **Sem mudança** em KDF, wire format, Encoder, Decoder, STC, HILL, robust codec,
+  PNG/JPEG codec, SPEC F21 ou medições de redes sociais.
+
+## v2.42.15 — 2026-08-14
+**Fechamento da série 2.42.x: estado de evidência unificado, JPEG robusto honesto e flash determinístico**
+
+Rechecagem externa da v2.42.14 não encontrou blocker, mas mostrou que a mesma família
+de divergência ainda tinha resíduos em outras superfícies. Esta versão fecha esses
+resíduos sem alterar KDF, wire format, Encoder, STC, HILL ou a SPEC F21.
+
+- Threat passa a usar `resolveProtocolState()` para escolher **a redação** da evidência
+  nativa. O peso continua refletindo a evidência bruta, mas combinações como
+  `hasHeader + nativeHeaderMatched` não podem mais produzir `headerOnly` no Protocolo
+  e `header passivo` no Threat.
+- `offline-limit-note` deixa de olhar apenas `hasHeader`: extração nativa, header
+  confirmado, motor de terceiro ou evidência robusta já conhecida suprimem a nota
+  de limitação, evitando mensagem de “métodos podem passar despercebidos” ao lado de
+  uma extração confirmada.
+- A pista JPEG robusta preserva a evidência já confirmada quando o conteúdo interno
+  AES não abre ou a descompressão falha. Novos estados `robust:'locked'` e
+  `robust:'content-error'` impedem queda falsa em “nada encontrado”.
+- O aviso de chave ganhou `clearKeyFlash()` com um único timer; chamadas repetidas
+  reiniciam o período em vez de deixarem timers concorrentes. `Limpar análise`
+  remove o estado corretamente.
+- O realce de chave não depende mais apenas de cor: durante o aviso, o ícone vira
+  `⚠` e a hint visível abaixo do campo explica chave ausente ou chave que não abriu
+  o conteúdo.
+- CHECK 16 cobre as oito combinações das três evidências nativas. CHECK 18 ganhou
+  catraca global do handler para `report.studio`/`decodeStatus`, proibição de mutação
+  via `lastReport.modules.studio` e guarda explícita da pista robusta.
+- As mutações N1 e N2 do parecer externo foram reexecutadas e deixam o harness
+  vermelho; N3 é bloqueada pela exigência de `const nativeEvidenceLevel` derivado
+  diretamente de `resolveNativeEvidence(...).level`.
+
+**Nota de adjudicação:** o parecer descreveu a perda da evidência robusta como cenário
+“mesma imagem, senha correta × senha errada”. No formato produzido pelo nosso Encoder,
+a senha também determina o plano externo de slots do modo robusto; portanto uma senha
+inteiramente errada normalmente falha antes de `rb.status==='ok'`. O defeito ainda é
+real para entrada hostil/malformada em que o envelope externo e o AES interno usem
+credenciais diferentes, e foi corrigido porque o Analyzer trata arquivos como hostis.
+
+## v2.42.14 — 2026-08-14
+**Correção visual do feedback de chave incorreta após smoke da v2.42.13**
+
+A v2.42.13 passou no smoke manual: `2414` e `1424` recuperaram as duas mensagens
+históricas com relatórios públicos idênticos fora de `timestamp`/`decodedMsg`; senha
+errada não recuperou conteúdo; Console sem exceção funcional. O único defeito visível
+foi cosmético: o destaque de chave incorreta aparecia como **duas barras verticais**.
+
+### 🟢 Causa
+
+`flashKey()` aplicava `box-shadow` diretamente no `<input id="dec-key">`. Esse input
+fica dentro de `.key-field`, que usa `overflow:hidden`. O contêiner recortava as partes
+superior e inferior da sombra, deixando visíveis apenas as laterais.
+
+### 🟢 Correção
+
+O flash agora adiciona a classe `key-flash` ao **contêiner `.key-field` inteiro**, que
+recebe borda/sombra laranja completa. A lógica de Decoder, evidência, F1, KDF e formato
+não mudou. O CHECK 18 ganhou uma asserção estrutural para impedir retorno do
+`box-shadow` ao input interno.
+
+## v2.42.13 — 2026-08-14
+**Rechecagem pós-v2.42.12: coerência restante + CHECK 18 protegendo o pipeline**
+
+A v2.42.12 passou no smoke manual e numa rechecagem independente completa: os
+quatro bloqueadores da v2.42.11 foram confirmados como fechados e **nenhum novo
+achado bloqueante** apareceu. Como a v2.42.12 já tinha hash próprio e foi usada no
+smoke/revisão, ela não foi reemitida. Os achados pequenos restantes viraram a
+v2.42.13.
+
+### 🟠 A — flash provisório ainda tinha três portas irmãs
+
+A v2.42.12 adiou o `flashKey()` da rota genérica, mas três falhas com **chave já
+informada** dentro da rota do header ainda piscavam imediatamente antes de F1 e
+motores de terceiros terminarem. Não distinguia o par histórico 2414/1424, mas
+podia produzir a mesma contradição “chave errada” + mensagem recuperada em outros
+casos.
+
+**Correção:** toda falha provisória com chave presente agora usa
+`pendingKeyFlash=true`. Chamadas imediatas permanecem apenas quando realmente não
+há chave e a ação correta é pedir uma.
+
+### 🟠 B/C — uma ordem de evidência em todas as superfícies
+
+O renderer já usava `extracted > headerOnly > passive`, mas o Threat ainda dava
+precedência ao `hasHeader`. Assim uma imagem com header passivo **e** extração
+autenticada podia dizer “extraído” em Protocolo e apenas “header detectado” na
+flag do Threat. O score era igual; o texto não.
+
+`computeThreat` agora usa a mesma precedência. O CHECK 16 ganhou o caso combinado
+`{hasHeader:true,nativeExtracted:true}` e exige a **flag exata** de cada nível, não
+apenas “alguma flag nativa”.
+
+A correção anterior de precedência também escondia um fato passivo útil: quando
+um header público já expôs `payloadBytes`, o ramo `extracted` não mostrava mais o
+tamanho. A linha neutra de recuperação agora preserva a contagem de bytes quando
+ela já é conhecida sem senha. Isso não revela qual camada F1 venceu.
+
+### 🟠 D — CHECK 18 deixou de proteger só a função e passou a proteger o uso
+
+A revisão independente executou três mutações que mantinham 18/18 verde: ignorar
+`resolveNativeEvidence()` no call site, publicar `tailLayer` depois da
+consolidação e anexar `[F1]` ao `decodeStatus`.
+
+O CHECK 18 agora:
+
+- exige que o pipeline chame `resolveNativeEvidence()` com as quatro evidências
+  locais;
+- exige um único **call site real** de `markNativeExtracted(report)` — a definição
+  não conta como chamada;
+- cria uma catraca na região entre `consolidateVerdict` e `lastReport`, onde só
+  são permitidas a atribuição do status consolidado e a publicação `headerOnly`;
+- impede marcadores públicos como `tailLayer`/`decoyLayer`/`alternativeLayer`;
+- cobre também o flash provisório da rota do header com chave.
+
+As três mutações do parecer foram repetidas localmente: as três agora deixam o
+harness vermelho.
+
+### 🟢 E — escopo do round-trip nomeado corretamente
+
+O teste sintético não é “um navegador em Node”. Ele percorre o **codec PNG de
+produção** usado no caminho normal de PNG (`pngEncodeRGBA → pngDecodeRGBA`) em
+`MODE_B` furtivo e cobre transparência/`opaquePixels`. PNG interlaçado/16-bit e
+os caminhos de fallback via canvas ficam explicitamente para a matriz da F17.
+
+Importante: no caminho normal de PNG a produção também usa `pngDecodeRGBA`; o
+canvas é fallback para PNG interlaçado/16-bit e para formatos não-PNG. Portanto a
+ressalva da revisão era válida quanto ao escopo de navegador/fallback, mas forte
+demais ao sugerir que o teste não exercita o caminho normal de produção de PNG.
+
+### 🟢 Texto vivo remanescente do Pro
+
+A própria rechecagem confirmou que `neuralNote` havia sido corrigida, mas uma
+varredura posterior encontrou `decGuideAdaptive` EN ainda recomendando o antigo
+“neural Pro” enquanto o PT já descrevia o produto atual. O fallback do
+`template.html` também continha a frase antiga. Ambos foram sincronizados com a
+build 100% client-side atual.
+
+### Timing F1 — reclassificado, não alterado
+
+A revisão observou corretamente que as duas chamadas de `decoyGcmDecrypt()`
+derivam a mesma chave Argon2id porque o salt da F1 é determinístico por senha.
+Reusar essa chave dentro da operação seria **memoização de trabalho redundante**,
+não mudança de wire format/KDF. Mesmo assim, fica fora desta correção de coerência:
+será medido/otimizado em frente própria para não misturar performance com o fechamento
+da série 2.42.x.
+
+## v2.42.12 — 2026-08-14
+**Fechamento da revisão independente da F1: distinguidor visual, autoria contaminada e teste de portadora**
+
+A v2.42.11 passou no smoke manual: as duas senhas válidas produziram JSONs
+publicamente idênticos quanto à evidência nativa. Antes de publicar, uma revisão
+independente do fonte encontrou duas assimetrias que o relatório exportado não
+mostrava e uma correção documental incompleta. A v2.42.11, portanto, permaneceu
+**release candidate não publicada** e ganhou número novo em vez de ser reemitida
+com outro hash.
+
+### 🔴 A — senha alternativa válida ainda piscava como senha errada
+
+A rota genérica chamava `flashKey()` assim que uma senha não revelava texto ali.
+Só **depois** a sonda da camada alternativa F1 rodava e podia autenticar a mesma
+senha por AES-GCM. Resultado: a mensagem alternativa aparecia corretamente, mas o
+campo de senha recebia por cinco segundos o mesmo destaque visual de uma chave
+incorreta.
+
+**Correção:** a falha genérica agora marca `pendingKeyFlash`. O efeito só é
+publicado depois que F1 e motores aplicáveis terminaram, e apenas se nenhuma
+extração/identificação legítima resolveu o caso. O placeholder de `flashKey()`
+também deixou de ser PT hardcoded e reutiliza `decKeyHint` do i18n.
+
+### 🔴 B — OpenStego podia herdar `nativeExtracted`
+
+`nativeHeaderMatched` era gravado cedo no `report`. Se o header nativo casasse mas
+o payload falhasse, e depois o OpenStego recuperasse uma mensagem, o fechamento
+via apenas `decodedMsg + nativeHeaderMatched` e podia atribuir a mensagem de
+terceiro ao STEGO·STUDIO.
+
+**Correção estrutural:** `nativeHeaderMatched`, `nativePayloadRecovered` e
+`nativeLayerRecovered` são fatos **locais à operação**. A função pura
+`resolveNativeEvidence()` decide, depois das tentativas e da consolidação:
+
+- `extracted` — há mensagem final e uma rota nativa registrou recuperação;
+- `headerOnly` — houve header nativo, mas nenhuma rota nativa produziu a mensagem;
+- `none` — nenhuma das duas.
+
+Só então o estado é publicado no `report`. Um OpenStego que rode depois de um
+header nativo falho permanece terceiro + `headerOnly`, nunca `nativeExtracted`.
+
+### 🟠 C — renderer e texto neural
+
+O renderer do protocolo agora respeita a mesma precedência de
+`resolveProtocolState`: **extracted > headerOnly > passive**. Assim uma extração
+autenticada não perde a linha neutra “payload recuperado” só porque a imagem
+também expõe header passivo.
+
+A string `neuralNote` EN/PT ainda dizia que modelos especializados “não rodam no
+navegador”, apesar de a ajuda já ter sido corrigida. Agora ambas dizem a limitação
+real: modelos podem rodar via WASM/WebGPU; esta build offline single-file é que
+não os embarca.
+
+### CHECK 18 — escopo corrigido e portadora real
+
+A revisão apontou corretamente que os vetores compactos históricos provavam
+**formato/cripto**, não a localização física na portadora. O CHECK 18 foi
+reformulado sem aumentar artificialmente sua promessa:
+
+1. mantém os vetores reais v2.29.0 para retrocompatibilidade de formato;
+2. gera uma imagem RGBA determinística 64×64, com transparência, embute as duas
+   camadas, serializa para PNG, reabre e decodifica as duas senhas — cobrindo
+   `opaquePixels()`, âncora da cauda, offsets e codec PNG;
+3. executa a função pura `resolveNativeEvidence()` numa tabela-verdade, incluindo
+   o caso “header nativo falhou → OpenStego recuperou texto”;
+4. verifica que o flash provisório só pode ocorrer depois das rotas de extração,
+   que as duas rotas usam o mesmo status público de senha válida e que renderer e
+   resolvedor usam a mesma precedência.
+
+O harness continua sendo **cobertura comportamental parcial**, não suíte de
+segurança completa. A mensagem final foi corrigida para não afirmar que inexiste
+qualquer round-trip: agora existe um round-trip F1 direcionado, mas F17 ainda é
+necessária para a matriz completa e corpus malformado.
+
+### Decisão documentada — negação plausível e evidência pública
+
+`SECURITY.md` e a ajuda registram a exceção deliberada: depois de uma extração
+nativa autenticada, o Analyzer confirma que um payload STEGO·STUDIO foi
+recuperado, mas **não exporta qual camada interna o produziu**. Isso suprime apenas
+a identidade da rota, não a existência da extração.
+
+### Não mexido nesta versão
+
+O timing da camada alternativa ainda faz duas derivações Argon2id, contra uma na
+rota principal. A revisão classificou como distinguidor de baixa severidade e a
+questão fica registrada para medição posterior; não se altera cripto/KDF sem
+necessidade medida. F21 continua não implementada.
+
+## v2.42.11 — 2026-08-14
+**Negação plausível: duas senhas válidas agora produzem a mesma classe pública de evidência**
+
+O smoke da v2.42.10 com uma imagem **real da v2.29.0** confirmou que a F1 ainda
+decodificava as duas mensagens corretamente, mas revelou um distinguidor criado
+pelo modelo de evidência da série 2.42.x.
+
+### 🔴 O defeito
+
+- senha da rota principal → mensagem recuperada + `nativeHeaderMatched` +
+  `nativeExtracted` + Threat/Protocolo nativos;
+- senha da camada alternativa → **mensagem AES-GCM autenticada e recuperada**,
+  mas Threat/Protocolo permaneciam no mesmo nível da senha errada.
+
+A camada alternativa não tem MAGIC/header próprio por desenho. O código novo só
+promovia `nativeExtracted` quando `nativeHeaderMatched` já existia, portanto uma
+rota válida ficava fora do novo sistema de evidência. A criptografia da F1 não
+estava quebrada.
+
+### ✅ Correção
+
+`markNativeExtracted(report)` passa a representar o estado público final de uma
+extração nativa bem-sucedida. Depois que uma mensagem nativa sobrevive à
+consolidação:
+
+- `nativeExtracted:true` é publicado;
+- `nativeHeaderMatched` é removido do estado final — ele continua existindo
+  apenas no estado **header localizado, conteúdo não recuperado**;
+- a rota alternativa usa `nativeLayerRecovered` somente como flag local da
+  operação; nenhum `decoy`, `tailLayer`, `alternativeLayer` ou equivalente é
+  exportado.
+
+Isso normaliza as duas senhas válidas sem falsificar um header que a camada
+alternativa deliberadamente não possui.
+
+### UI / Protocolo
+
+O nível `extracted` não exibe mais “header confirmado com a senha”. Ele mostra
+**payload recuperado com a senha informada**, afirmação correta para as duas
+rotas. Threat, Protocolo e JSON passam a compartilhar a mesma classe pública de
+evidência.
+
+### CHECK 18 — vetor histórico, não auto-gerado
+
+O repositório ganhou **dois vetores compactos históricos** extraídos da imagem
+original v2.29.0 (SHA-256 da imagem registrado no manifest): o payload nativo de
+79 bytes e a cauda alternativa de 80 bytes. O teste usa as funções reais de
+Argon2id/AES-GCM e `extractDecoyTail`:
+
+- `2414` → `Teste encode mensagem real v2.29.0`;
+- `1424` → `Mensagem alternativa`;
+- usar uma senha na camada da outra → rejeição;
+- senha errada → rejeição.
+
+Além disso, o check prova que as duas rotas bem-sucedidas terminam com o mesmo
+estado público e que o renderer não volta a alegar header no estado `extracted`.
+
+Harness: **18/18 invariantes**. O smoke em navegador continua obrigatório antes
+do deploy.
+
+### Documentação pública alinhada
+
+README, SECURITY e ajuda deixam de dizer que modelos neurais “não rodam no
+navegador”. Eles podem rodar via WASM/WebGPU; a limitação real é que esta build
+offline single-file **não embarca** esses modelos especializados.
+
+> **Nota posterior (v2.42.12):** esta afirmação estava incompleta: a ajuda longa
+> havia sido corrigida, mas `neuralNote` EN/PT ainda carregava a formulação antiga.
+> A ocorrência viva restante foi corrigida na v2.42.12.
+
+Na mesma rodada foi consolidada a reconciliação documental iniciada em 14/08:
+roadmap = fila ativa, contexto bastão = estado operacional, changelog = história.
+`MEDICAO_REDES_SOCIAIS.md` e a SPEC F21 Rev.5 permanecem preservados; a F21 só
+começa depois da Rev.6 documental.
+
+---
+
+## v2.42.10 — 2026-08-13
+**Busy-state explícito + três lacunas do `analysisGeneration`**
+
+Revisão do smoke da v2.42.9. Dois testes de concorrência **não eram executáveis**:
+a thread principal ocupada engolia Ctrl+V e cliques. Isso virou decisão de
+produto, e a revisão do HTML final achou três lacunas reais.
+
+### 🔒 DECISÃO DE PRODUTO — busy-state explícito
+> **Enquanto uma análise está ativa, entradas e controles que possam mutar ou
+> re-renderizar seu estado ficam bloqueados EXPLICITAMENTE.**
+
+Hoje o bloqueio existe **por acidente** — a thread ocupada. Isso desaparece no
+dia em que o pipeline ceder a thread, ganhar `await` mais longo ou virar Worker,
+e a interação concorrente volta sem ninguém decidir.
+
+`setAnalysisBusy(true|false)`: desabilita `dec-file`, `dec-key`, `btn-analyze`,
+`dec-clear`, `lang-en`, `lang-pt`; marca `aria-busy` no painel e na drop zone;
+libera no `finally` **recalculando** o estado real.
+
+⚠️ **Não substitui** snapshots nem `analysisGeneration` — duas camadas
+deliberadas: UX e estado interno.
+
+### 🔴 A — Ctrl+V global não invalidava a geração
+Havia **dois** caminhos duplicados de ingresso no Decoder (`setupDrop` e o
+`paste` global) e só o primeiro chamava `bumpAnalysisGeneration()`. **Quarta vez
+que corrijo uma superfície e deixo a irmã.**
+
+Centralizado em **`loadDecoderFile(file)`** — ingresso único, com bump e
+busy-state. Drop e paste passam por ele.
+
+**🔴 E o CHECK 17 me deu falsa confiança.** Ele exigia "`bumpAnalysisGeneration`
+em ≥3 pontos" e ficou verde: havia exatamente 3 ocorrências textuais — duas
+chamadas e **a própria definição**. Contei texto em vez de provar propriedade,
+enquanto o caminho de paste não invalidava nada. **Check que aparenta cobertura
+sem ter é pior que check nenhum.**
+
+Reescrito para provar a propriedade: ingresso único existe, paste usa o helper,
+paste **não** escreve `decFile` direto, e a definição não conta como chamada.
+
+### 🔴 B — o `finally` reabilitava o botão cegamente
+`checkDecReady()` calculava o estado certo e a linha seguinte
+(`btn-analyze.disabled=false`) desfazia no instante seguinte. Eu havia afirmado
+o contrário na resposta da v2.42.9 — a afirmação estava errada. Linha removida;
+o `setAnalysisBusy(false)` já recalcula.
+
+### 🟠 C — geração por imagem, não por operação
+`const run = analysisGeneration` sem incremento: reanalisar a MESMA imagem
+mantinha a geração, e o `lastRenderArgs` anterior continuava "corrente" — o
+guard de idioma não mordia. Agora cada análise incrementa.
+
+### 🟠 D — `setLang` assimétrico
+`if (resultsVisible) add('visible')` sem o ramo `false`, e `renderResults` torna
+visível. Virou `toggle('visible', !!resultsVisible)`.
+
+### 🟠 E — o build chamava caracteres de bytes
+`html.length` conta unidades UTF-16; o arquivo tem Unicode. **Divergência de
+~19 KB** — foi por isso que meus números não batiam com os da revisão a sessão
+inteira. Agora reporta `Buffer.byteLength(html,'utf8')` **e** caracteres,
+rotulados. O número da Release é o de bytes.
+
+### 🟢 F — timings do Encoder até `ui-ready`
+O flush parava no PNG, antes da self-analysis de furtividade e do JPEG
+resistente — media menos do que o usuário espera. Agora `coreTotal` (até o PNG)
+e `uiReadyTotal` (até o botão liberar). **Nada otimizado.**
+
+### Validação
+17/17. As quatro correções de estado validadas por injeção deliberada — todas
+detectadas.
+
+---
+
+## v2.42.9 — 2026-08-13
+**Corrida A→B confirmada em navegador, e duas consequências da v2.42.8**
+
+O smoke da v2.42.8 confirmou que o travamento sumiu nas quatro rodadas
+(`correta → vazia → errada → correta`), e encontrou uma corrida real.
+
+### 🔴 A — trocar a imagem durante a análise
+```
+imagem A → analisar → carregar B durante o processamento
+→ preview = B   ·   resultado exibido = A
+```
+`_analisando` guarda o **clique**, não a **operação viva**: `decID`, `decFile` e
+`decFmt` continuavam mutáveis durante os `await`.
+
+**Snapshot + generation token:**
+- `analysisGeneration` incrementa em toda troca de imagem e no limpar;
+- a análise tira `run/runID/runFile/runFmt` no início e usa **só** eles —
+  converti os 6 usos do estado global que restavam dentro da execução;
+- portão `if (obsoleta()) return;` **antes** de gravar `lastReport`,
+  `lastRenderArgs` ou renderizar qualquer coisa;
+- `finally` recalcula o botão com `checkDecReady()` em vez de reabilitar cego.
+
+Descartar em silêncio é o certo: exibir o resultado de A sob o preview de B é
+pior que não exibir nada.
+
+**Troca de idioma:** `lastRenderArgs` ganhou `gen`, e o `setLang` só re-renderiza
+se a geração ainda for a corrente — era o mesmo bug por outro caminho.
+
+### 🟠 B — falha de leitura virava "sem EXIF"
+`parseEXIF(...).catch(()=>({noExif:true}))` tratava erro de I/O como ausência de
+metadado, e `noExif` alimenta o classificador de origem.
+
+**A v2.42.8 agravou isso**, e o defeito é meu: antes a leitura *travava* (ruim e
+visível); depois passou a *rejeitar*, e a rejeição era engolida como ausência
+(ruim e invisível). Trocar travamento por mentira silenciosa é pior.
+
+Agora: `available:false, readError:...`, e a linha que recalculava `noExif`
+passou a exigir `available !== false`.
+
+### 🟢 C — instrumentação do Encoder, sem otimizar
+Lentidão percebida pelo Rick. **Confirmo o que a revisão levantou:** as mudanças
+v2.42.5–v2.42.9 estão em Threat, protocolo, renderer e leitura do **Analyzer** —
+nada no núcleo de encode. A alteração de encode mais próxima é anterior
+(`crypto.getRandomValues` com buffer, medida em 4 recargas por 100 mil bits).
+
+Portanto é **percepção até ser medida**. Marcadores em deflate, crypto, embed e
+PNG; resultado em `window.__encTimings` e no console. Nada foi otimizado.
+
+### CHECK 17 estendido
+Snapshot presente, portão presente, `bumpAnalysisGeneration` chamado em ≥3
+pontos, **nenhum uso de `decID`/`decFile`/`decFmt` global dentro da execução**,
+`setLang` guardado por geração, e `noExif` não recalculado após falha de leitura.
+Validado por injeção.
+
+⚠️ A varredura precisou ignorar comentários — a primeira versão acusou o `decFmt`
+citado num comentário. Terceira vez que erro assim.
+
+---
+
+## v2.42.8 — 2026-08-13
+**Travamento na reanálise e a terceira superfície divergente**
+
+Dois achados do smoke da v2.42.7.
+
+### 🔴 A — pipeline preso em 20%, console limpo
+Reanalisar a MESMA imagem após esvaziar a senha deixava a barra em
+"Strings & bytes brutos" para sempre, **sem uma linha no console**.
+
+**Mecanismo estrutural real, gatilho NÃO reproduzido.** Os três
+`new FileReader()` do `forensics.js` não tinham **nenhum `onerror`**. Cada um vivia em
+`new Promise(res => { r.onload = …; r.readAsArrayBuffer(f) })`. Uma leitura que
+falha **não dispara `onload`** ⇒ promessa pendente para sempre, sem exceção e sem
+log. **Console limpo + barra congelada é a assinatura exata desse defeito.**
+
+**Limite do diagnóstico, dito com precisão:** existe um mecanismo real capaz de
+produzir promessa pendente, e a sequência que o Rick reproduzia deixou de travar
+na v2.42.8. Mas **não foi provado que era esse mecanismo** — o gatilho (por que a
+leitura falharia na segunda tentativa) nunca foi reproduzido, aqui não há
+navegador, e o console limpo é compatível com mais de uma explicação. A correção elimina a possibilidade de promessa pendente **nesses três caminhos
+`FileReader` identificados**; a sequência reproduzida no navegador deixou de
+travar, mas o gatilho original não foi demonstrado e não se deve generalizar a
+conclusão para qualquer forma futura de travamento.
+
+**`readFileBytes(file, rotulo)`** fecha as três saídas — `onerror`, `onabort` e
+timeout de 60 s — e rejeita com erro nomeado (`fileReadError:strings`). As três
+leituras passaram a usá-lo. Mais uma **guarda de reentrância** na análise: se um
+pipeline não chegar ao `finally`, o próximo clique não roda sobre estado pela
+metade.
+
+### 🔴 B — a nota do accordion contradizia a extração
+Com a senha certa a tela mostrava, na mesma caixa:
+
+> Protocolo detectado: STEGO·STUDIO · Decode Status: decifrado com chave ✓
+> *"nenhum texto legível foi recuperado — forneça a chave para tentar decodificar"*
+
+**TERCEIRA superfície do mesmo estado.** A v2.42.5 ensinou o Threat a usar a
+evidência ativa; a v2.42.7 ensinou o badge do Protocolo; a **nota interpretativa**
+(`forensics.js`, `interpModule`) continuava lendo só `hasHeader`.
+
+Agora deriva de `resolveProtocolState`, com dois textos novos:
+`interpStudioExtracted` e `interpStudioHeaderOnly`.
+
+**Padrão registrado — terceira vez:** corrijo uma superfície e não enumero as
+irmãs. Aconteceu no XSS (v2.42.0 → 4 sinks restantes), no Steghide/BMP (v2.42.3 →
+a ajuda contradizia a matriz) e agora aqui.
+
+### CHECK 16 estendido e CHECK 17 novo
+- **16** passou a exigir que a *nota* também derive de `resolveProtocolState`, e
+  que `extracted` tenha precedência sobre a nota de cifra.
+- **17** exige `readFileBytes` com `onerror`/`onabort`/timeout, **um único**
+  `FileReader` em código no bundle, e a guarda de reentrância.
+
+Ambos validados por injeção. O 17 achou, ainda na primeira execução, um
+`FileReader` que eu havia deixado passar.
+
+### Não corrigido
+O Threat 88 do PNG com senha errada **fica como está**: a imagem contém stego de
+verdade e os sinais estatísticos são válidos. O que a senha certa acrescenta é
+confirmação, não a suspeita.
+
+---
+
+## v2.42.7 — 2026-08-12
+**Threat e Protocolo divergiam sobre a mesma evidência**
+
+Achado do smoke test da v2.42.6. Não é falha criptográfica; é a contradição que
+o projeto inteiro existe para não cometer.
+
+### O sintoma
+Com a senha correta, na mesma tela:
+- Threat: `payload STEGO·STUDIO extraído`
+- accordion Protocolo: `Indeterminado (possível cifra)`
+
+### A causa
+A cadeia de `if` do renderer (`results.js:294`) consultava **só** `hasHeader`,
+que vem do M7 passivo — o qual roda **sem senha** e não enxerga payload furtivo.
+Quando a v2.42.5 ensinou o Threat a usar a evidência ativa
+(`nativeHeaderMatched` / `nativeExtracted`), **o accordion ficou para trás**.
+Dois renderizadores do mesmo estado que derivaram.
+
+### A correção
+`resolveProtocolState(r)` — **função pura**, fonte única para UI e testes, com
+precedência por força da evidência:
+
+```
+nativeExtracted → nativeHeaderMatched → hasHeader → deepScan → cipher → none
+```
+
+A distinção passa para as linhas internas: "confirmado com a senha informada" vs
+"confirmado com a senha — conteúdo não recuperado" vs o caminho passivo, que é o
+único com `payloadBytes` conhecido (o M7 leu o header; os outros não).
+
+Ser função pura é o ponto: permite o teste exercitar a lógica **de produção** em
+vez de reimplementá-la e concordar consigo mesmo.
+
+### CHECK 16 — Threat e Protocolo não divergem
+Roda `computeThreat` **e** `resolveProtocolState`, ambos extraídos do HTML
+construído, sobre os mesmos relatórios, e exige concordância nos dois sentidos:
+- Threat afirma protocolo nativo ⇒ Protocolo não pode dizer indeterminado/nenhum;
+- Protocolo diz nativo ⇒ Threat tem de ter registrado alguma coisa.
+
+Quatro estados cobertos: `extracted:75 · headerOnly:55 · passive:75 · cipher:35`.
+
+**Validado por injeção:** desliguei a leitura da evidência ativa no renderer e o
+check reproduziu o bug do smoke — "protocolo resolveu como 'cipher', esperado
+'extracted'".
+
+### Versionamento
+Número novo em vez de reemitir a v2.42.6, que já tem hash próprio e foi usada no
+smoke. Dois artefatos com o mesmo número já nos custaram meia sessão antes.
+
+---
+
+## v2.42.6 — 2026-08-12
+**`nativeExtracted` afirmava extração onde só havia header**
+
+Correção semântica levantada na revisão externa, **antes** do smoke test — para
+não gastar duas rodadas de teste manual.
+
+### O problema
+A v2.42.5 gravava `nativeExtracted:true` no instante em que o header era
+localizado com a senha. Mas **seis ramos** do decode ainda terminam com
+`decodedMsg=null` depois disso:
+
+- AES-GCM reprovando em corpo corrompido (`decStatusCipherWrongKey`)
+- payload cifrado sem senha informada (`decStatusCipherFound`)
+- `inflate` falhando no ramo comprimido
+- texto ilegível abaixo do corte de `isReadableText`
+- e mais dois no caminho legado
+
+Em todos, a flag diria "payload extraído" com a tela vazia. **Eu criei uma
+assimetria com o nosso próprio código:** o modo robusto já distingue
+`robust:true` de `robust:'damaged'` exatamente por isso.
+
+### A correção
+Dois achados distintos:
+
+| campo | quando | peso | flag |
+|---|---|---|---|
+| `nativeHeaderMatched` | header localizado com a senha | +20 | "header localizado, conteúdo não recuperado" |
+| `nativeExtracted` | mensagem sobrevive à consolidação | +40 | "payload extraído" |
+
+O `nativeExtracted` é gravado **depois** do `consolidateVerdict`, de propósito:
+se a consolidação concluir que o "texto" é ruído estatístico, não houve extração
+alguma. Os dois entram no `hardStego` — header localizado é estrutural.
+
+Escala resultante, medida: **30 (senha errada) → 50 (header sem conteúdo) →
+70 (extração confirmada)**.
+
+### Regressão
+CHECK 15 estendido: header sem conteúdo tem de pesar **mais** que nada e
+**menos** que extração, e não pode carregar a flag de extração. Validado por
+injeção — colapsei os dois níveis e o check acusou "pesou igual (70 vs 70)".
+
+---
+
+## v2.42.5 — 2026-08-12
+**Dois defeitos comportamentais achados por smoke test real**
+
+A v2.42.4 não foi publicada. Cinco relatórios exportados de um smoke test no
+navegador expuseram o que 14 invariantes verdes não pegavam.
+
+**Reprodução antes de corrigir:** `computeThreat` extraído do HTML construído e
+rodado contra os cinco JSONs — os cinco scores reproduziram exatamente.
+
+### 🔴 A — extração PNG confirmada não pesava no Threat
+O M7 do forensics roda `extractLSBStudio(imageData)` **sem senha**; payload
+furtivo tem header mascarado, então `hasHeader=false`. O decode nativo
+(`main.js:127`) roda **com** a senha, recupera tudo e **nunca escrevia de volta
+em `report.studio`** — as outras 7 chamadas fazem isso; o caminho nativo era o
+único de fora. Threat idêntico com senha certa e errada.
+
+**Correção:** `nativeExtracted:true` gravado no decode; **+40** em
+`computeThreat`, espelhando o `robust===true`. **30 → 78.**
+
+### 🔴 B — imagem C2PA limpa saturando em 100
+**Circularidade, não limiar.** Ablação sobre o relatório real:
+
+| alteração | score |
+|---|---|
+| base | **100** |
+| `c2pa.manifestDetected=false` | **100** ← a supressão não fazia nada |
+| `cipher` + `lsbr` = false | **0** ← a supressão funciona, quando roda |
+
+`hardStego`, o interruptor que desliga a supressão C2PA, incluía
+`lsbrDetected` e `cipherSuspicion` — estatísticos, e exatamente o que conteúdo
+C2PA produz. **A supressão era desligada pelos sinais que ela existe para
+suprimir.**
+
+Por que dispararam:
+- `lsbrDetected` veio do caminho **corroborado** (`wsDetect 40,3% && rsSoft
+  9,0%`), não do RS. O código já avisava que o WS dá 53–80% em imagem limpa.
+- `cipherSuspicion` varre ~39 janelas de 512 bits e dispara se **qualquer uma**
+  tiver chi<3,84. **Sem correção para comparações múltiplas.**
+
+**Correção — reclassificação, NENHUM limiar alterado** (0,15 / 0,08 / 3,84
+intactos): `lsbrStrong` (= `rsDetect`) exposto; `hardStego` passa a exigir
+estrutura ou extração; o +45 do LSBR corroborado vira suprimível por contexto
+C2PA, o forte nunca. **Alcance restrito a imagens com C2PA.** 100 → **0**, com
+flag explicando.
+
+### 🟢 C e D
+`synth.flags` ignorava `labelVars` — relatório saía com `{ratio}` cru
+(`forensics.js:1294`). E o `#paste-anchor` tinha `aria-hidden="true"` **com**
+`tabindex="0"`; agora `tabindex="-1"`, `role="note"`, `aria-label`. Zero
+`aria-hidden="true"` no build.
+
+### CHECK 15 — primeiro invariante que EXECUTA lógica
+Roda o `computeThreat` real contra relatórios mínimos derivados dos casos.
+Verifica: extração confirmada pesa; C2PA mole não satura; evidência dura na
+mesma imagem C2PA continua acusando; RS forte não é suprimível. Validado por
+injeção deliberada das duas regressões.
+
+Relatórios do smoke test guardados em `test/fixtures/reports/`.
+
+### Erro meu que a reprodução expôs
+A flag ainda dizia *"certificado por C2PA"* em PT — corrigi só o EN na v2.42.4.
+Mesmo padrão da v2.42.0: correção parcial declarada como completa.
+
+---
+
+## v2.42.4 — 2026-08-11
+**Correções da revisão externa da v2.42.3 — 8 achados, todos confirmados**
+
+A v2.42.3 **chegou à Cloudflare como build intermediária de teste**, mas não
+recebeu Release nem foi tratada como versão corrente — a correção destes achados
+virou a v2.42.4. (A formulação anterior, "não foi publicada", era simples demais.)
+Cada achado foi verificado no código
+antes de aceitar.
+
+### 🔴 1. A ajuda prometia Steghide/BMP — a ferramenta não lê
+`helpDecB` (EN+PT): *"Steghide — em BMP e em JPEG, incluindo a cifragem AES-256"*.
+Duas afirmações falsas de uma vez:
+- **BMP não está integrado** (`decoder.js:1032`): o canvas entrega top-down, o
+  steghide amostra bottom-up, e isso muda o mapeamento do Selector. Núcleo
+  escrito e validado, nunca ligado.
+- **"AES-256"** sugere cobertura da cifra — são **2 de ~129** pares cifra/modo.
+
+**Gravidade:** quem abrisse um BMP do Steghide via "nenhuma mensagem" e podia
+concluir que o arquivo estava limpo. A `COMPATIBILITY.md` criada na v2.42.3 para
+declarar limites dizia o certo enquanto a interface dizia o contrário.
+
+### 🔴 2. `setStatus` → texto puro (nem DOMParser, nem regex)
+A revisão perguntou qual das duas e respondeu: **nenhuma**. Os três chamadores
+(`files.js:503`, `files.js:590`, `main.js:334`) sempre montavam
+`<span class="ok|err">…</span>` para ser desmontado dentro da função. **Dois
+interpolam `e.message`**, que pode carregar conteúdo do arquivo.
+
+```js
+function setStatus(id, text, cls) {
+  termWrite(id, [{ text: String(text), cls: cls || null }]);
+}
+```
+
+Reescrita duas vezes (innerHTML → DOMParser → texto puro) quando a correção era
+parar de processar HTML. **Regressão no CHECK 12**: falha se `setStatus` voltar a
+conter `DOMParser`, `innerHTML`, `createElement` ou strip por regex, e se algum
+chamador passar markup. Validado por injeção.
+
+### 🟠 3. CHECK 13 fail-closed
+Comentários deixaram de ser ignorados. Uma heurística de comentário pode, em
+forma sintática inesperada, **esconder código real** — e esse erro é silencioso.
+Falso positivo é barato; sink escondido não. Allowlist regravada: **27**
+ocorrências textuais (25 sinks + 2 em comentário).
+
+### 🟠 4. "neural models do not run in a browser" — categórico demais
+Modelos rodam em navegador via WASM/WebGPU. O limite é **nosso**: esta build não
+embarca os modelos. Trocado por decisão de produto declarada, não impossibilidade
+da plataforma.
+
+### 🟠 5. Base de validação por ferramenta na matriz
+O rodapé "medido em 11/08" cobria só o Steghide, mas a página fala de OpenStego,
+OutGuess e F5. Coluna **Validation basis** por linha, e a distinção explícita:
+validação histórica **é evidência**, só é mais antiga.
+
+### 🟢 6–8. Estados defasados
+- `README.md` e `SECURITY.md` agora **linkam** a matriz (ela fica em `docs/`).
+- CONTEXTO: i18n 696→**694**; ordem dos módulos `pro`→**`warnings`**; "subir a
+  v2.42.2"→v2.42.4; **X (Twitter) "não recomprime"→"às vezes"** — a rodada 3 da
+  medição corrigiu isso e o resumo carregava a conclusão da rodada 2.
+- ROADMAP: ponteiro movido para "F21 implementada".
+
+### Validação
+14/14, i18n 694/694. Oito achados conferidos no código antes de aceitar; nenhum
+recusado.
+
+---
+
 ## v2.42.3 — 2026-08-11
 **Catraca 31→25 e matriz de compatibilidade (fecha a F20)**
 
@@ -823,10 +1582,13 @@ que some assim que alguém renomeia ou rebaixa a imagem.
   coeficientes — e é justamente aí que a identificação mais serve, já que
   Facebook e X publicam progressivo.
 
-**⚠️ X/Twitter ficou de fora de propósito.** A medição provou que ele **não
-recomprime**: faz transcodificação sem perda (saída byte a byte idêntica a
-`jpegtran -progressive -copy none`), preservando as tabelas da origem. Não tem
-assinatura própria — e afirmar que tem gerava falso positivo comprovado em
+**⚠️ X/Twitter ficou de fora de propósito.** **Conclusão intermediária daquela
+rodada:** os arquivos então medidos indicavam transcodificação sem perda (saída
+byte a byte idêntica a `jpegtran -progressive -copy none`), preservando as
+tabelas da origem. **A Rodada 3 posterior corrigiu a generalização:** o X também
+recomprimiu outra imagem do mesmo envio; portanto o comportamento é condicional
+e não há assinatura estável. Não tem assinatura própria — e afirmar que tem
+gerava falso positivo comprovado em
 qualquer JPEG intocado do mesmo editor.
 
 **Correção:** a nota do painel de coeficientes DCT apontava para um "painel de
@@ -1035,6 +1797,10 @@ celular) passam a ter análise útil e honesta, não só metadados/EXIF.
 
 ## v2.31.0 — 2026-07-17
 **Decoder agora lê Steghide (BMP + JPEG/DCT, com AES-256)**
+
+> ⚠️ *Estado de época (v2.31.0).* No produto atual **apenas o JPEG está
+> integrado**, e a cobertura de cifra é sem-cifra + rijndael-128/CBC. Ver
+> `docs/COMPATIBILITY.md`.
 
 Segundo motor de terceiro do Decoder, e o mais elaborado até agora. Recupera
 mensagens escondidas pelo **Steghide** (0.5.x):

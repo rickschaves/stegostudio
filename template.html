@@ -14,7 +14,7 @@
 <link rel="icon" type="image/png" sizes="512x512" href="/android-chrome-512x512.png">
 
 <!-- SEO -->
-<meta name="description" content="STEGO·STUDIO is a free, 100% client-side tool for steganography and image forensics. Hide encrypted messages in images — in the pixels, or in the JPEG coefficients so they survive being posted to social media — and analyze any image for hidden data and origin (photo, screenshot, digital art, or AI-generated). No uploads, fully private.">
+<meta name="description" content="STEGO·STUDIO is a free, 100% client-side tool for steganography and image forensics. Hide encrypted messages in images — in lossless pixels or with a recompression-resistant JPEG mode — and analyze any image for hidden data and origin (photo, screenshot, digital art, or AI-generated). No uploads, fully private.">
 <meta name="keywords" content="steganography, LSB, image forensics, hidden message, AI image detection, synthetic image, EXIF, C2PA, encrypt image, decode image, stego tool, esteganografia, forense de imagem">
 <meta name="author" content="RASC & JOI">
 <meta name="robots" content="index, follow">
@@ -57,7 +57,7 @@
 <body>
 
 <header>
-  <div class="logo">STEGO<span class="e">·</span>STUDIO <span style="font-size:0.85rem;letter-spacing:2px;color:var(--dim)">v2.42.3 // ENCODER · ANALYZER · DECODER</span></div>
+  <div class="logo">STEGO<span class="e">·</span>STUDIO <span style="font-size:0.85rem;letter-spacing:2px;color:var(--dim)">v2.42.16 // ENCODER · ANALYZER · DECODER</span></div>
   <div class="header-meta"><span data-i18n="tagline1">Esteganografia LSB com criptografia AES-256 opcional</span><br><span data-i18n="tagline2">Análise forense integrada · Exportação JSON</span></div>
 </header>
 
@@ -285,7 +285,7 @@
           <p data-i18n-html="decGuide3"><b>3.</b> Se a imagem contém uma mensagem cifrada, insira a <b>chave</b> e analise de novo para decodificá-la. A chave também é o que revela mensagens em <b>Modo furtivo</b> — o cabeçalho delas é cifrado, então sem a chave são indistinguíveis de ruído. Mensagens em texto puro são recuperadas automaticamente, sem chave. O Decoder também lê imagens do <b>OpenStego</b>, do <b>Steghide</b> e do <b>OutGuess</b> — inclusive Steghide em JPEG (domínio DCT) com AES — automaticamente sem senha, ou com a senha quando informada.</p>
           <p data-i18n-html="decGuide4"><b>4.</b> A <b>Probabilidade de origem</b> estima se a imagem é fotografia, screenshot, arte digital ou gerada por IA. São scores independentes — vários podem ser altos. O maior é a origem mais provável.</p>
           <p data-i18n-html="decGuide5"><b>5.</b> Abra os <b>indicadores</b> para ver os detalhes técnicos de cada sinal e entender por que cada score foi atribuído.</p>
-          <p class="qg-tip" data-i18n-html="decGuideAdaptive">⚠ Alguns métodos deixam apenas traços estruturais fracos. Stego <b>adaptativo</b> e LSB matching podem manter o Threat Score modesto mesmo com mensagem presente — a análise neural <b>Pro</b> (com o servidor online) detecta melhor esses casos. Um score baixo não garante que a imagem esteja limpa.</p>
+          <p class="qg-tip" data-i18n-html="decGuideAdaptive">⚠ Alguns métodos deixam apenas traços estruturais fracos. Stego <b>adaptativo</b> e LSB matching podem manter o Threat Score modesto mesmo com mensagem presente — esta build não detecta esses métodos com confiabilidade. Um score baixo não garante que a imagem esteja limpa.</p>
           <p class="qg-tip" data-i18n-html="decGuideTip">ℹ A classificação de origem é heurística, não uma prova definitiva. Scores próximos entre si indicam que a ferramenta não conseguiu determinar a origem com certeza.</p>
         </div>
       </details>
@@ -311,7 +311,7 @@
           <input type="password" id="dec-key" data-i18n-ph="keyPlaceholder" placeholder="Opcional">
           <button type="button" class="key-clear-btn" id="dec-key-clear" aria-label="Limpar senha" style="display:none">✕</button>
         </div>
-        <div class="hint-text" data-i18n="decKeyHint2">Necessária apenas se a mensagem foi cifrada. A análise forense roda independente da chave.</div>
+        <div class="hint-text" id="dec-key-hint" data-i18n="decKeyHint2">Necessária apenas se a mensagem foi cifrada. A análise forense roda independente da chave.</div>
       </div>
 
       <button class="btn btn-dec" id="btn-analyze" data-i18n="analyzeBtn" disabled>ANALISAR IMAGEM</button>
@@ -527,7 +527,7 @@
         <div class="help-text">
           <p data-i18n-html="helpS6a">Esta é uma ferramenta <b>heurística</b>, não um classificador definitivo. Ela analisa propriedades estatísticas e metadados, sem rede neural. Nada roda em servidor: se um método exige modelo treinado, esta ferramenta não o detecta.</p>
           <p data-i18n-html="helpS6b">Casos difíceis: imagens recomprimidas por redes sociais (que apagam metadados e alteram pixels), fotos muito editadas, e imagens de IA de última geração que imitam ruído de câmera. Use os resultados como <b>indício investigativo</b>, cruzando com outras evidências — não como prova isolada.</p>
-          <p data-i18n-html="helpS6c">No lado da esteganografia, a ferramenta detecta com confiança o <b>LSB Replacement</b> (via RS/WS) e mensagens em texto puro ou fracamente ocultas. Para métodos neurais como o SteganoGAN ela oferece apenas uma heurística de <b>nível de suspeita</b> — consegue sinalizar a assinatura tipo GAN, mas não confirmá-la sem o modelo treinado, que não roda no navegador. Ela <b>não</b> detecta com confiabilidade métodos adaptativos como HILL, UNIWARD ou J-UNIWARD. Detectá-los exige modelos neurais treinados, que não rodam em navegador — então esta ferramenta simplesmente não os detecta. É um limite real, não temporário: <b>a ausência de detecção aqui não é evidência de que a imagem esteja limpa.</b> Se você precisa desse nível de análise, use um toolbox dedicado de esteganálise como o <b>Aletheia</b>, de Daniel Lerch (MIT, <code>github.com/daniellerch/aletheia</code>).</p>
+          <p data-i18n-html="helpS6c">No lado da esteganografia, a ferramenta detecta com confiança o <b>LSB Replacement</b> (via RS/WS) e mensagens em texto puro ou fracamente ocultas. Para métodos neurais como o SteganoGAN ela oferece apenas uma heurística de <b>nível de suspeita</b> — consegue sinalizar uma assinatura tipo GAN, mas não confirmá-la sem um modelo treinado. Modelos desse tipo podem rodar no navegador via WASM/WebGPU; esta build offline de arquivo único é que <b>não os embarca</b>. Ela <b>não</b> detecta com confiabilidade métodos adaptativos como HILL, UNIWARD ou J-UNIWARD porque não inclui os modelos especializados necessários. <b>A ausência de detecção aqui não é evidência de que a imagem esteja limpa.</b> Se você precisa desse nível de análise, use um toolbox dedicado de esteganálise como o <b>Aletheia</b>, de Daniel Lerch (MIT, <code>github.com/daniellerch/aletheia</code>).</p>
         </div>
       </details>
     </div>
@@ -550,7 +550,11 @@
   <div class="footer-opensource" data-i18n-html="footerOpensource">Software livre sob GPL-3.0 &middot; código em <code>github.com/rickschaves/stegostudio</code></div>
 </footer>
 
-<div id="paste-anchor" tabindex="0" style="position:fixed;opacity:0;pointer-events:none;width:1px;height:1px;top:0;left:0" aria-hidden="true"></div>
+<!-- Alvo invisível que recebe foco para capturar Ctrl+V. NÃO leva
+     aria-hidden: um elemento oculto para tecnologia assistiva que recebe foco
+     deixa quem usa leitor de tela sem saber onde está — o Chrome bloqueia e
+     avisa. Fica no fluxo de acessibilidade, com rótulo, em vez de escondido. -->
+<div id="paste-anchor" tabindex="-1" role="note" aria-label="Área de colagem de imagem" style="position:fixed;opacity:0;pointer-events:none;width:1px;height:1px;top:0;left:0"></div>
 <canvas id="canvas" style="display:none"></canvas>
 
 <!-- hash-wasm Argon2id (UMD, wasm base64 embutido) — usado no KDF do AES (FRENTE #9).

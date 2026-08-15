@@ -17,7 +17,7 @@ const SRC = path.join(__dirname, 'src');
 const DIST = path.join(__dirname, 'dist');
 
 // Versão do artefato final. Convenção: pontos entre números (nunca underscore).
-const VERSION = '2.42.3';
+const VERSION = '2.42.16';
 
 // ORDEM DE CONCATENAÇÃO — preserva a ordem-fonte do monolito v2.23.1.
 // hill.js e stc.js foram retirados de dentro do span do encoder (span 100%
@@ -150,7 +150,12 @@ function build({ write = true } = {}) {
     const outName = `stego_studio_v${VERSION}.html`;
     const outPath = path.join(DIST, outName);
     fs.writeFileSync(outPath, html);
-    console.log(`  ✓ build: dist/${outName}  (${html.length.toLocaleString()} bytes)`);
+    // `html.length` conta UNIDADES DE CÓDIGO UTF-16, não bytes — o arquivo tem
+    // Unicode (STEGO·STUDIO, acentos, emojis nos textos), então as duas medidas
+    // divergem. Reportar o tamanho REAL em disco, que é o que vai na Release e
+    // o que o usuário confere com sha256sum.
+    const bytesReais = Buffer.byteLength(html, 'utf8');
+    console.log(`  ✓ build: dist/${outName}  (${bytesReais.toLocaleString()} bytes · ${html.length.toLocaleString()} caracteres)`);
   }
   return html;
 }

@@ -11,8 +11,10 @@ including with the network off.
 ## What it does
 
 **Encoder** — hides an encrypted message inside an image. Either in the pixels
-of a PNG, or in the DCT coefficients of a JPEG so the message survives the
-recompression that social platforms apply when you post a picture.
+of a PNG, or in the DCT coefficients of a JPEG using a recompression-resistant
+mode whose parameters were measured against real social-platform workflows.
+Those pipelines change over time, so the measurements — not a universal promise
+— define the tested boundary.
 
 **Analyzer** — examines any image for traces of hidden data: RS, WS and
 chi-square analysis, structural inspection, platform fingerprinting, and a
@@ -20,7 +22,8 @@ classifier that estimates whether an image is a photograph, a screenshot,
 digital art, or AI-generated.
 
 **Decoder** — reads back what the Encoder wrote, and also attempts extraction
-for OpenStego, Steghide and Outguess.
+for OpenStego, Steghide and Outguess. Coverage varies by tool, format and cipher;
+[docs/COMPATIBILITY.md](docs/COMPATIBILITY.md) states the boundaries.
 
 Messages are encrypted with AES-256-GCM using a key derived with Argon2id. The
 password never leaves the page, because nothing leaves the page.
@@ -32,11 +35,13 @@ password never leaves the page, because nothing leaves the page.
 This matters more than the feature list.
 
 The tool **cannot** reliably detect modern adaptive steganography — HILL,
-UNIWARD, J-UNIWARD and similar. Detecting those takes trained neural models,
-which do not run in a browser. **Finding nothing here is not evidence that an
-image is clean.** If you need that level of analysis, use a dedicated
-steganalysis toolbox such as [Aletheia](https://github.com/daniellerch/aletheia)
-by Daniel Lerch.
+UNIWARD, J-UNIWARD and similar. That work generally needs specialised trained
+models. Models can run in browsers through technologies such as WebAssembly or
+WebGPU; this offline single-file build deliberately does **not ship those
+models** because of their size and complexity. **Finding nothing here is not
+evidence that an image is clean.** If you need that level of analysis, use a
+dedicated steganalysis toolbox such as
+[Aletheia](https://github.com/daniellerch/aletheia) by Daniel Lerch.
 
 The tool also separates what it can *prove* from what it can only *suggest*, and
 labels which is which. A number without a visible justification behind it is
@@ -52,7 +57,7 @@ build anything to use the tool. To build it yourself:
 ```sh
 node unpack_assets.js   # recreates src/fonts/ from ASSETS_BASE64.md
 node build.js           # assembles dist/stego_studio_v<VERSION>.html
-node test.js            # 12 invariants
+node test.js            # 18 invariants
 ```
 
 No bundler and no dependencies. `build.js` concatenates 16 JavaScript modules,
@@ -71,7 +76,7 @@ before writing.
 src/            16 modules + styles.css + hash-wasm.js
 template.html   page markup; the build injects CSS and JS into it
 build.js        the build
-test.js         12 invariants (syntax, i18n parity, offline guarantee, XSS, ...)
+test.js         18 invariants (syntax, i18n parity, offline guarantee, XSS, ...)
 HTML_PRODUCAO/  the published single-file build
 docs/           changelog and the social-platform measurements
 ```

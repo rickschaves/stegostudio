@@ -1,0 +1,260 @@
+{
+  "_tool": "STEGO·STUDIO v2.42.4",
+  "_schema": "forensic-report-v2",
+  "_hint": "Envie este arquivo para sua IA de preferência para análise aprofundada.",
+  "timestamp": "2026-08-13T01:23:33.565Z",
+  "threat": {
+    "score": 40,
+    "flags": [
+      "payload do modo resistente extraído"
+    ]
+  },
+  "synth": {
+    "score": 53,
+    "level": "MÉDIA",
+    "flags": [
+      "JPEG sem metadados EXIF de câmera",
+      "Entropia regional muito uniforme",
+      "Anomalias de crominância e saturação"
+    ]
+  },
+  "origin": {
+    "fotografia": 35,
+    "screenshot": 0,
+    "arte_digital": 15,
+    "sintetica": 53,
+    "topCategory": "sintetica",
+    "signals": {
+      "fotografia": [
+        {
+          "labelKey": "sigSensorNoise",
+          "weight": 20
+        },
+        {
+          "labelKey": "sigHighChroma",
+          "weight": 15
+        }
+      ],
+      "screenshot": [],
+      "arte_digital": [
+        {
+          "labelKey": "sigControlledChroma",
+          "weight": 15
+        }
+      ],
+      "sintetica": [
+        {
+          "labelKey": "sigSyntheticPixels",
+          "weight": null
+        }
+      ]
+    }
+  },
+  "decodedMsg": "Teste v2.42.4 — ação, João, 😀",
+  "decodeStatus": "Mensagem recuperada dos coeficientes do JPEG (modo mais resistente).",
+  "modules": {
+    "format": {
+      "cat": "lossy",
+      "ext": "JPEG",
+      "encOk": false,
+      "msg": "JPEG usa compressão DCT lossy — LSBs são destruídos na compressão. Análise de coeficientes DCT, IA, strings e metadados funcionam."
+    },
+    "metadata": {
+      "filename": "stego_resistente_1786583496974_pass_2414.jpg",
+      "size": "126.6 KB",
+      "type": "image/jpeg",
+      "formatCategory": "lossy",
+      "width": 720,
+      "height": 1080,
+      "pixels": 777600,
+      "lastModified": "2026-08-13T01:11:45.065Z"
+    },
+    "strings": {
+      "count": 245,
+      "interesting": [],
+      "adversarial": [],
+      "appendedData": false,
+      "appendedBytes": 0,
+      "note": "Strings de estrutura interna do codec foram filtradas automaticamente."
+    },
+    "jpegDCT": {
+      "available": true,
+      "progressive": false,
+      "components": 3,
+      "width": 720,
+      "height": 1080,
+      "acTotal": 1151010,
+      "acNonZero": 157332,
+      "nonZeroRatio": 0.13669038496624702,
+      "distinctValues": 275,
+      "avgAbsCoeff": 4.565466656497089,
+      "maxAbsCoeff": 142,
+      "chi": 1182.589617604371,
+      "chiPairs": 32,
+      "chiPerPair": 36.95592555013659,
+      "firstOrderAnomaly": false,
+      "bandLow": 40570,
+      "bandMid": 75719,
+      "bandHigh": 41043,
+      "verdict": "noFirstOrderAnomaly"
+    },
+    "studio": {
+      "hasHeader": false,
+      "payloadBytes": 0,
+      "shuffled": false,
+      "available": false,
+      "note": "Protocolo STEGO·STUDIO usa LSB — indisponível em JPEG.",
+      "robust": true,
+      "robustCorrected": 0
+    },
+    "lsb": {
+      "available": false,
+      "note": "LSB indisponível — compressão JPEG reescreve os bits menos significativos. Resultados seriam ruído de codec, não esteganografia."
+    },
+    "frequency": {
+      "spikes": 9,
+      "evenOddBias": "0.0709",
+      "biasAnomaly": false,
+      "biasReliable": false,
+      "biasLowComplexity": false,
+      "dominantRGB": [
+        189,
+        172,
+        0
+      ]
+    },
+    "entropy": {
+      "shannon": "12.4252",
+      "uniqueColors": 76297,
+      "avgNoise": "7.92",
+      "noiseAnomaly": false,
+      "noiseThreshold": 0.8,
+      "highEntropy": false
+    },
+    "color": {
+      "uniqueAlpha": 1,
+      "alphaAnomaly": false,
+      "partialAlpha": 0,
+      "rareClusters": 5,
+      "rareSuspicious": false,
+      "rareDetails": [
+        "RGB(184,144,104): 777px",
+        "RGB(144,136,120): 771px",
+        "RGB(112,96,80): 744px",
+        "RGB(120,104,88): 725px",
+        "RGB(56,40,32): 714px"
+      ]
+    },
+    "dct": {
+      "available": true,
+      "blockCount": 529,
+      "stdDev": "66.24",
+      "mean": "93.1",
+      "suspicious": false
+    },
+    "gradients": {
+      "available": true,
+      "totalEdges": 33610,
+      "sharpRatio": "10.5%",
+      "sharpEdges": 3541,
+      "softEdges": 30069,
+      "suspicious": true
+    },
+    "chroma": {
+      "available": true,
+      "avgSaturation": "29.7%",
+      "highSatRatio": "10.4%",
+      "cbVariance": "7.62",
+      "crVariance": "6.75",
+      "oversaturated": false,
+      "uniformChroma": true,
+      "suspicious": true
+    },
+    "exif": {
+      "found": false,
+      "fields": {},
+      "aiSoftware": null,
+      "hasCamera": false,
+      "hasGPS": false,
+      "noExif": true
+    },
+    "c2pa": {
+      "found": false,
+      "manifestDetected": false,
+      "aiGenerator": null,
+      "ca": null,
+      "certDate": null,
+      "digitalSourceType": null,
+      "manifestPresent": false,
+      "signals": [],
+      "rawSoftware": null
+    },
+    "_regionalEntropyVar": 0.5692461053597082,
+    "ai": {
+      "score": 53,
+      "level": "MÉDIA",
+      "signals": [
+        {
+          "labelKey": "aiLblJPEGNoEXIF",
+          "detailKey": "aiDetJPEGNoEXIF",
+          "level": "warn"
+        },
+        {
+          "labelKey": "aiLblEntropyVery",
+          "detailKey": "aiDetEntropyVery",
+          "detailVars": {
+            "spread": "0.57"
+          },
+          "level": "crit"
+        },
+        {
+          "labelKey": "aiLblChromaAnomalies",
+          "detailKey": "aiDetChromaAnomalies",
+          "detailVars": {
+            "detail": "crominância uniforme (Cb:7.62 Cr:6.75)"
+          },
+          "level": "warn"
+        }
+      ],
+      "formatCat": "lossy",
+      "formatExt": "JPEG",
+      "cameraVeto": false,
+      "vectorArtVeto": false,
+      "digitalRenderVeto": false
+    },
+    "origin": {
+      "fotografia": 35,
+      "screenshot": 0,
+      "arte_digital": 15,
+      "sintetica": 53,
+      "topCategory": "sintetica",
+      "signals": {
+        "fotografia": [
+          {
+            "labelKey": "sigSensorNoise",
+            "weight": 20
+          },
+          {
+            "labelKey": "sigHighChroma",
+            "weight": 15
+          }
+        ],
+        "screenshot": [],
+        "arte_digital": [
+          {
+            "labelKey": "sigControlledChroma",
+            "weight": 15
+          }
+        ],
+        "sintetica": [
+          {
+            "labelKey": "sigSyntheticPixels",
+            "weight": null
+          }
+        ]
+      }
+    },
+    "socialPipeline": null,
+    "stegomalware": []
+  }
+}

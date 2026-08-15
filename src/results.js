@@ -145,6 +145,31 @@ function renderLeakModule(r){
   renderModule('leak','\u229e',t('leakModuleName'),susp?t('badgeSuspicious'):t('badgeNormal'),susp?'mb-warn':'mb-ok',body);
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+//  ESTADO DO PROTOCOLO — função PURA, fonte única para UI e testes
+//
+//  Existia como cadeia de `if` dentro do renderer, consultando só `hasHeader`.
+//  `hasHeader` vem do M7, que roda SEM senha: um payload furtivo fica invisível
+//  para ele. Resultado observado em smoke test real: com a senha certa a tela
+//  mostrava "payload STEGO·STUDIO extraído" no Threat e, logo abaixo,
+//  "Indeterminado (possível cifra)" no Protocolo. A mesma evidência, dois
+//  veredictos opostos — exatamente o que este projeto não pode fazer.
+//
+//  Precedência por FORÇA DA EVIDÊNCIA, do mais forte ao mais fraco. Ser função
+//  pura é o que permite o teste exercitar a lógica real em vez de reimplementá-la.
+// ─────────────────────────────────────────────────────────────────────────────
+function resolveProtocolState(r) {
+  const st = r.studio;
+  if (!st?.available)        return { level:'na',        name:'—',                       badge:t('badgeNA'),            cls:'mb-scan' };
+  if (st.nativeExtracted)    return { level:'extracted', name:'STEGO·STUDIO',            badge:'STEGO·STUDIO',          cls:'mb-crit' };
+  if (st.nativeHeaderMatched)return { level:'headerOnly',name:'STEGO·STUDIO',            badge:'STEGO·STUDIO',          cls:'mb-crit' };
+  if (st.hasHeader)          return { level:'passive',   name:'STEGO·STUDIO',            badge:'STEGO·STUDIO',          cls:'mb-crit' };
+  if (st.deepScan && r.lsb?.foundText)
+                             return { level:'generic',   name:t('protoNameGeneric'),     badge:t('protoBadgeGeneric'),  cls:'mb-crit' };
+  if (r.lsb?.cipherSuspicion)return { level:'cipher',    name:t('protoNameUndetermined'),badge:t('protoBadgeCipher'),   cls:'mb-warn' };
+  return                            { level:'none',      name:t('protoNameNone'),        badge:t('protoBadgeNone'),     cls:'mb-ok' };
+}
+
 // ── F9 fatia 2: impressão digital de FERRAMENTA ──────────────────────────────
 // Regra de projeto (a mesma da v2.33.1): CONFIRMADO e INDÍCIO são níveis
 // visivelmente distintos, e a distinção NÃO pode depender de cor. Cada item
@@ -217,17 +242,18 @@ function renderResults(r, decodedMsg, decodeStatus) {
     tFlags.map(f=>`<span class="score-flag threat">${f}</span>`).join('');
 
   // ── Nota de limitação do modo offline ──
-  // Aparece quando: (1) o modo Pro está indisponível (sem backend neural),
-  // (2) a análise LSB foi possível (lossless), e (3) há sinal de suspeita
-  // parcial — anomalia LSB ou algum threat — MAS sem mensagem real confirmada
-  // (sem header). Comunica que métodos adaptativos (LSBM/HILL) podem passar
-  // despercebidos no offline, sem alterar nenhum número. Não polui imagens
-  // claramente limpas (threat 0 sem anomalia) nem casos já confirmados.
+  // QUARTA superfície do mesmo estado. Só faz sentido quando há suspeita parcial
+  // sem qualquer evidência confirmada. Não pode aparecer ao lado de payload nativo
+  // extraído, header confirmado, motor de terceiro identificado ou modo robusto
+  // confirmado/danificado — nesses casos já sabemos que existe stego.
   const offNote = document.getElementById('offline-limit-note');
   if (offNote) {
     const lsbPossible = !!r.lsb?.available;
     const partialSuspicion = !!r.lsb?.suspicious || tScore > 0;
-    const noConfirmedMsg = !r.studio?.hasHeader;
+    const protoLevel = resolveProtocolState(r).level;
+    const nativeConfirmed = ['extracted','headerOnly','passive'].includes(protoLevel);
+    const otherConfirmed = !!r.studio?.thirdParty || !!r.studio?.robust;
+    const noConfirmedMsg = !nativeConfirmed && !otherConfirmed;
     if (lsbPossible && partialSuspicion && noConfirmedMsg) {
       offNote.textContent = t('offlineLimitNote');
       offNote.style.display = 'block';
@@ -291,28 +317,8 @@ function renderResults(r, decodedMsg, decodeStatus) {
   renderGroupHeader(t('groupSteg'), 'stego');
 
   // Protocolo
-  let protoName, protoBadge, protoClass;
-  if (!r.studio?.available) {
-    protoName = '—';
-    protoBadge = t('badgeNA');
-    protoClass = 'mb-scan';
-  } else if (r.studio.hasHeader) {
-    protoName = 'STEGO·STUDIO';
-    protoBadge = 'STEGO·STUDIO';
-    protoClass = 'mb-crit';
-  } else if (r.studio.deepScan && r.lsb?.foundText) {
-    protoName = t('protoNameGeneric');
-    protoBadge = t('protoBadgeGeneric');
-    protoClass = 'mb-crit';
-  } else if (r.lsb?.cipherSuspicion) {
-    protoName = t('protoNameUndetermined');
-    protoBadge = t('protoBadgeCipher');
-    protoClass = 'mb-warn';
-  } else {
-    protoName = t('protoNameNone');
-    protoBadge = t('protoBadgeNone');
-    protoClass = 'mb-ok';
-  }
+  const proto = resolveProtocolState(r);
+  const protoName = proto.name, protoBadge = proto.badge, protoClass = proto.cls;
 
   let stBody='';
   if(!r.studio?.available){
@@ -323,8 +329,22 @@ function renderResults(r, decodedMsg, decodeStatus) {
     // deixava a nota do painel DCT apontando para uma linha que não aparecia.
     stBody+=row(t('rowDecodeStatus'), decodeStatus||'—');
   } else {
-    stBody=row(t('rowProtocolDetected'), protoName, r.studio.hasHeader||r.studio.deepScan?'finding-crit':'');
-    if(r.studio.hasHeader){
+    const protoForte = proto.level==='extracted'||proto.level==='headerOnly'||proto.level==='passive';
+    stBody=row(t('rowProtocolDetected'), protoName, protoForte||r.studio.deepScan?'finding-crit':'');
+    // A ordem aqui precisa seguir resolveProtocolState: evidência de extração
+    // autenticada vence o header passivo. Assim um payload extraído não perde a
+    // linha neutra de recuperação só porque a mesma imagem também expõe header.
+    if(proto.level==='extracted'){
+      // Uma extração bem-sucedida pode vir do payload principal OU da camada
+      // alternativa F1. Não revelar a rota: mostrar apenas a evidência comum.
+      const recoveredDetail = r.studio.hasHeader && r.studio.payloadBytes
+        ? t('payloadRecoveredWithKey') + ' · ' + r.studio.payloadBytes + ' bytes'
+        : t('payloadRecoveredWithKey');
+      stBody+=row(t('rowPayload'), recoveredDetail, 'finding-crit');
+    } else if(proto.level==='headerOnly'){
+      stBody+=row(t('rowHeader'), t('headerFoundNoContent'), 'finding-crit');
+    } else if(r.studio.hasHeader){
+      // Caminho passivo: o M7 leu o header sem senha, então sabe o tamanho.
       stBody+=row(t('rowHeader'), t('modeChannelBHeader'), 'finding-crit');
       stBody+=row(t('rowPayload'), r.studio.payloadBytes+' bytes', 'finding-crit');
     }
