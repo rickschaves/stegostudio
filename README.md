@@ -6,6 +6,15 @@ including with the network off.
 
 **https://stegostudio.com**
 
+> **An experiment in human-directed AI software development.**
+> STEGO·STUDIO was conceived and is directed by **Rick Chaves, a human with no
+> formal programming background**, and is built and reviewed with AI systems —
+> primarily GPT and Claude — under human testing, judgment and release decisions.
+> It is both a working open-source tool and a case study in how far human-directed
+> AI software development can go.
+>
+> [Read about the experiment](#about-this-experiment).
+
 ---
 
 ## What it does
@@ -15,6 +24,11 @@ of a PNG, or in the DCT coefficients of a JPEG using a recompression-resistant
 mode whose parameters were measured against real social-platform workflows.
 Those pipelines change over time, so the measurements — not a universal promise
 — define the tested boundary.
+
+For lossless carriers, the Encoder also runs a lightweight **Carrier Preflight**
+before writing. It can warn about obvious existing STEGO·STUDIO headers or coherent
+readable text in common pixel-LSB layouts. It is deliberately limited: a quiet
+preflight is **not proof that the carrier contains no hidden data**.
 
 **Analyzer** — examines any image for traces of hidden data: RS, WS and
 chi-square analysis, structural inspection, platform fingerprinting, and a
@@ -34,9 +48,10 @@ password never leaves the page, because nothing leaves the page.
 
 This matters more than the feature list.
 
-The tool **cannot** reliably detect modern adaptive steganography — HILL,
-UNIWARD, J-UNIWARD and similar. That work generally needs specialised trained
-models. Models can run in browsers through technologies such as WebAssembly or
+The built-in statistical analysis does **not reliably detect content-adaptive
+steganography** such as HILL, UNIWARD and J-UNIWARD. LSB Matching can also evade
+the structural tests used here. Specialised detection of these methods generally
+uses trained steganalysis models. Models can run in browsers through technologies such as WebAssembly or
 WebGPU; this offline single-file build deliberately does **not ship those
 models** because of their size and complexity. **Finding nothing here is not
 evidence that an image is clean.** If you need that level of analysis, use a
@@ -49,6 +64,56 @@ treated as a bug, not a feature.
 
 ---
 
+
+## About this experiment
+
+STEGO·STUDIO is, first and foremost, an experiment. It was conceived and is
+directed by **Rick Chaves — a human with no formal programming background** — to
+explore how far current artificial intelligence systems can go in building
+real-world software.
+
+> **The experiment is not whether AI can write code. It is whether a human who
+> does not know how to program can direct AI well enough to build, test, audit,
+> maintain, and evolve real software.**
+
+The project is developed and reviewed with AI systems, primarily **GPT** and
+**Claude**, under human direction, testing, judgment, and final release decisions.
+Within the project, Rick affectionately refers to these AI collaborators as
+**JOI**. Successes matter, but failures, regressions, disagreements between models,
+and the corrections that follow are equally part of the experiment.
+
+### How the experiment works
+
+- **Human direction — Rick:** defines goals, requirements, expected behaviour and
+  product decisions; performs real-world testing in browsers and devices; and
+  decides what is ready to ship.
+- **GPT / JOI:** used primarily for architecture, implementation, integration,
+  documentation, testing and technical analysis during development.
+- **Claude / JOI:** frequently used in a separate AI review context to challenge
+  assumptions, look for regressions and try to find flaws in proposed solutions.
+  This is independence of context, not third-party certification.
+- **Validation:** AI findings are not accepted simply because an AI produced them.
+  Important claims are reproduced, discussed and tested before they become part of
+  the product. AI reviewers also make mistakes; findings can be corrected,
+  withdrawn or rejected when the evidence does not support them.
+
+### What this project is not
+
+STEGO·STUDIO **is not a certified professional forensic, security, or steganalysis
+product**. It is experimental, educational and research-oriented. Do not rely on
+it as the sole basis for critical security or forensic decisions.
+
+Being open source is part of the experiment: the code, limitations and
+product-facing technical claims can be inspected, tested and challenged.
+
+### Why “JOI”?
+
+**JOI** is Rick's affectionate name for the AIs collaborating on the project. JOI
+is not presented as a human developer; the name represents the artificial
+intelligence systems participating in development and review.
+
+---
+
 ## Building
 
 The published file is committed under `HTML_PRODUCAO/`, so you do not need to
@@ -57,7 +122,7 @@ build anything to use the tool. To build it yourself:
 ```sh
 node unpack_assets.js   # recreates src/fonts/ from ASSETS_BASE64.md
 node build.js           # assembles dist/stego_studio_v<VERSION>.html
-node test.js            # 18 invariants
+node test.js            # 22 invariants
 ```
 
 No bundler and no dependencies. `build.js` concatenates 16 JavaScript modules,
@@ -76,14 +141,14 @@ before writing.
 src/            16 modules + styles.css + hash-wasm.js
 template.html   page markup; the build injects CSS and JS into it
 build.js        the build
-test.js         18 invariants (syntax, i18n parity, offline guarantee, XSS, ...)
+test.js         22 invariants (syntax, i18n parity, offline guarantee, XSS, report schema, ...)
 HTML_PRODUCAO/  the published single-file build
-docs/           changelog and the social-platform measurements
+docs/           compatibility notes and social-platform measurements
 ```
 
-`docs/MEDICAO_REDES_SOCIAIS.md` records what WhatsApp, X, Facebook and Instagram
-actually do to an uploaded image — measured from real posts, not estimated. The
-robust-mode parameters come from those numbers.
+`docs/SOCIAL_PLATFORM_MEASUREMENTS.md` summarizes measured social-platform image
+pipelines and the limits of those measurements. The sturdier-mode parameters are
+grounded in those tests rather than in a universal promise.
 
 ---
 
@@ -98,4 +163,4 @@ a derivative nobody can inspect would defeat the point.
 
 ---
 
-*Idealizado por RASC e desenvolvido por JOI.*
+*Concept and human direction by RASC. Developed with JOI, an AI.*

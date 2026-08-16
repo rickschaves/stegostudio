@@ -83,10 +83,13 @@ cost/benefit grounds: rare in practice, expensive by construction.
 
 ## What none of this covers
 
-Detecting **adaptive** steganography — HILL, UNIWARD, J-UNIWARD — generally
-requires specialised trained models. **STEGO·STUDIO does not ship those models
-in its offline single-file build**, so it does not detect these methods at all.
-Finding nothing here is not evidence that an image is clean.
+Detecting **content-adaptive** steganography — HILL, UNIWARD, J-UNIWARD —
+generally requires specialised trained models. LSB Matching is not itself a
+content-adaptive method, but it can also evade the structural traces associated
+with LSB Replacement. **STEGO·STUDIO does not ship specialised trained
+steganalysis models in its offline single-file build**, so these methods may go
+undetected. Finding nothing here is not evidence that an image contains no
+hidden data.
 
 The limit is a product decision, not a limitation of the web platform: models
 can run in a browser via WebAssembly or WebGPU, at a cost in file size and

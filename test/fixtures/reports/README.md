@@ -1,27 +1,27 @@
-# Relatórios do smoke test — v2.42.4 (12/08/2026)
+# Frozen forensic-report fixtures
 
-Exportados de um smoke test **real** no navegador, não sintetizados. Foram eles
-que expuseram os dois defeitos corrigidos na v2.42.5:
+These JSON files are browser exports kept as regression inputs. They are deliberately
+frozen: changing historical outputs would weaken their value as compatibility fixtures.
 
-| arquivo | papel |
-|---|---|
-| `..._imagem_limpa_...` | controle sem stego, com C2PA — saturava em 100 |
-| `..._encoded_..._pass_correct` | PNG nativo, senha certa — extração não pesava |
-| `..._encoded_..._pass_incorrect` | mesmo arquivo, senha errada — controle negativo |
-| `..._resistente_..._pass_correct` | JPEG robusto, senha certa — já correto |
-| `..._resistente_..._pass_incorrect` | mesmo arquivo, senha errada — controle negativo |
+The corpus includes clean controls, native PNG extraction with correct/incorrect test
+passwords, sturdier-mode JPEG cases, and layered-message reports. Some files are in
+Portuguese because they preserve the locale in which the historical export was made.
 
-Os pares "mesma imagem, senha certa vs. errada" são o que torna o conjunto útil:
-isolam o efeito da extração de tudo o mais.
+The passwords and plaintexts present in these fixtures are **test data only**.
+The historical fixture named `Carmen_Mendoza.png` is an AI-generated test image;
+its Trufo CA address and certificate fields are metadata preserved from the
+original C2PA artifact, not project contact details or secrets.
 
-O CHECK 15 usa relatórios **mínimos derivados** destes, não os arquivos brutos —
-eles são grandes e cheios de campo irrelevante. Estes ficam como referência e
-como base da F17.
+## Public-schema regression corpus
 
-**Não regenerar.** Vieram de uma sessão de navegador que não se repete igual.
+The v2.42.17 additions contain two valid layered-message exports and one sturdier-mode
+JPEG export. The public-schema coverage check projects these frozen reports through
+`PUBLIC_REPORT_SCHEMA` and requires every previously public leaf path to survive.
 
-## F1 / v2.42.10
+Do not regenerate the frozen historical files merely to normalize wording or formatting.
 
-A subpasta `f1_v2.42.10/` preserva os três relatórios que mostraram a assimetria
-de evidência entre duas senhas válidas e motivaram a v2.42.11. São história do
-bug e não devem ser “corrigidos” retroativamente.
+The `deepscan_strong_embedding_false_text_v2.42.23.json` fixture preserves a sanitized
+v2.42.23 report in which strong LSB Replacement evidence coincided with an accidental
+printable ciphertext island. It exists to enforce a separate invariant: evidence that
+embedding occurred must not, by itself, authenticate a particular string as recovered
+content.

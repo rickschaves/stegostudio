@@ -1,14 +1,13 @@
 #!/usr/bin/env node
 /*
- * STEGO·STUDIO — unpack de binários guardados em base64
+ * STEGO·STUDIO — base64 asset unpacker
  *
- * O repo não aceita binário: rejeita .woff2/.ico e transcodifica PNG para JPEG
- * (redimensionando e destruindo o alfa). ASSETS_BASE64.md guarda os bytes como
- * texto; este script os devolve ao disco e CONFERE O SHA-256 de cada um.
+ * ASSETS_BASE64.md stores build assets as text with expected byte lengths and
+ * SHA-256 hashes. This script restores those assets and verifies integrity.
  *
- * Uso:  node unpack_assets.js                 -> grava todos os arquivos
- *       node unpack_assets.js --check         -> só verifica, não grava
- *       node unpack_assets.js --pack <path>   -> imprime o bloco para colar no .md
+ * Usage: node unpack_assets.js                 -> write all assets
+ *        node unpack_assets.js --check         -> verify only
+ *        node unpack_assets.js --pack <path>   -> print a block for the asset store
  */
 'use strict';
 const fs = require('fs');

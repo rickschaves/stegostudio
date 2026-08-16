@@ -1,31 +1,14 @@
-# ── Saída do build ──────────────────────────────────────────────────────────
-# Gerada por `node build.js`. O HTML da versão publicada vive em HTML_PRODUCAO/
-# e esse sim é versionado.
+# Generated build output
 dist/
 
-# ── Binários reconstruíveis ─────────────────────────────────────────────────
-# Fontes e estáticos de deploy vivem em ASSETS_BASE64.md (texto, com SHA-256).
-# `node unpack_assets.js` os recria. Versionar os dois seria duplicar bytes e
-# abrir espaço para divergirem.
+# Reconstructed binary assets
 src/fonts/
 deploy/
 
-# ── Backend do antigo Modo Pro ──────────────────────────────────────────────
-# Removido na v2.40.0. NÃO republicar: o start.sh carregava uma chave de API em
-# texto puro, e um segredo commitado permanece no histórico para sempre.
-server.py
-start.sh
-start.sh.example
-stego_benchmark.py
-requirements.txt
-aletheia-env*/
-
-# ── Documentos internos ─────────────────────────────────────────────────────
-# Handoff, roadmap operacional, mapa interno e arqueologia ficam no pacote de
-# trabalho completo, mas NÃO pertencem ao repositório público.
+# Local-only project files
 internal/
 
-# ── Ambiente ────────────────────────────────────────────────────────────────
+# Local environment
 node_modules/
 .env
 .env.*
@@ -37,4 +20,3 @@ desktop.ini
 .idea/
 *.swp
 *~
-

@@ -1,0 +1,324 @@
+{
+  "_tool": "STEGO·STUDIO v2.42.23",
+  "_schema": "forensic-report-v2",
+  "_hint": "Send this file to your preferred AI for in-depth analysis.",
+  "timestamp": "2026-08-15T21:37:46.438Z",
+  "threat": {
+    "score": 83,
+    "flags": [
+      "anomalous LSB",
+      "LSB Replacement detected (RS+WS)",
+      "rare color clusters"
+    ]
+  },
+  "synth": {
+    "score": 100,
+    "level": "ALTA",
+    "flags": [
+      "AI-typical dimensions",
+      "Rare color clusters detected",
+      "Exact 2:3 aspect ratio",
+      "Very uniform regional entropy",
+      "DCT blocks with uniform distribution",
+      "Severe edge smoothing",
+      "Chrominance and saturation anomalies",
+      "PNG without camera EXIF metadata"
+    ]
+  },
+  "origin": {
+    "fotografia": 20,
+    "screenshot": 25,
+    "arte_digital": 30,
+    "sintetica": 100,
+    "topCategory": "sintetica",
+    "signals": {
+      "fotografia": [
+        {
+          "labelKey": "sigSensorNoise",
+          "weight": 20
+        }
+      ],
+      "screenshot": [
+        {
+          "labelKey": "sigPNGNoCamera",
+          "weight": 15
+        },
+        {
+          "labelKey": "sigPNGNoMeta",
+          "weight": 10
+        }
+      ],
+      "arte_digital": [
+        {
+          "labelKey": "sigControlledPalette",
+          "weight": 20
+        },
+        {
+          "labelKey": "sigPNGNoCamera",
+          "weight": 10
+        }
+      ],
+      "sintetica": [
+        {
+          "labelKey": "sigSyntheticPixels",
+          "weight": null
+        }
+      ]
+    }
+  },
+  "decodedMsg": "JFR:4kӀe;GF5",
+  "decodeStatus": "Hidden text recovered — LSB statistics (RS/WS/chi-square) confirm embedding in this image.",
+  "modules": {
+    "format": {
+      "cat": "lossless",
+      "ext": "PNG",
+      "encOk": true
+    },
+    "metadata": {
+      "filename": "regression_strong_lsb_cipher.png",
+      "size": "2.78 MB",
+      "type": "image/png",
+      "formatCategory": "lossless",
+      "width": 1024,
+      "height": 1536,
+      "pixels": 1572864,
+      "lastModified": "2026-08-15T00:00:00.000Z"
+    },
+    "strings": {
+      "count": 300,
+      "interesting": [],
+      "adversarial": [],
+      "appendedData": false,
+      "appendedBytes": 0,
+      "note": ""
+    },
+    "lsb": {
+      "available": true,
+      "chiR": "5.51",
+      "chiG": "0.05",
+      "chiB": "0.02",
+      "bestMode": "canal R",
+      "printableRatio": "38.0%",
+      "decodedSample": "�@��?��\u0011\u001ed�\u001b�[�,k��S��2�\u000f\u0015��:\u001aX�;���a,\u000b\u0004P|�g�Uю��g�M+�q(\u000bg-&u�5���\\��+m%\rsق\u0014�\u001b�\ng`mÎ<\u0005��Q����-�#��o\u000f�>\u001b�\u0012F\u0011r�bV�}�L�μ�",
+      "suspicious": true,
+      "foundText": "JFR:4kӀe;GF5",
+      "headerName": null,
+      "cipherSuspicion": false,
+      "rsRate": "32.7%",
+      "wsRate": "34.3%",
+      "lsbrDetected": true,
+      "lsbrStrong": true,
+      "lsbrPossible": false,
+      "wsReliable": true,
+      "neuralSuspect": false,
+      "neuralEntSim": "98.3%",
+      "neuralHfSim": "86.8%",
+      "neuralAvgHF": "3.03"
+    },
+    "frequency": {
+      "spikes": 10,
+      "evenOddBias": "0.0639",
+      "biasAnomaly": false,
+      "biasReliable": true,
+      "biasLowComplexity": false,
+      "dominantRGB": [
+        0,
+        0,
+        0
+      ]
+    },
+    "entropy": {
+      "shannon": "10.5041",
+      "uniqueColors": 29975,
+      "avgNoise": "2.56",
+      "noiseAnomaly": false,
+      "noiseThreshold": 2,
+      "highEntropy": false
+    },
+    "color": {
+      "uniqueAlpha": 1,
+      "alphaAnomaly": false,
+      "partialAlpha": 0,
+      "rareClusters": 5,
+      "rareSuspicious": true,
+      "rareDetails": [
+        "RGB(48,56,48): 1374px",
+        "RGB(0,8,16): 1017px",
+        "RGB(48,56,64): 940px",
+        "RGB(40,48,40): 926px",
+        "RGB(16,40,40): 899px"
+      ]
+    },
+    "studio": {
+      "hasHeader": false,
+      "payloadBytes": 0,
+      "shuffled": false,
+      "available": true,
+      "note": "",
+      "genericMode": "canal R",
+      "deepScan": true,
+      "headerName": null
+    },
+    "dct": {
+      "available": true,
+      "blockCount": 484,
+      "stdDev": "24.15",
+      "mean": "23.1",
+      "suspicious": true
+    },
+    "gradients": {
+      "available": true,
+      "totalEdges": 25912,
+      "sharpRatio": "3.6%",
+      "sharpEdges": 929,
+      "softEdges": 24983,
+      "suspicious": true
+    },
+    "chroma": {
+      "available": true,
+      "avgSaturation": "45.6%",
+      "highSatRatio": "23.3%",
+      "cbVariance": "2.02",
+      "crVariance": "3.02",
+      "oversaturated": true,
+      "uniformChroma": true,
+      "suspicious": true
+    },
+    "exif": {
+      "found": false,
+      "fields": {},
+      "aiSoftware": null,
+      "hasCamera": false,
+      "hasGPS": false,
+      "noExif": true
+    },
+    "c2pa": {
+      "found": false,
+      "manifestDetected": false,
+      "aiGenerator": null,
+      "ca": null,
+      "certDate": null,
+      "digitalSourceType": null,
+      "manifestPresent": false,
+      "signals": [],
+      "rawSoftware": null
+    },
+    "_regionalEntropyVar": 0.784796746499572,
+    "ai": {
+      "score": 100,
+      "level": "ALTA",
+      "signals": [
+        {
+          "labelKey": "aiLblDimTypical",
+          "detailKey": "aiDetDimTypical",
+          "level": "warn",
+          "detailVars": {
+            "w": 1024,
+            "h": 1536
+          }
+        },
+        {
+          "labelKey": "aiLblRareClusters",
+          "detailKey": "aiDetRareClusters",
+          "level": "warn",
+          "detailVars": {
+            "count": 5
+          }
+        },
+        {
+          "labelKey": "aiLblExactRatio",
+          "detailKey": "aiDetExactRatio",
+          "level": "info",
+          "labelVars": {
+            "ratio": "2:3"
+          }
+        },
+        {
+          "labelKey": "aiLblEntropyVery",
+          "detailKey": "aiDetEntropyVery",
+          "level": "crit",
+          "detailVars": {
+            "spread": "0.78"
+          }
+        },
+        {
+          "labelKey": "aiLblDCTUniform",
+          "detailKey": "aiDetDCTUniform",
+          "level": "warn",
+          "detailVars": {
+            "std": "24.15"
+          }
+        },
+        {
+          "labelKey": "aiLblEdgeSevere",
+          "detailKey": "aiDetEdgeSevere",
+          "level": "crit",
+          "detailVars": {
+            "ratio": "3.6%"
+          }
+        },
+        {
+          "labelKey": "aiLblChromaAnomalies",
+          "detailKey": "aiDetChromaAnomalies",
+          "level": "warn",
+          "detailVars": {
+            "detail": "oversaturation in 23.3% of pixels · uniform chrominance (Cb:2.02 Cr:3.02)"
+          }
+        },
+        {
+          "labelKey": "aiLblPNGNoEXIF",
+          "detailKey": "aiDetPNGNoEXIF",
+          "level": "info"
+        }
+      ],
+      "formatCat": "lossless",
+      "formatExt": "PNG",
+      "cameraVeto": false,
+      "vectorArtVeto": false,
+      "digitalRenderVeto": false
+    },
+    "origin": {
+      "fotografia": 20,
+      "screenshot": 25,
+      "arte_digital": 30,
+      "sintetica": 100,
+      "topCategory": "sintetica",
+      "signals": {
+        "fotografia": [
+          {
+            "labelKey": "sigSensorNoise",
+            "weight": 20
+          }
+        ],
+        "screenshot": [
+          {
+            "labelKey": "sigPNGNoCamera",
+            "weight": 15
+          },
+          {
+            "labelKey": "sigPNGNoMeta",
+            "weight": 10
+          }
+        ],
+        "arte_digital": [
+          {
+            "labelKey": "sigControlledPalette",
+            "weight": 20
+          },
+          {
+            "labelKey": "sigPNGNoCamera",
+            "weight": 10
+          }
+        ],
+        "sintetica": [
+          {
+            "labelKey": "sigSyntheticPixels",
+            "weight": null
+          }
+        ]
+      }
+    },
+    "socialPipeline": null,
+    "stegomalware": []
+  }
+}

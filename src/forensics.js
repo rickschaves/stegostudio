@@ -23,7 +23,7 @@ const C2PA_CA_KNOWN = [
   {rx:/c2pa\.org/i,     label:'C2PA.org'},
 ];
 
-// ── Extração de assets C2PA (Frente #16/b.1): SVG watermark + superbox JUMBF ──
+// ── Extração de assets C2PA: SVG watermark + superbox JUMBF ───────────────
 // Os assets ficam FORA do objeto de relatório (não vão pro JSON exportado) — só
 // flags pequenas entram no relatório. Recorte é feito nos BYTES (offsets exatos),
 // não no texto decodificado (onde índice de char ≠ índice de byte por causa do
@@ -57,11 +57,11 @@ function extractJumbfBox(bytes){
   return null;
 }
 
-// ── Leitura de campos do manifesto (Frente #16/b.2) ──────────────────────────
+// ── Leitura de campos do manifesto C2PA ────────────────────────────────────
 // NÃO é um parser CBOR completo: é leitura ANCORADA NA CHAVE de poucos campos,
 // respeitando só o suficiente do CBOR (tamanho do tstr) e do ASN.1 (string do CN)
-// para não pegar lixo. Validado isolado em Node contra manifestos reais de 2
-// fornecedores (GPT/Trufo e Gemini/Google).
+// para não aceitar bytes arbitrários fora da estrutura esperada. Vetores de
+// fornecedores distintos cobrem as formas de manifesto suportadas.
 function cborReadTstr(buf, pos) {
   if (pos < 0 || pos >= buf.length) return null;
   const b = buf[pos], mt = b >> 5, ai = b & 0x1f;
@@ -87,7 +87,7 @@ function c2paGenerator(buf) {
   }
   return null;
 }
-// digitalSourceType correto, ancorado na URL IPTC (conserta a regex antiga que pegava lixo).
+// digitalSourceType ancorado na URL IPTC para evitar capturar bytes não relacionados.
 function c2paDigitalSourceType(buf) {
   const m = new TextDecoder('latin1').decode(buf).match(/digitalsourcetype\/([A-Za-z]+)/i);
   return m ? m[1] : null;
@@ -124,7 +124,7 @@ function c2paActionDescriptions(buf) {
 // Devolve [{kind, text}] com o conteúdo de cada um. Texto solto no meio dos
 // pixels ou num comentário JPEG NÃO entra aqui, e é essa a diferença entre
 // "o arquivo carrega um manifesto" e "o arquivo contém a palavra c2pa".
-// Isto NÃO valida assinatura, certificado nem hash — ver F16 no ROADMAP.
+// Isto NÃO valida assinatura, certificado nem hash; apenas identifica estrutura e campos.
 // ─────────────────────────────────────────────────────────────────────────────
 function findC2PAContainers(bytes) {
   const out = [];
@@ -181,16 +181,10 @@ async function parseC2PA(file) {
         C2PA_ASSETS = { svg: null, manifest: null }; // zera assets do arquivo anterior
 
         // ── Detectar presença de manifesto JUMBF/C2PA ──
-        // Exige evidências explícitas de C2PA — não basta namespace Adobe/XMP genérico
-        // XMP do Picasa/Photoshop contém "adobe:ns:meta" mas NÃO é C2PA
-        // ⚠️ v2.42.0 — ESTRUTURA, não texto solto.
-        // Antes bastava a string "JUMB" ou "c2pa" aparecer EM QUALQUER LUGAR dos
-        // bytes. Um comentário JPEG de 71 caracteres produzia "C2PA confirmado"
-        // com gerador de IA identificado — zero criptografia envolvida.
-        // Agora o marcador precisa estar no CONTÊINER certo: segmento APP11 no
-        // JPEG (onde a norma põe o JUMBF) ou chunk caBX no PNG. Isso não é
-        // validação criptográfica — continua sendo detecção — mas forjar exige
-        // montar a estrutura do formato, não escrever texto num comentário.
+        // Exige evidência estrutural no contêiner correto; namespaces Adobe/XMP
+        // genéricos e strings soltas não bastam. Em JPEG o JUMBF esperado fica em
+        // APP11; em PNG, em chunk caBX. Isto continua sendo detecção de manifesto,
+        // não validação criptográfica da assinatura ou do conteúdo.
         const c2paBoxes = findC2PAContainers(bytes);
         const hasJUMB     = c2paBoxes.some(b => b.kind === 'app11' || b.kind === 'caBX');
         const boxText     = c2paBoxes.map(b => b.text).join('\n');
@@ -285,14 +279,14 @@ async function parseC2PA(file) {
           const mB = extractJumbfBox(bytes);
           if (mB) {
             C2PA_ASSETS.manifest = mB; result.hasManifest = true; result.manifestLen = mB.length;
-            // Campos legíveis do manifesto (Frente #16/b.2)
+            // Campos legíveis do manifesto
             const gen = c2paGenerator(mB);
             if (gen) { result.genName = gen.name; result.genVersion = gen.version; }
             const signer = c2paSignerCN(mB);
             if (signer) result.signerCN = signer;
             const descs = c2paActionDescriptions(mB);
             if (descs.length) result.actionDescriptions = descs;
-            // Conserta digitalSourceType (a regex antiga pega lixo binário): usa a URL IPTC.
+            // digitalSourceType é extraído da URL IPTC estruturada, não de texto binário solto.
             const dst = c2paDigitalSourceType(mB);
             if (dst) result.digitalSourceType = dst;
           }
@@ -341,7 +335,7 @@ async function runForensics(imageData, file, onProgress=()=>{}, sharedDec=null) 
         {rx:/https?:\/\/[^\s"'<>]+/,label:'URL'},
         {rx:/[A-Za-z0-9+\/]{20,}={0,2}/,label:'Base64 candidate'},
         {rx:/\b[A-Fa-f0-9]{32,}\b/,label:'Hash/hex'},
-        {rx:/password|secret|hidden|key|token|flag\{/i,label:'Palavra-chave sensível'},
+        {rx:/password|secret|hidden|key|token|flag\{/i,label:'Sensitive keyword'},
         {rx:/\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/,label:'IP address'},
         {rx:/[a-z0-9._%+\-]+@[a-z0-9.\-]+\.[a-z]{2,}/i,label:'Email'},
         {rx:/STEGO\x00/,label:'Header STEGO·STUDIO'},
@@ -387,8 +381,8 @@ async function runForensics(imageData, file, onProgress=()=>{}, sharedDec=null) 
   let jpegStruct = null;
   if(fmt.ext==='JPEG' && strResult._rawBytes){
     try{ report.jpegDCT = analyzeJpegDCT(strResult._rawBytes, sharedDec); }
-    catch(_){ report.jpegDCT = {available:false, reason:'erro na análise DCT'}; }
-    // Fatia A: assinatura do modo robusto, sem senha e sem extração.
+    catch(_){ report.jpegDCT = {available:false, reason:'analysis-error'}; }
+    // Assinatura estatística do modo robusto, sem senha e sem extração.
     try{ const sig = robustSignature(sharedDec);
          if(sig) report.studio = {...(report.studio||{}), robustSignature: sig}; }
     catch(_){}
@@ -569,12 +563,8 @@ async function runForensics(imageData, file, onProgress=()=>{}, sharedDec=null) 
   report.gradients = analyzeGradients(imageData);
   onProgress(9, PIPELINE_STEPS[8]);
   report.chroma = analyzeChrominance(imageData);
-  // ⚠️ "não li o arquivo" ≠ "li e não havia EXIF".
-  // O fallback antigo devolvia `noExif:true` também quando a LEITURA falhava, e
-  // esse campo alimenta o classificador de origem — uma falha de I/O virava
-  // evidência de "PNG sem metadados de câmera". A v2.42.8 agravou isso: antes a
-  // leitura travava (ruim e visível); depois passou a rejeitar, e a rejeição era
-  // engolida aqui como ausência (ruim e invisível).
+  // Falha de leitura e ausência de EXIF são estados distintos. `noExif` alimenta
+  // o classificador de origem e só pode ser afirmado depois de uma leitura válida.
   report.exif  = await parseEXIF(file).catch(e=>({available:false,readError:String(e&&e.message||e),
     found:false,fields:{},aiSoftware:null,hasCamera:false,hasGPS:false,noExif:false}));
   report.c2pa  = await parseC2PA(file).catch(e=>({available:false,readError:String(e&&e.message||e),
@@ -598,8 +588,8 @@ async function runForensics(imageData, file, onProgress=()=>{}, sharedDec=null) 
   // C2PA — indicador definitivo, peso máximo
   if(report.c2pa?.manifestDetected){
     aiScore+=85;
-    // Estes valores saem do manifesto do arquivo e terminam em HTML via
-    // detailVars. Escapados na origem (sink perdido na v2.42.0).
+    // Valores do manifesto chegam ao HTML via detailVars; escape-os antes de
+    // compor a descrição para impedir markup controlado pelo arquivo.
     const c2paDetail=[
       report.c2pa.aiGenerator?t('c2paGenPrefix').replace('{gen}',escapeHTML(report.c2pa.aiGenerator)):null,
       report.c2pa.digitalSourceType?`IPTC: ${escapeHTML(report.c2pa.digitalSourceType)}`:null,
@@ -749,19 +739,16 @@ async function runForensics(imageData, file, onProgress=()=>{}, sharedDec=null) 
       detailKey:'aiDetPNGNoEXIF',level:'info'});
   }
 
-  // VETO DE CÂMERA REAL
-  // EXIF com Make/Model de câmera física é uma das definições mais confiáveis
-  // de foto real — firmware de câmera não pode ser forjado por geradores de IA.
-  // Quando presente e sem nenhum sinal de IA nos metadados, a evidência documental
-  // supera a heurística de pixel: o score recebe um teto baixo.
+  // VETO DE CÂMERA DECLARADA
+  // Make/Model em EXIF é evidência útil de uma origem fotográfica declarada, mas EXIF
+  // não é autenticado e pode ser reescrito. Por isso ele apenas atenua a heurística
+  // de pixels; não prova sozinho que a imagem veio de uma câmera física.
   let cameraVeto = false;
   if (report.exif.hasCamera && !report.exif.aiSoftware && !report.c2pa?.manifestDetected) {
     cameraVeto = true;
-    // v2.42.0 — era teto absoluto de 15. Mas EXIF não é autenticado: um teto
-    // duro deixava qualquer arquivo com Make/Model forjado zerar o score de IA.
-    // Agora o EXIF ATENUA em vez de decidir — o sinal de pixel continua
-    // pesando, e um score altíssimo não desaba para 15 por causa de um campo
-    // de texto. 15 vira piso do teto, não veredito.
+    // EXIF não é autenticado, portanto atenua em vez de decidir sozinho. Um
+    // Make/Model declarado não pode apagar sinais fortes de pixel; o teto preserva
+    // evidência contrária enquanto reconhece documentação de câmera.
     const capped = aiScore >= 70 ? Math.max(15, Math.round(aiScore * 0.45))
                                  : Math.min(aiScore, 15);
     if (aiScore > capped) {
@@ -980,109 +967,41 @@ function computeOrigin(r, file, fmt) {
 //  THREAT SCORE (mensagem oculta)
 // ════════════════════════════════════════
 // ════════════════════════════════════════
-//  CONSOLIDAÇÃO DO VEREDITO (Etapa 5a)
-//  Cruza três sinais — detecção neural (Pro), ataques estruturais RS/WS,
-//  e qualidade da extração — para decidir o que mostrar ao usuário de forma
-//  honesta. O objetivo central: NUNCA exibir ruído como se fosse mensagem.
-//
-//  Recebe o que já foi computado e devolve { decodedMsg, decodeStatus, note }
-//  possivelmente ajustados. A 'note' é uma observação interpretativa opcional.
+//  CONSOLIDAÇÃO DO VEREDITO
+//  Combines structural LSB evidence with extraction quality before deciding
+//  what can be shown as a reliable message. The invariant is simple: never
+//  promote statistical noise to recovered content.
 // ════════════════════════════════════════
 function consolidateVerdict(r, decodedMsg, decodeStatus, fromDeepScan) {
   const out = { decodedMsg, decodeStatus, note: null };
 
-  // Sinais disponíveis
-  const neural = r.neuralPro?.verdict || null;
-  const neuralStego = !!neural?.stego_detected;
-  const neuralMaxP = neural?.max_probability || 0;
-  const flagged = neural?.methods_flagged || [];
-  const na = r.neuralPro?.neural_analysis || {};
-  const rsRate = parseFloat(r.lsb?.rsRate) || 0;   // %
-  const wsRate = parseFloat(r.lsb?.wsRate) || 0;   // %
-  // WS é instável em cover chapado/sintético; só conta quando confiável.
+  const rsRate = parseFloat(r.lsb?.rsRate) || 0;
+  const wsRate = parseFloat(r.lsb?.wsRate) || 0;
   const wsReliable = r.lsb?.wsReliable !== false;
   const lsbrDetected = !!r.lsb?.lsbrDetected;
-  const printable = parseFloat(r.lsb?.printableRatio) || 0; // %
+  const printable = parseFloat(r.lsb?.printableRatio) || 0;
   const hasHeader = !!r.studio?.hasHeader;
-  // Header de QUALQUER ferramenta (STEGO, JOI_LSB1/2, etc.) detectado nos LSBs
-  // é prova de mensagem real, mesmo que não seja o protocolo nativo.
-  const hasToolHeader = !!(r.lsb?.headerName);
-
-  // Uma "mensagem real" exige uma destas: header (nativo OU de outra ferramenta
-  // detectado nos LSBs), ou texto com alta proporção legível (>70%). Caso
-  // contrário, é candidata a ruído.
-  // Payload robusto extraído conta como mensagem real tanto quanto um header.
+  const hasToolHeader = !!r.lsb?.headerName;
   const robustOk = r.studio?.robust === true;
   const looksReal = hasHeader || hasToolHeader || robustOk || printable > 70;
 
-  // ── CONFIABILIDADE DO SINAL NEURAL (alinhado ao computeThreat) ──
-  // PRIORIDADE stego: o neural só é vetado por C2PA confirmado (origem IA
-  // provada) ou por ser outguess isolado (artefato JPEG). "Parecer sintético"
-  // NÃO veta — pode ser a própria esteganografia imitando IA.
-  const aiProven = !!(r.c2pa?.manifestDetected);
-  const onlyOutguess = flagged.length === 1 && flagged[0] === 'outguess';
-  const lsbFamilyHigh = (na.lsbr?.probability >= 0.9) || (na.lsbm?.probability >= 0.9);
-  const structuralCorroborates = hasHeader || robustOk || rsRate >= 25 || (wsRate >= 25 && wsReliable) ||
-                                  !!r.lsb?.lsbrDetected;
-
-  const neuralReliable = neuralStego && lsbFamilyHigh && !onlyOutguess &&
-                         !(aiProven && !structuralCorroborates);
-
-  // ── DETECÇÃO ESTATÍSTICA CONFIRMA EMBEDDING ──
-  // A prova de que há mensagem (e não ruído) vem da ESTATÍSTICA dos LSBs, não
-  // do texto ser legível ou longo. RS/WS altos, LSBR detectado, ou chi-quadrado
-  // anômalo são assinaturas que ruído natural não produz. Quando a estatística
-  // confirma, qualquer texto coeso capturado no deep scan é uma mensagem real —
-  // mesmo curto, mesmo com printable baixo, mesmo sem header. Isso torna a
-  // ferramenta robusta contra fragmentação: cada fragmento embutido acende a
-  // estatística, então não há tamanho mínimo de mensagem que escape à detecção.
+  // Structural LSB evidence can support the conclusion that embedding occurred,
+  // but it cannot authenticate an arbitrary text island as the embedded message.
+  // WS only participates when its reliability gate passed.
   const statConfirmsEmbedding = lsbrDetected || rsRate >= 25 || (wsRate >= 25 && wsReliable);
 
-  // Se a estatística confirma E há texto capturado, EXIBE — a estatística é a
-  // autorização, não o tamanho/legibilidade do texto. Pode vir com algum ruído
-  // junto; o usuário distingue facilmente a mensagem real do ruído ao redor.
-  if (fromDeepScan && !looksReal && statConfirmsEmbedding && r.lsb?.foundText) {
-    out.decodedMsg = r.lsb.foundText;
-    out.decodeStatus = t('verdictStatConfirmedText');
-    out.note = t('verdictStatConfirmedNote');
-    return out;
-  }
-
-  // ── CASO B — Detectado mas NÃO extraível (o problema central) ──
-  // Só dispara se o sinal neural é CONFIÁVEL. Em imagem de IA sem corroboração,
-  // não afirmamos "detectado mas não extraível" — seria um falso-positivo.
-  if (neuralReliable && neuralMaxP >= 0.85 && fromDeepScan && !looksReal) {
-    out.decodedMsg = null; // NÃO mostra o ruído como mensagem
-    out.decodeStatus = t('verdictDetectedNotExtractable');
-    if (!lsbrDetected && rsRate < 25 && (wsRate < 25 || !wsReliable)) {
-      out.note = t('verdictAdaptiveMethod');
-    } else {
-      out.note = t('verdictKeyRequired');
-    }
-    return out;
-  }
-
-  // ── CASO B2 — deep scan deu ruído, mas neural NÃO é confiável ──
-  // Não temos evidência confiável de stego. Suprime o ruído mostrado como
-  // mensagem, mas sem afirmar que há esteganografia.
-  if (fromDeepScan && !looksReal && !neuralReliable) {
+  // A headerless deep-scan candidate is not promoted merely because RS/WS/chi-square
+  // are strong. Ciphertext can contain short printable islands by chance; treating
+  // those bytes as recovered content creates false messages. Keep the structural
+  // evidence, discard the unvalidated candidate, and report the two facts separately.
+  if (fromDeepScan && !looksReal) {
     out.decodedMsg = null;
-    out.decodeStatus = t('verdictNoReliableMessage');
+    out.decodeStatus = statConfirmsEmbedding
+      ? t('verdictEmbeddingNoReliableText')
+      : t('verdictNoReliableMessage');
     return out;
   }
 
-  // ── CASO D — Discordância informativa (só com neural confiável) ──
-  // Neural confiável diz stego, estrutural (RS/WS) diz limpo. Informa o
-  // provável método adaptativo.
-  if (neuralReliable && neuralMaxP >= 0.6 && !lsbrDetected && rsRate < 25 && (wsRate < 25 || !wsReliable)) {
-    if (!out.decodedMsg) {
-      out.note = t('verdictAdaptiveMethod');
-    }
-    return out;
-  }
-
-  // ── CASO A — Mensagem real: mantém como está. ──
-  // ── CASO C — Nada detectado: mantém como está (status "sem conteúdo"). ──
   return out;
 }
 
@@ -1094,30 +1013,19 @@ function computeThreat(r) {
   // Esses pesam alto porque apontam mensagem oculta de forma específica.
   let hasStrongStego = false;
 
-  // ── CONTEXTO C2PA (Opção B, #15a.2) ──
-  // C2PA confirmado = prova criptográfica de origem IA. Os sinais MOLES que o próprio
-  // conteúdo C2PA produz — strings do manifesto/SVG, anomalia LSB do SynthID, viés de
-  // paridade de palette quantizada, suspeita neural — NÃO devem inflar o threat de
-  // esteganografia, A MENOS que haja evidência DURA de que uma ferramenta embutiu
-  // mensagem. Escotilha de segurança: a evidência dura abaixo (header STEGO, dado após
-  // EOF, stegomalware, LSBR estrutural, RS≥25%, cifra ou texto oculto real) desliga a
-  // supressão — então um embedding REAL numa imagem C2PA continua acusando.
+  // ── CONTEXTO C2PA ──
+  // Um manifesto C2PA detectado fornece contexto de proveniência, mas esta build não
+  // valida criptograficamente sua assinatura. Sinais fracos que podem acompanhar
+  // imagens sintéticas/C2PA não devem inflar o Threat de esteganografia sem evidência
+  // estrutural ou de extração independente; evidência forte continua prevalecendo.
   const aiProvenC2PA = !!(r.c2pa?.manifestDetected);
   const _printR = parseFloat(r.lsb?.printableRatio) || 0;
   const _realHiddenText = r.lsb?.available && r.lsb?.suspicious && r.lsb?.foundText &&
                           (r.lsb?.headerName || _printR > 70);
-  // ⚠️ v2.42.5 — hardStego só aceita evidência ESTRUTURAL ou de EXTRAÇÃO.
-  // Antes incluía `lsbrDetected` e `cipherSuspicion`, que são estatísticos e
-  // são justamente o que conteúdo C2PA/IA produz. Resultado: a supressão era
-  // desligada pelos próprios sinais que ela existe para suprimir — circular.
-  // Medido numa imagem C2PA limpa: threat 100, e zerar o C2PA não mudava nada,
-  // porque a supressão nunca chegava a rodar.
-  //   • `lsbrStrong` (RS>15% sozinho) fica — é o caminho confiável do RS.
-  //   • o caminho corroborado (WS+RS fraco) sai — WS dá taxa alta sem stego.
-  //   • `cipherSuspicion` sai — uma janela de 512 bits com chi<3.84 entre ~39
-  //     janelas, sem correção para comparações múltiplas.
-  // Escotilha preservada: header, extração nativa, modo robusto, dado após EOF,
-  // stegomalware, RS≥25% e texto oculto real continuam desligando a supressão.
+  // `hardStego` aceita somente evidência estrutural ou de extração. Sinais
+  // estatísticos que também podem surgir em conteúdo C2PA/IA não devem desligar
+  // a própria supressão. Header, extração nativa, modo robusto, dados após EOF,
+  // stegomalware, RS forte e texto oculto confiável continuam prevalecendo.
   const hardStego = !!(
     r.strings?.appendedData || r.studio?.hasHeader ||
     r.studio?.nativeExtracted || r.studio?.nativeHeaderMatched ||
@@ -1178,10 +1086,8 @@ function computeThreat(r) {
   if(_malw.some(m=>m.sev==='crit')){score+=50;flags.push(t('flagStegomalware'));hasStrongStego=true;}
   else if(_malw.length>0){score+=15;flags.push(t('flagStegoIndicators'));}
 
-  // Texto extraído. Distingue texto REAL (header ou alta proporção legível)
-  // de ruído de deep scan (printable baixo). Só o primeiro é evidência máxima.
-  // Isso mantém coerência com a consolidação, que descarta o ruído — antes,
-  // o mesmo ruído inflava o threat aqui e era descartado lá.
+  // Texto extraído só recebe peso máximo quando há header ou alta proporção
+  // legível; amostras de deep scan com baixa legibilidade permanecem como ruído.
   if(isLossless&&r.lsb?.available&&r.lsb?.suspicious){
     if(c2paExplains){ c2paSuppressed = true; } // anomalia LSB = SynthID/manifesto, não soma
     else {
@@ -1229,68 +1135,6 @@ function computeThreat(r) {
   if(isLossless&&r.lsb?.neuralSuspect){
     if(c2paExplains){ c2paSuppressed = true; }
     else { score+=10;flags.push(t('flagNeuralStego')); }
-  }
-
-  // ── DETECÇÃO NEURAL (backend Pro) — COM CONTEXTO DE CONFIANÇA ──
-  // PRIORIDADE: a análise esteganográfica é a função-núcleo. O neural NÃO é
-  // suprimido por "parecer IA" — porque a própria esteganografia pode fazer
-  // uma foto real parecer sintética. O único veto forte é C2PA confirmado
-  // (prova criptográfica de origem IA), onde o falso-positivo é quase certo.
-  // Os testes mostraram dois artefatos a filtrar:
-  //  • outguess isolado dispara ~100% em JPEG (artefato de compressão)
-  //  • C2PA-IA confirmada dispara os modelos espaciais sem mensagem real
-  const neural = r.neuralPro?.verdict;
-  const na = r.neuralPro?.neural_analysis || {};
-  if(neural?.stego_detected){
-    const maxP = neural.max_probability || 0;
-    const flagged = neural.methods_flagged || [];
-    const onlyOutguess = flagged.length === 1 && flagged[0] === 'outguess';
-    const lsbFamilyHigh = (na.lsbr?.probability >= 0.9) || (na.lsbm?.probability >= 0.9);
-    // FP comprovado por baseline limpo: o modelo HILL dispara ~0,99 em arte vetorial
-    // chapada SEM mensagem (reage ao tipo de cover, não ao payload). Distinguidor
-    // seguro = complexidade do cover: a detecção REAL de HILL (ex.: foto texturizada,
-    // HILL 0,747) ocorre em cover NÃO-chapado (biasLowComplexity=false), então o veto
-    // abaixo não a alcança. Exige HILL alto SEM corroboração da família LSB.
-    const hillDominant = (na.hill?.probability >= 0.9) && !lsbFamilyHigh;
-    const lowComplexityCover = r.frequency?.biasLowComplexity === true;
-
-    // Veto forte: origem IA comprovada por C2PA → falso-positivo quase certo.
-    const aiProven = !!(r.c2pa?.manifestDetected);
-
-    // Corroboração estrutural (reforça confiança, mas não é obrigatória).
-    const rsRate = parseFloat(r.lsb?.rsRate) || 0;
-    const wsRate = parseFloat(r.lsb?.wsRate) || 0;
-    const structuralCorroborates = hasStrongStego || r.studio?.hasHeader ||
-                                   rsRate >= 25 || (wsRate >= 25 && r.lsb?.wsReliable!==false);
-
-    if(c2paExplains){
-      c2paSuppressed = true; // C2PA confirmado sem evidência dura → neural não soma (Opção B)
-    }
-    else if(onlyOutguess && !structuralCorroborates){
-      flags.push(t('flagNeuralArtifact')); // artefato, não soma
-    }
-    else if(aiProven && !structuralCorroborates){
-      flags.push(t('flagNeuralUncertainAI')); // C2PA-IA com corroboração ambígua, não soma
-    }
-    else if(hillDominant && lowComplexityCover && !structuralCorroborates){
-      flags.push(t('flagNeuralVectorFP')); // HILL em cover chapado/vetorial → FP, não soma
-    }
-    else if(lsbFamilyHigh && maxP >= 0.9){
-      // Detecção neural forte da família LSB. Conta — esta é a função-núcleo.
-      // Peso maior com corroboração; ainda assim significativo sem ela.
-      if(structuralCorroborates){
-        score += 35; flags.push(t('flagNeuralConfirmed')); hasStrongStego = true;
-      } else {
-        score += 28; flags.push(t('flagNeuralConfirmed')); hasStrongStego = true;
-        // Se a imagem foi classificada como sintética SEM prova C2PA, marca que
-        // a esteganografia pode ser a causa do alto synth score (foto real).
-        // A nota vai para a SEÇÃO DE ORIGEM, não para as flags do threat.
-        if((r.ai?.score || 0) >= 75){ r._stegoMimicsAI = true; }
-      }
-    }
-    else if(maxP >= 0.6){
-      score += 12; flags.push(t('flagNeuralLikely'));
-    }
   }
 
   // ── SINAIS AMBÍGUOS (servem para IA E para stego) ──
@@ -1380,12 +1224,8 @@ function interpretModule(key, r) {
   }
 
   if(key==='studio') {
-    // ⚠️ UMA das superfícies do mesmo estado. A v2.42.5 ensinou o Threat a usar a
-    // evidência ativa; a v2.42.7 ensinou o badge do Protocolo. Esta nota ficou
-    // para trás e continuava lendo só `hasHeader`, então com a senha certa a
-    // tela mostrava "decifrado com chave ✓" logo acima de "nenhum texto legível
-    // foi recuperado — forneça a chave". Agora as três derivam de
-    // `resolveProtocolState`, que é a fonte única também para a nota offline.
+    // Interpretação, badge e nota offline devem derivar do mesmo estado resolvido
+    // para não publicar descrições contraditórias da mesma evidência.
     const proto = resolveProtocolState(r);
     if(proto.level === 'extracted')   return t('interpStudioExtracted');
     if(proto.level === 'headerOnly')  return t('interpStudioHeaderOnly');
@@ -1396,6 +1236,7 @@ function interpretModule(key, r) {
       return t('interpStudioDeepNoHeader');
     }
     if(proto.level === 'cipher')      return t('interpStudioCipher');
+    if(proto.level === 'embedded')    return t('interpStudioEmbedded');
     return t('interpStudioNone');
   }
 
@@ -1409,16 +1250,9 @@ function interpretModule(key, r) {
 // ─────────────────────────────────────────────────────────────────────────────
 //  LEITURA DE ARQUIVO À PROVA DE TRAVAMENTO
 //
-//  Havia três `new FileReader()` neste módulo e **nenhum `onerror`**. Cada um
-//  vivia dentro de `new Promise(res => { r.onload = …; r.readAsArrayBuffer(f) })`
-//  — se a leitura falhasse, `onload` nunca disparava, a promessa nunca resolvia
-//  e o pipeline parava para sempre. Sem exceção e sem log: **console limpo e
-//  barra congelada**, que é exatamente o sintoma do smoke da v2.42.7 (travou em
-//  20%, "Strings & bytes brutos", console sem uma linha).
-//
-//  Este helper fecha as três saídas — erro, cancelamento e silêncio. O timeout
-//  existe porque `onerror` cobre a falha declarada, não a leitura que
-//  simplesmente nunca volta.
+//  Toda leitura precisa resolver ou rejeitar; depender apenas de `onload` pode
+//  deixar o pipeline pendente indefinidamente. Este helper cobre sucesso, erro,
+//  cancelamento e timeout, mantendo uma única semântica para todos os leitores.
 // ─────────────────────────────────────────────────────────────────────────────
 const FILE_READ_TIMEOUT_MS = 60000;
 
@@ -1552,7 +1386,7 @@ async function parseEXIF(file) {
                   const type = tiffView.getUint16(entryOffset + 2, littleEndian);
                   const count = tiffView.getUint32(entryOffset + 4, littleEndian);
 
-                  if (tag === 0x8825) { result.hasGPS = true; result.fields['GPS'] = 'presente'; }
+                  if (tag === 0x8825) { result.hasGPS = true; result.fields['GPS'] = 'present'; }
                   if (tag === 0x8769) { /* ExifIFD — câmera real */ result.hasCamera = true; }
 
                   if (type === 2 && TAGS[tag]) { // ASCII string
@@ -1581,12 +1415,9 @@ async function parseEXIF(file) {
                 } catch(_) {}
               }
 
-              // ⚠️ v2.42.0 — o comentário dizia "Make + Model + ExifIFD" e o código
-              // fazia `Make OU Model`, descartando o ExifIFD que a linha do tag
-              // 0x8769 já havia detectado. Agora o código cumpre o que promete:
-              // os três, porque um EXIF montado à mão costuma trazer só Make.
-              // Continua sendo EXIF — não autenticado, forjável por qualquer
-              // editor. É evidência de apoio, nunca prova (ver aiVetoDetail).
+              // Uma câmera completa exige Make + Model + ExifIFD. Campos EXIF são
+              // não autenticados e podem ser forjados; servem como evidência de apoio,
+              // nunca como prova de origem.
               result.hasExifIFD = result.hasCamera;   // vem do tag 0x8769
               result.hasCamera  = !!(result.fields['Make'] && result.fields['Model'] && result.hasExifIFD);
               result.cameraPartial = !result.hasCamera &&
@@ -1609,14 +1440,14 @@ async function parseEXIF(file) {
 //  DCT BLOCK UNIFORMITY (8×8 grid variance)
 // ════════════════════════════════════════
 // ════════════════════════════════════════
-//  F3-C — Esteganálise em JPEG (coeficientes DCT quantizados)
-//  Usa jpeg_dct.js (F3-B) para ler os coeficientes reais e produz uma análise
+//  Esteganálise em JPEG (coeficientes DCT quantizados)
+//  Usa jpeg_dct.js para ler os coeficientes reais e produz uma análise
 //  HONESTA em camadas: estatísticas descritivas + chi-quadrado rotulado como
 //  indicador FRACO de 1ª ordem. Não promete detecção "liga/desliga": o
 //  chi-quadrado clássico não pega Steghide/OutGuess/F5 (payload baixo/espalhado)
 //  — o caminho forte é a extração real pelo Decoder, integrada à parte.
 // ════════════════════════════════════════
-// F7: `sharedDec` opcional — coeficientes já decodificados no nível acima.
+// `sharedDec` opcional — coeficientes já decodificados no nível acima.
 // Quando vem preenchido, pula o decode (o mesmo arquivo não é decodificado duas
 // vezes). Quando vem nulo — inclusive porque o decode falhou lá em cima —, faz
 // o decode aqui para produzir a mensagem de erro correta.
@@ -1625,13 +1456,12 @@ function analyzeJpegDCT(jpegBytes, sharedDec){
   if(!dec){
     try{ dec=decodeJpegCoefficients(jpegBytes); }
     catch(e){
-      const msg=(e&&e.message)||'decode falhou';
-      return {available:false, reason:msg};
+      return {available:false, reason:'decode-failed'};
     }
   }
   let lin;
   try{ lin=jpegCoeffsLinear(dec); }
-  catch(_){ return {available:false, reason:'linearização falhou'}; }
+  catch(_){ return {available:false, reason:'linearization-failed'}; }
 
   // estatísticas descritivas dos coeficientes AC (pula DC = índice múltiplo de 64)
   let acTotal=0, acNonZero=0, acAbsSum=0, maxAbs=0;
@@ -1645,7 +1475,7 @@ function analyzeJpegDCT(jpegBytes, sharedDec){
       hist.set(v,(hist.get(v)||0)+1);
     }
   }
-  if(acTotal===0) return {available:false, reason:'sem coeficientes AC'};
+  if(acTotal===0) return {available:false, reason:'no-ac-coefficients'};
 
   // chi-quadrado sobre pares de valores (PoV: 2k ↔ 2k+1). Indicador FRACO.
   // Mede se as frequências de pares adjacentes foram artificialmente igualadas
@@ -1829,15 +1659,16 @@ function analyzeChrominance(imageData) {
 // forenses e pelos indicadores.
 
 // ════════════════════════════════════════
-//  F9 — IMPRESSÃO DIGITAL DE ORIGEM (plataforma) E DE FERRAMENTA
+//  IMPRESSÃO DIGITAL DE ORIGEM (plataforma) E DE FERRAMENTA
 // ════════════════════════════════════════
 // Perfis medidos em 18/07/2026 a partir de imagens reais passadas por cada
 // plataforma. A tabela de quantização é a assinatura principal; SOF,
-// subamostragem e sequência de APP corroboram. Ver MEDICAO_REDES_SOCIAIS.md.
+// subamostragem e sequência de APP corroboram. Ver SOCIAL_PLATFORM_MEASUREMENTS.md.
 const JPEG_PLATFORM_PROFILES = [
   {id:'whatsapp', name:'WhatsApp', sof:'baseline', sub:'420', apps:[0,2],
    luma:[3,2,2,2,2,2,3,2,2,2,3,3,3,3,4,6,4,4,4,4,4,8,6,6,5,6,9,8,10,10,9,8,9,9,10,12,15,12,10,11,14,11,9,9,13,17,13,14,15,16,16,17,16,10,12,18,19,18,16,19,15,16,16,16]},
-  // ⚠️ X (Twitter) NÃO ENTRA AQUI — e isso é um ACHADO, não uma omissão.
+  // X (Twitter) não entra nesta heurística porque os perfis medidos não formam
+  // um padrão estrutural estável o bastante para identificação confiável.
   // Medição de 18/07/2026: o X faz TRANSCODIFICAÇÃO SEM PERDA. A saída dele é
   // byte a byte idêntica a `jpegtran -progressive -copy none` aplicado ao
   // original (provado com MD5, em 1200x800 e 3000x2000). Ou seja: ele PRESERVA
@@ -1879,7 +1710,7 @@ function identifyJpegPlatform(st){
 }
 
 // Impressão digital de FERRAMENTA de esteganografia.
-// ⚠️ Achado honesto da investigação: a superfície aqui é MUITO menor que a de
+// Limite desta heurística: a superfície observável aqui é muito menor que a de
 // plataforma. Steghide e OutGuess NÃO recodificam o JPEG — preservam a estrutura
 // original e por isso não deixam assinatura estrutural. Só o F5/Westfeld
 // recodifica com codificador próprio, e o dele grava um comentário identificável.

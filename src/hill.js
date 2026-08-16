@@ -109,7 +109,7 @@ function adaptiveOrder(cost, candidatePx) {
 }
 
 // ════════════════════════════════════════
-//  EMBARALHAMENTO POR SENHA (FRENTE 2)
+//  EMBARALHAMENTO POR SENHA
 //  A senha semeia um PRNG determinístico (Mulberry32). Com ele, a ORDEM em que
 //  as posições do corpo recebem os bits é permutada (Fisher-Yates). Sem a senha,
 //  mesmo sabendo que é LSBM, não há como remontar a sequência: as posições

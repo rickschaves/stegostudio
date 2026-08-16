@@ -1,16 +1,15 @@
-# STEGO·STUDIO — Binários em base64
+# STEGO·STUDIO — Base64 asset store
 
-O repo não aceita binário: rejeita `.woff2`/`.ico` e **transcodifica PNG para
-JPEG**, redimensionando e destruindo o canal alfa (comprovado em 11/08/2026 —
-`favicon-16x16.png` chegou como JPEG 28×28). Este arquivo guarda os bytes como
-texto, que o repo transporta intacto.
+Binary assets used by the build are stored here as base64 text together with their
+expected byte length and SHA-256 hash. This keeps repository transfers deterministic and
+lets the build restore each asset without trusting an unchecked binary copy.
 
-**Uso:** `node unpack_assets.js` na raiz do repo. Decodifica cada bloco no
-caminho do cabeçalho `##` e **confere o SHA-256**; se um byte mudou, falha em
-vez de gravar. `--check` só verifica; `--pack <arquivo>` gera um bloco novo.
+**Usage:** run `node unpack_assets.js` from the repository root. It decodes every block
+into the path named by its `##` heading and verifies SHA-256 before writing.
+`node unpack_assets.js --check` verifies the stored material without rewriting it.
 
-Reconstrói `src/fonts/` (necessário para buildar) e `deploy/` (tudo que sobe
-para a Cloudflare, junto com o `index.html`).
+The restored assets include `src/fonts/` for the single-file build and `deploy/` for the
+static files that accompany `index.html` in production.
 
 ---
 ## src/fonts/ibm-plex-mono-400.woff2

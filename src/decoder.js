@@ -19,7 +19,7 @@ function extractLSBStudio(imageData, password='') {
   const magicOK = (bytes) => { for (let i=0;i<MAGIC.length;i++) if (bytes[i]!==MAGIC[i]) return false; return true; };
 
   if (magicOK(rawHeader)) {
-    hBytes = rawHeader;                       // header em claro
+    hBytes = rawHeader;
   } else if (password.length > 0) {
     const dec = xorHeader(rawHeader, password); // tenta decifrar (furtivo)
     if (magicOK(dec)) { hBytes = dec; stealth = true; }
@@ -51,7 +51,7 @@ function extractLSBStudio(imageData, password='') {
   // especial para o chamador pedir a senha.
   if (shuffled && password.length === 0) return { needsPassword: true };
 
-  // ── CORPO via STC (Frente #13): lê o w-byte (decifra se furtivo), reconstrói Ĥ
+  // ── CORPO via STC: lê o w-byte (decifra se furtivo), reconstrói Ĥ
   //    e extrai por síndrome (independente de custo, sem recalcular HILL). ──
   if (isStc) {
     let rawW = 0;
@@ -94,7 +94,7 @@ function extractLSBStudio(imageData, password='') {
       const pxIdx = headerBits + k;
       if (pxIdx >= op.length) break;
       const px = op[pxIdx];
-      const i = order ? order[k] : k;       // qual bit do corpo essa posição carrega
+      const i = order ? order[k] : k;
       payload[Math.floor(i/8)] |= (d[px*4+2]&1) << (7-(i%8));
     }
   } else {
@@ -111,7 +111,7 @@ function extractLSBStudio(imageData, password='') {
 }
 
 // ════════════════════════════════════════
-//  NEGAÇÃO PLAUSÍVEL — extração da mensagem-isca (decoy) — Opção C
+//  NEGAÇÃO PLAUSÍVEL — extração da mensagem alternativa
 //  Sonda a âncora fixa no FIM do pool de pixels opacos. Lê o bloco-len (32 bytes
 //  fixos: iv+GCM(len)+tag), valida pela TAG do GCM. Se validar, lê o bloco-msg.
 //  Retorna a string da isca, ou null (sem isca ali / senha não é da isca). Nunca
@@ -141,8 +141,7 @@ async function extractDecoyTail(imageData, password) {
   const lenPlain = await decoyGcmDecrypt(blockLen, password);
   if (!lenPlain || lenPlain.length !== 4) return null; // tag inválida → sem isca
   const len = new DataView(lenPlain.buffer, lenPlain.byteOffset).getUint32(0, false);
-  if (len <= 0 || len > op.length / 8) return null;    // sanidade
-
+  if (len <= 0 || len > op.length / 8) return null;
   // Bloco-msg logo "acima" do bloco-len: iv(12) + ct(len) + tag(16).
   const blockMsgLen = 12 + len + 16;
   if (op.length < (BLOCK_LEN_BYTES + blockMsgLen) * 8) return null;
@@ -151,9 +150,10 @@ async function extractDecoyTail(imageData, password) {
   if (!plain) return null;
   return new TextDecoder('utf-8', { fatal: false }).decode(plain);
 }
-//  como OpenStego e OpenPuff. NÃO detectam LSBM (matching), que evita a
-//  assimetria estrutural — por isso imagens do próprio STEGO·STUDIO (que agora
-//  usa LSBM) passam limpas por estes testes, como esperado.
+// ════════════════════════════════════════
+//  DETECTORES ESTATÍSTICOS DE LSB REPLACEMENT
+//  RS/WS exploram assimetrias introduzidas por replacement. Não detectam LSBM
+//  de forma equivalente, porque matching evita a estrutura que esses testes medem.
 // ════════════════════════════════════════
 
 // RS Attack (Regular–Singular), Fridrich et al. 2001.
@@ -164,8 +164,8 @@ function rsAttack(data, channelOffset, width, height) {
   // Função discriminante: variação absoluta entre pixels vizinhos do grupo
   const groupSize = 4;
   // F1: flip LSB (0<->1, 2<->3, ...) ; F-1: flip "shifted" (1<->2, 3<->4, ...)
-  const flip = (v) => v ^ 1;                       // F1
-  const flipNeg = (v) => ((v + 1) ^ 1) - 1;        // F-1 (shifted)
+  const flip = (v) => v ^ 1;
+  const flipNeg = (v) => ((v + 1) ^ 1) - 1;
   const px = (i) => data[i*4 + channelOffset];
 
   function smoothness(vals) {
@@ -245,7 +245,7 @@ function wsAttack(data, channelOffset, width, height) {
 //  Imagens naturais quase nunca têm os três canais tão simétricos.
 //  IMPORTANTE: sem o modelo neural original isto é uma SUSPEITA estatística, não
 //  uma prova. Serve para levantar a hipótese, jamais para afirmar com certeza.
-// ---- #21 Auto-report de furtividade (v2.25.0) ----
+// ---- Avaliação de furtividade da saída do Encoder ----
 // Roda o arsenal estatístico na PRÓPRIA saída do encoder e devolve o veredito,
 // usando OS MESMOS limiares do Analyzer (runForensics) para nunca discordar dele:
 // RS>0.15 = detectável (confiável), >0.08 = sinal fraco, abaixo = indistinguível.
@@ -262,7 +262,7 @@ function analyzeOutputStealth(data, width, height) {
   return { rs, ws, wsReliable, verdict };
 }
 
-// ---- #22 Mapa de resíduos: RS por célula da grade (canal azul, o padrão furtivo).
+// ---- Mapa de resíduos: RS por célula da grade (canal azul, o padrão furtivo).
 // Localiza ONDE o sinal RS é mais forte — o "onde vazou". Reaproveita rsAttack.
 function rsResidualMap(data, w, h, cols, rows, allCh) {
   const map = [];
@@ -316,8 +316,8 @@ function neuralStegoHeuristic(data, width, height) {
 
   // Similaridade entre canais: 1 = idênticos, 0 = muito diferentes.
   const spread = (a) => { const mx=Math.max(...a), mn=Math.min(...a); return mx>0?(mx-mn)/mx:0; };
-  const entSim = 1 - spread(lsbEntropy);  // quão parecidas as entropias LSB
-  const hfSim  = 1 - spread(hfEnergy);    // quão parecidas as energias HF
+  const entSim = 1 - spread(lsbEntropy);
+  const hfSim  = 1 - spread(hfEnergy);
   const minEnt = Math.min(...lsbEntropy); // todos os canais com LSB quase aleatório?
   const avgHF  = hfEnergy.reduce((a,b)=>a+b,0)/3;
 
@@ -433,10 +433,11 @@ function extractHeader(bytes, islandStart) {
       break;
     }
   }
-  // Um header plausível tem entre 2 e 16 caracteres e ao menos uma letra
-  if (header.length >= 2 && header.length <= 16 && /[A-Za-z]/.test(header)) {
-    return header;
-  }
+  // Only names whose framing is actually known are treated as tool headers. An
+  // arbitrary alphanumeric prefix inside ciphertext is not protocol evidence.
+  // The generic investigator can still expose the text island as a candidate; it
+  // simply cannot gain trust from an unknown prefix.
+  if (/^(?:JOI_LSB\d?|STEGO|LSB|STEG)$/i.test(header)) return header;
   return null;
 }
 
@@ -525,6 +526,59 @@ function findTextIsland(bytes) {
   return best;
 }
 
+
+// ════════════════════════════════════════
+//  CARRIER PREFLIGHT
+// ════════════════════════════════════════
+// Lightweight, password-free check used by the Encoder before writing a new
+// payload. It looks only for obvious remnants that can be recognized without
+// trusting a full forensic verdict: a visible native header or a coherent text
+// island in common pixel-LSB layouts. A negative result is not evidence that a
+// carrier is free of hidden data.
+function inspectCarrierPreflight(imageData, fmt) {
+  const cat = typeof fmt === 'string' ? fmt : fmt?.cat;
+  if (!imageData?.data || cat !== 'lossless') {
+    return { checked:false, suspicious:false, signals:[] };
+  }
+
+  const d = imageData.data;
+  const rawHeader = new Uint8Array(HEADER_BYTES);
+  let bit = 0;
+  for (let p = 0; p < d.length / 4 && bit < HEADER_BYTES * 8; p++) {
+    if (d[p*4+3] !== 255) continue;
+    rawHeader[bit >> 3] |= (d[p*4+2] & 1) << (7 - (bit & 7));
+    bit++;
+  }
+
+  if (bit === HEADER_BYTES * 8) {
+    let magic = true;
+    for (let i = 0; i < MAGIC.length; i++) {
+      if (rawHeader[i] !== MAGIC[i]) { magic = false; break; }
+    }
+    if (magic) {
+      const modeByte = rawHeader[5];
+      const mode = modeByte & ~(FLAG_SHUFFLED | FLAG_ADAPTIVE | FLAG_STEALTH |
+                                FLAG_COMPRESSED | FLAG_STC | FLAG_HILLV2);
+      const len = (rawHeader[6] | (rawHeader[7] << 8) |
+                  (rawHeader[8] << 16) | (rawHeader[9] << 24)) >>> 0;
+      if ((mode === MODE_B || mode === MODE_RGB) && len > 0 && len <= 5_000_000) {
+        return { checked:true, suspicious:true, signals:['native-header'] };
+      }
+    }
+  }
+
+  const total = imageData.width * imageData.height;
+  const maxBytes = Math.min(Math.floor(total / 8), 8000);
+  if (maxBytes < 12) return { checked:true, suspicious:false, signals:[] };
+
+  const raw = extractLSBRaw(imageData, maxBytes);
+  if (raw?.foundText && raw.foundTextLength >= 12) {
+    return { checked:true, suspicious:true, signals:['readable-lsb-text'] };
+  }
+
+  return { checked:true, suspicious:false, signals:[] };
+}
+
 // ════════════════════════════════════════
 //  HELPERS
 // ════════════════════════════════════════
@@ -551,7 +605,7 @@ function classifyFormat(file, magicBytes) {
     // JPEG: FF D8 FF  (cobre jpg, jpeg, jfif, jpe, exif, etc.)
     if (b[0]===0xFF && b[1]===0xD8 && b[2]===0xFF)
       return {cat:'lossy', ext:'JPEG', encOk:false,
-        msg:'JPEG usa compressão DCT lossy — LSBs são destruídos na compressão. Análise de coeficientes DCT, IA, strings e metadados funcionam.'};
+        msg:'JPEG uses lossy DCT compression — pixel LSBs are not preserved. DCT coefficient analysis, strings and metadata remain available.'};
     // PNG: 89 50 4E 47 0D 0A 1A 0A
     if (b[0]===0x89 && b[1]===0x50 && b[2]===0x4E && b[3]===0x47)
       return {cat:'lossless', ext:'PNG', encOk:true};
@@ -561,7 +615,7 @@ function classifyFormat(file, magicBytes) {
     // GIF: 47 49 46 38
     if (b[0]===0x47 && b[1]===0x49 && b[2]===0x46 && b[3]===0x38)
       return {cat:'palette', ext:'GIF', encOk:false,
-        msg:'GIF usa paleta de 256 cores indexadas — LSBs distorcidos por quantização. Análise LSB não confiável.'};
+        msg:'GIF uses an indexed-color palette — pixel LSBs are altered by quantization, so LSB analysis is not reliable.'};
     // TIFF: 49 49 2A 00  ou  4D 4D 00 2A
     if ((b[0]===0x49 && b[1]===0x49 && b[2]===0x2A) || (b[0]===0x4D && b[1]===0x4D && b[2]===0x00))
       return {cat:'lossless', ext:'TIFF', encOk:true};
@@ -571,12 +625,12 @@ function classifyFormat(file, magicBytes) {
       const c = b[15];
       if (c===0x4C) return {cat:'lossless', ext:'WEBP', encOk:true, webp:true}; // VP8L
       return {cat:'lossy', ext:'WEBP lossy', encOk:false,
-        msg:'WEBP lossy usa compressão VP8 — LSBs destruídos.'};
+        msg:'Lossy WebP uses VP8 compression — pixel LSBs are not preserved.'};
     }
     // HEIC/AVIF: ....ftyp + marca
     if (b[4]===0x66 && b[5]===0x74 && b[6]===0x79 && b[7]===0x70)
       return {cat:'lossy', ext:'HEIC/AVIF', encOk:false,
-        msg:'Formato HEIF/AVIF (ftyp) usa compressão HEVC/AV1 lossy — LSBs destruídos. Análise forense parcial.'};
+        msg:'HEIF/AVIF (ftyp) uses lossy HEVC/AV1 compression — pixel LSBs are not preserved. Forensic coverage is partial.'};
   }
 
   // ── fallback por MIME/extensão (quando não há magic) ──
@@ -589,13 +643,13 @@ function classifyFormat(file, magicBytes) {
   // JPEG por MIME ou por QUALQUER extensão comum de JPEG (inclui jfif, jpe)
   if (['image/jpeg','image/jpg'].includes(mime) || ['jpg','jpeg','jfif','jpe','jif','jfi'].includes(ext))
     return {cat:'lossy', ext:'JPEG', encOk:false,
-      msg:'JPEG usa compressão DCT lossy — LSBs são destruídos na compressão. Análise de coeficientes DCT, IA, strings e metadados funcionam.'};
+      msg:'JPEG uses lossy DCT compression — pixel LSBs are not preserved. DCT coefficient analysis, strings and metadata remain available.'};
   if (['image/avif','image/heic','image/heif'].includes(mime) || ['avif','heic','heif'].includes(ext))
     return {cat:'lossy', ext:ext.toUpperCase(), encOk:false,
-      msg:`${ext.toUpperCase()} usa compressão AV1/HEVC lossy — LSBs destruídos. Análise forense parcial disponível.`};
+      msg:`${ext.toUpperCase()} uses lossy AV1/HEVC compression — pixel LSBs are not preserved. Forensic coverage is partial.`};
   if (mime==='image/gif' || ext==='gif')
     return {cat:'palette', ext:'GIF', encOk:false,
-      msg:'GIF usa paleta de 256 cores indexadas — LSBs distorcidos por quantização. Análise LSB não confiável.'};
+      msg:'GIF uses an indexed-color palette — pixel LSBs are altered by quantization, so LSB analysis is not reliable.'};
   // Fallback: trata como lossless para não bloquear
   return {cat:'lossless', ext:ext.toUpperCase(), encOk:false};
 }
@@ -707,7 +761,7 @@ function detectStegomalware(text) {
 }
 
 // ════════════════════════════════════════
-//  MOTOR DE TERCEIRO — OpenStego (RandomLSB)  [F2]
+//  MOTOR DE TERCEIRO — OpenStego (RandomLSB)
 //  Decodifica imagens geradas pela ferramenta OpenStego (v0.8.x). Algoritmo
 //  reimplementado a partir da especificação/fonte oficial (GPLv2 — lógica
 //  reimplementada, sem cópia de código). Validado contra amostras reais.
@@ -716,7 +770,7 @@ function detectStegomalware(text) {
 //  primeiros 15 chars, base 16. PRNG = java.util.Random (LCG 48-bit). Posições:
 //  nextInt(w), nextInt(h), nextInt(3)=canal(0=B,1=G,2=R), nextInt(chBits), pulando
 //  repetidas. Header: "OPENSTEGO"+ver(2)+[len4LE,chBits,fnLen,comp,enc]+algo8+nome.
-//  Dados: gzip por padrão; AES opcional (não implementado nesta fatia).
+//  Dados: gzip por padrão; AES opcional (não implementado neste decoder).
 // ════════════════════════════════════════
 
 // java.util.Random fiel (LCG 48-bit) via BigInt.
@@ -832,7 +886,7 @@ function osExtract(imageData, password){
     const channelBits=hdr[4], fileNameLen=hdr[5];
     const useCompression=hdr[6]===1, useEncryption=hdr[7]===1;
     if(dataLength<=0 || dataLength>w*h*3) return null; // sanidade
-    r.readBytes(8); // cryptAlgo (ignorado nesta fatia)
+    r.readBytes(8); // cryptAlgo (não usado por este decoder)
     let fileName='';
     if(fileNameLen>0) fileName=new TextDecoder().decode(r.readBytes(fileNameLen));
     r.setChannelBits(channelBits);
@@ -885,7 +939,7 @@ function osIdentify(imageData, password){
 }
 
 // ════════════════════════════════════════
-//  MOTOR DE TERCEIRO — Steghide (BMP espacial + JPEG DCT)  [F3]
+//  MOTOR DE TERCEIRO — Steghide (BMP espacial + JPEG DCT)
 //  Decodifica imagens geradas pela ferramenta Steghide (0.5.x). Algoritmo
 //  reimplementado da spec/fonte oficial (GPLv2 — lógica reimplementada, sem
 //  copiar código). Validado contra amostras reais do binário oficial.
@@ -1035,9 +1089,9 @@ function shAesKey(password){
 // mas como o canvas entrega top-down, o mapeamento de posição do Selector muda.
 // → BMP via browser fica como caso futuro; priorizamos JPEG (caso comum real).
 
-// EValues de um JPEG a partir dos bytes crus (usa jpeg_dct.js / F3-B).
+// EValues de um JPEG a partir dos bytes crus (usa jpeg_dct.js).
 // steghide JPEG: sample = coeficiente DCT != 0, spv=3, mod=2, EValue=|coef|%2.
-// F7: `dec` opcional — coeficientes já decodificados, compartilhados entre os
+// `dec` opcional — coeficientes já decodificados, compartilhados entre os
 // motores. Sem ele, decodifica por conta própria (a função segue autônoma).
 function shJpegEValues(jpegBytes, dec){
   try{ if(!dec) dec=decodeJpegCoefficients(jpegBytes); }catch(_){ return null; }
@@ -1096,7 +1150,7 @@ function shIdentifyJpeg(jpegBytes, password, dec){
 }
 
 // ════════════════════════════════════════
-//  MOTOR DE TERCEIRO — OutGuess 0.4 (JPEG, domínio DCT)  [F5]
+//  MOTOR DE TERCEIRO — OutGuess 0.4 (JPEG, domínio DCT)
 //  Decodifica imagens geradas pela ferramenta OutGuess. Algoritmo
 //  reimplementado da spec/fonte oficial (licença BSD — lógica reimplementada,
 //  sem copiar código). Validado contra amostras reais do binário oficial.

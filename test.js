@@ -2,12 +2,9 @@
 /*
  * STEGO·STUDIO — harness de teste (Node puro, zero dependência)
  *
- * Roda `node test.js` antes de cada deploy. Faz um build em memória e valida
- * invariantes que devem SEMPRE valer. Sai com código 1 se qualquer um falhar,
- * para poder ser usado em CI ou como gate manual.
- *
- * NÃO trava o desenvolvimento normal: só verifica o que não pode regredir
- * (sintaxe, i18n, versão, offline, eventos, changelog).
+ * Faz um build em memória e valida invariantes explícitos do projeto. Sai com
+ * código 1 se qualquer propriedade coberta falhar. Um resultado verde prova
+ * somente essas propriedades; não é prova geral de correção ou segurança.
  */
 'use strict';
 const fs = require('fs');
@@ -92,9 +89,9 @@ check('paridade i18n (EN == PT)', () => {
 });
 
 // ---------------------------------------------------------------------------
-// CHECK 4 — consistência da versão nos 3 touchpoints
+// CHECK 4 — consistência dos identificadores de versão do produto
 // ---------------------------------------------------------------------------
-check(`versão consistente (v${VERSION}) nos 3 touchpoints`, () => {
+check(`versão consistente (v${VERSION}) nos identificadores públicos`, () => {
   const header = new RegExp(`v${VERSION.replace(/\./g, '\\.')} // ENCODER`).test(html);
   const json = html.includes(`_tool:'STEGO·STUDIO v${VERSION}'`);
   const changelog = new RegExp(`ver:'v${VERSION.replace(/\./g, '\\.')}'`).test(html);
@@ -107,10 +104,9 @@ check(`versão consistente (v${VERSION}) nos 3 touchpoints`, () => {
 // ---------------------------------------------------------------------------
 // CHECK 4b — injeção literal: nenhum caractere consumido pelo String.replace
 //
-// Com substituição por STRING, o JS interpreta $$, $&, $`, $' e $<nome> como
-// padrões e os remove em silêncio (sem erro, sem aviso). O hash-wasm.js tem 3
-// ocorrências de "$$" que eram engolidas assim. build.js usa substituição por
-// FUNÇÃO; este check garante que ninguém volte atrás.
+// Replacements textuais interpretam $$, $&, $`, $' e $<nome> como sequências
+// especiais. O build usa callbacks; este check exige identidade byte a byte dos
+// blocos injetados para que conteúdo de módulo nunca seja consumido.
 // ---------------------------------------------------------------------------
 check('injeção literal dos blocos (sem consumo de $)', () => {
   const blobs = {
@@ -164,7 +160,6 @@ check('nenhum onclick inline no HTML', () => {
 
 // ---------------------------------------------------------------------------
 // CHECK 8 — tipos de badge do changelog válidos (add/chg/fix)
-//           (esta checagem teria pego o bug do "undefined" do t:'new')
 // ---------------------------------------------------------------------------
 check("tipos do changelog válidos (add/chg/fix)", () => {
   const types = [...html.matchAll(/\{\s*t\s*:\s*'([a-z]+)'/g)].map(m => m[1]);
@@ -179,19 +174,28 @@ check("tipos do changelog válidos (add/chg/fix)", () => {
 // ---------------------------------------------------------------------------
 check('eventos: alvos no DOM + funções definidas', () => {
   const targets = ['class="tab enc', 'class="tab dec', 'id="settings-gear"',
-    'id="settings-help"', 'id="settings-changelog"', 'id="lang-en"', 'id="lang-pt"',
+    'id="settings-help"', 'id="settings-changelog"', 'id="settings-about"', 'id="lang-en"', 'id="lang-pt"',
     'id="help-overlay"', 'id="help-close-btn"', 'id="changelog-overlay"',
-    'id="changelog-close-btn"', 'class="module-header"',
-    // modo robusto (F4): o contrato de DOM da segunda saída do Encoder
+    'id="changelog-close-btn"', 'id="about-overlay"', 'id="about-close-btn"', 'class="module-header"',
+    'id="enc-key"', 'id="enc-decoy-key"', 'id="dec-key"',
+    'id="btn-encode"', 'id="btn-analyze"',
+    // contrato de DOM da segunda saída do Encoder
     'id="enc-rb"', 'id="rb-body"', 'id="rb-unavailable"', 'id="rb-out-prev"',
-    'id="btn-dl-rb"', 'id="rb-stats"', 'id="rb-report"', 'id="enc-tips"', 'id="enc-decoy-pngonly"'];
+    'id="btn-dl-rb"', 'id="rb-stats"', 'id="rb-report"', 'id="enc-tips"', 'id="enc-decoy-pngonly"',
+    'id="enc-decoy-needmsg-warn"',
+    'id="enc-preflight"', 'id="enc-preflight-ok"', 'id="enc-preflight-warn"',
+    'id="enc-preflight-use"', 'id="enc-preflight-choose"', 'id="enc-preflight-continued"'];
   const missT = targets.filter(t => !html.includes(t));
   assert(missT.length === 0, `alvo(s) ausente(s): ${missT.join(', ')}`);
+  const helpMenuPos = html.indexOf('id="settings-help"');
+  const historyMenuPos = html.indexOf('id="settings-changelog"');
+  const aboutMenuPos = html.indexOf('id="settings-about"');
+  assert(helpMenuPos < historyMenuPos && historyMenuPos < aboutMenuPos,
+    'ordem do menu precisa ser How It Works → Version History → About This Project');
 
-  // Os painéis de saída do Encoder TÊM de começar ocultos. Já regrediu uma vez:
-  // uma regra CSS mais específica venceu o `.download-wrap{display:none}` e o
-  // relatório aparecia antes de existir imagem. Especificidade não é testável
-  // sem navegador, então a asserção mira a causa conhecida.
+  // Os painéis de saída do Encoder precisam começar ocultos. Como a especificidade
+  // CSS não é simulada pelo harness, a asserção bloqueia uma regra mais específica
+  // que tornaria o painel visível antes de existir uma saída.
   const semVisible = /\.out-pair\s*>\s*\.download-wrap\s*\{/.test(html);
   assert(!semVisible, '.out-pair > .download-wrap sem .visible — painel vaza antes do encode');
   const tipsOcultas = /\.enc-tips-solo\s*\{[^}]*display\s*:\s*none/.test(html);
@@ -207,21 +211,66 @@ check('eventos: alvos no DOM + funções definidas', () => {
     'falta a regra .key-warning.kw-static{display:block}');
 
   const fns = ['switchTab', 'toggleSettingsMenu', 'showHelpModal',
-    'closeSettingsMenu', 'showChangelogModal', 'setLang', 'hideHelpModal',
-    'hideChangelogModal', 'toggleAccordionItem'];
+    'closeSettingsMenu', 'showChangelogModal', 'showAboutModal', 'setLang', 'hideHelpModal',
+    'hideChangelogModal', 'hideAboutModal', 'toggleAccordionItem'];
   const missF = fns.filter(f => !new RegExp(`function ${f}\\b`).test(html));
   assert(missF.length === 0, `função(ões) não definida(s): ${missF.join(', ')}`);
-  return `${targets.length} alvos + ${fns.length} funções`;
+  // Enter nos campos de senha aciona a ação primária somente
+  // quando o próprio botão já está disponível. Não pode interferir em IME,
+  // repetir ao segurar a tecla, nem transformar textarea de mensagem em submit.
+  const enterStart = html.indexOf('function bindEnterToEnabledAction');
+  const enterEnd = html.indexOf('// Fecha ao clicar fora do menu', enterStart);
+  const enterBlock = html.slice(enterStart, enterEnd);
+  assert(enterStart >= 0 && enterEnd > enterStart, 'helper de ENTER não encontrado');
+  assert(enterBlock.includes("e.key !== 'Enter'") && enterBlock.includes('e.repeat') &&
+         enterBlock.includes('e.isComposing') && enterBlock.includes('e.keyCode === 229'),
+    'ENTER não protege repetição/IME corretamente');
+  assert(enterBlock.includes("button.getAttribute('aria-disabled') === 'true'") &&
+         enterBlock.includes('button.disabled') && enterBlock.includes('button.click()'),
+    'ENTER não respeita o gate real do botão');
+  for (const pair of [
+    ["'enc-key'", "'btn-encode'"],
+    ["'enc-decoy-key'", "'btn-encode'"],
+    ["'dec-key'", "'btn-analyze'"],
+  ]) {
+    assert(enterBlock.includes(`bindEnterToEnabledAction(${pair[0]}, ${pair[1]})`),
+      `binding de ENTER ausente: ${pair.join(' → ')}`);
+  }
+  assert(!/bindEnterToEnabledAction\(['"]enc-msg['"]/.test(enterBlock) &&
+         !/bindEnterToEnabledAction\(['"]enc-decoy-msg['"]/.test(enterBlock),
+    'ENTER foi ligado a textarea de mensagem e bloquearia novas linhas');
+  const readyStart = html.indexOf('function checkEncReady()');
+  const readyEnd = html.indexOf('function checkDecReady', readyStart);
+  const readyBlock = html.slice(readyStart, readyEnd);
+  assert(readyBlock.includes('decoyNeedsMsg = decoyOn && decoyMsg.length===0') &&
+         readyBlock.includes('decoyBlocked = decoyNeedsMsg || decoyNeedsKey || decoySameKey'),
+    'segunda camada ligada ainda pode liberar Encode sem mensagem alternativa');
+  assert(readyBlock.includes('showNeedMsgAlert = decoyNeedsMsg && decoyKey.length>0'),
+    'aviso de mensagem alternativa voltou a aparecer antes de o usuário preencher a senha alternativa');
+  assert(readyBlock.includes('!encPreflightBlocked'),
+    'Carrier Preflight suspeito não participa do gate real do botão Encode');
+  const decoyKeyPos = html.indexOf('id="enc-decoy-key"');
+  const needMsgPos = html.indexOf('id="enc-decoy-needmsg-warn"');
+  const sameKeyPos = html.indexOf('id="enc-decoy-samekey-warn"');
+  assert(decoyKeyPos >= 0 && needMsgPos > decoyKeyPos && sameKeyPos > needMsgPos,
+    'aviso de mensagem alternativa ausente precisa ficar logo abaixo da senha alternativa');
+  assert(html.includes("if (decoyMsg) decoyMsg.addEventListener('input', () =>") &&
+         html.includes("if (typeof checkEncReady === 'function') checkEncReady();"),
+    'digitação na mensagem alternativa não reavalia o aviso imediatamente');
+  const enterBehavior = execSync(`node "${path.join(__dirname, 'test', 'check_enter_shortcut.js')}"`,
+    { encoding:'utf8', stdio:['ignore','pipe','pipe'] }).trim();
+  assert(enterBehavior.includes('ENTER shortcut OK'), 'comportamento do atalho ENTER falhou');
+
+  return `${targets.length} alvos + ${fns.length} funções + ENTER protegido`;
 });
 
 // ---------------------------------------------------------------------------
 // CHECK 12 — XSS: dado vindo do ARQUIVO nunca vira markup
 //
 // O modelo de ameaça desta ferramenta é "abrir uma imagem suspeita", então
-// metadado é entrada hostil. Até a v2.41.0 um EXIF com
-// `Make = <img src=x onerror=...>` executava script na página.
-// Este check extrai as funções REAIS do HTML construído e as roda contra
-// payloads hostis; falha se algum sobreviver como tag ou handler.
+// metadados são entrada hostil. Este check extrai as funções reais do HTML
+// construído e as executa contra payloads hostis; falha se algum sobreviver
+// como tag ou handler.
 // ---------------------------------------------------------------------------
 check('XSS: metadados hostis saem como texto, não markup', () => {
   const esc = html.match(/function escapeHTML\(s\)\s*\{[\s\S]*?\n\}/);
@@ -262,10 +311,9 @@ check('XSS: metadados hostis saem como texto, não markup', () => {
   assert(row('L', '<b>x</b>', '').includes('&lt;b&gt;'), 'row() não está escapando');
 
   // ── Varredura estática: interpolação de dado do ARQUIVO em template string ──
-  // A v2.42.0 escapou row() e declarou "tudo que vem do arquivo agora é
-  // escapado" — mas hl(), detailVars e labelVars ficaram de fora, e este check,
-  // por só exercitar row(), passou verde com os furos abertos. Um invariante
-  // que testa apenas o caminho já corrigido dá falsa segurança.
+  // Exercitar apenas um helper de renderização não basta: valores do arquivo
+  // também podem atravessar helpers e interpolações diferentes. A varredura
+  // procura esses caminhos para evitar cobertura enganosa.
   const camposDoArquivo = [
     'signerCN', 'genName', 'genVersion', 'rawSoftware', 'digitalSourceType',
     'aiGenerator', 'decodedSample', 'certDate',
@@ -317,15 +365,16 @@ check('XSS: metadados hostis saem como texto, não markup', () => {
     ['hl() — campos do manifesto C2PA',  'word-break:break-word">${escapeHTML(val)}'],
     ['laço de c2pa.signals',             'padding:2px 0">· ${escapeHTML(s)}'],
     ['amostra decodificada (LSB)',       'escapeHTML(r.lsb.decodedSample'],
+    ['tipo de string suspeita',           '[${escapeHTML(s.type)}]'],
+    ['conteúdo de string suspeita',       '${escapeHTML(s.str)}</div></div>`'],
   ];
   for (const [nome, trecho] of escapesObrigatorios) {
     if (!html.includes(trecho)) semEscape.push(`escape removido em ${nome}`);
   }
 
   // ── setStatus: texto puro por construção ──────────────────────────────────
-  // A revisão externa da v2.42.3 apontou que nem DOMParser nem regex eram
-  // necessários: os três chamadores sempre montavam `<span class="ok|err">…`
-  // só para ser desmontado dentro da função. Dois deles interpolam `e.message`,
+  // Os chamadores montam apenas `<span class="ok|err">…`; não é necessário
+  // aceitar markup genérico. Dois deles interpolam `e.message`,
   // que pode carregar conteúdo do arquivo. Texto puro remove a classe inteira
   // de problema — e este check impede que o parser volte.
   const ss = html.match(/function setStatus\([^)]*\)\s*\{[\s\S]*?\n\}/);
@@ -346,27 +395,18 @@ check('XSS: metadados hostis saem como texto, não markup', () => {
 
 
 // ---------------------------------------------------------------------------
-// CHECK 13 — catraca de innerHTML (allowlist de dívida técnica)
+// CHECK 13 — catraca de innerHTML
 //
-// `innerHTML` é a porta por onde dado de arquivo vira markup. As duas
-// auditorias de 11/08/2026 acharam 6 sinks nessa família, e o CHECK 12 é uma
-// REDE DE SEGURANÇA que tenta adivinhar se cada interpolação foi escapada —
-// ele funciona, mas está a caminho de virar um mini analisador de JavaScript
-// dentro do build, e isso envelhece mal.
-//
-// A defesa PRIMÁRIA é outra: reduzir o número de lugares onde innerHTML existe.
-// Esta catraca congela o conjunto atual e força a curva para baixo:
+// `innerHTML` é uma fronteira sensível porque transforma strings em markup.
+// O CHECK 12 valida escapes; esta catraca complementa isso congelando o conjunto
+// atual de sinks conhecidos e forçando revisão consciente quando ele muda:
 //   • sink NOVO           → build quebra
 //   • sink REMOVIDO       → ótimo, atualize a lista (o teste avisa)
 //   • sink ALTERADO       → assinatura muda, exige revisão consciente
 //   • contagem            → nunca aumenta
 //
-// Contar só o total seria cego à substituição: alguém remove um sink seguro,
-// acrescenta um perigoso, e o número continua o mesmo. Por isso a lista guarda
-// ASSINATURAS, não um número.
-//
-// META: 31 → 25 → 17 → 10 → poucos helpers nomeados. Ao baixar, atualize aqui.
-// v2.42.3: 31→27 (5 limpezas→textContent; setStatus→texto puro; fail-closed).
+// Contar só o total seria cego à substituição; por isso a lista guarda
+// assinaturas dos sinks, não apenas uma contagem.
 // ---------------------------------------------------------------------------
 const INNERHTML_PERMITIDOS = {
   "files|_btn.disabled=false;_btn.classList.remove('working');_btn.in": 1,
@@ -387,7 +427,6 @@ const INNERHTML_PERMITIDOS = {
   "results|div.innerHTML=`<spanclass=\"module-group-label${type}\">${labe": 1,
   "results|document.getElementById('threat-flags').innerHTML=": 1,
   "results|host.innerHTML=`": 1,
-  "terminal|//J\u00e1foi`div.innerHTML=html`numn\u00f3solto,depois`DOMParser`,ambo": 1,
   "terminal|el.innerHTML=html;": 1,
   "terminal|el.innerHTML=line;": 1,
   "terminal|el.innerHTML=rendered.join('<br>')+(rendered.length?'<br>':'": 1,
@@ -396,7 +435,7 @@ const INNERHTML_PERMITIDOS = {
   "warnings|host.innerHTML=`": 2,
 };
 
-check('catraca de innerHTML (não cresce, não muda sem revisão)', () => {
+check('catraca de innerHTML (não cresce nem muda sem revisão)', () => {
   const atual = {};
   for (const m of MODULE_ORDER) {
     const src = fs.readFileSync(path.join(SRC, m), 'utf8');
@@ -404,9 +443,8 @@ check('catraca de innerHTML (não cresce, não muda sem revisão)', () => {
       const s = linha.trim();
       if (!s.includes('innerHTML')) continue;
       // FAIL-CLOSED: comentário NÃO é ignorado. Uma heurística de comentário
-      // pode, em alguma forma sintática inesperada, esconder código real — e
-      // esse erro é silencioso. Um `innerHTML` escrito num comentário novo
-      // gerar uma revisão é falso positivo barato e consciente.
+      // pode, em alguma forma sintática inesperada, esconder código real. Um
+      // falso positivo aqui é preferível a deixar um sink novo passar silenciosamente.
       const sig = m.replace(/\.js$/, '') + '|' + s.replace(/\s+/g, '').slice(0, 60);
       atual[sig] = (atual[sig] || 0) + 1;
     }
@@ -458,20 +496,19 @@ check('golden fixtures: payloads antigos continuam abrindo', () => {
 
 
 // ---------------------------------------------------------------------------
-// CHECK 15 — comportamento do Threat (primeiro check que EXECUTA a lógica)
+// CHECK 15 — comportamento do Threat (executa a lógica real)
 //
-// Origem: smoke test real de 12/08/2026, cinco relatórios exportados.
-// Dois defeitos que build verde não pegaria:
-//   (A) extração nativa PNG confirmada dava o MESMO threat que senha errada;
-//   (B) imagem C2PA sem stego saturava em 100, porque a supressão C2PA era
-//       desligada pelos próprios sinais moles que ela existe para suprimir.
-// Este check roda o computeThreat REAL do HTML construído contra relatórios
-// mínimos derivados daqueles casos.
+// Valida propriedades de pontuação que checks estáticos não capturam: evidência
+// nativa confirmada deve pesar mais que ausência de evidência, enquanto sinais
+// estatísticos fracos em contexto C2PA não devem saturar a pontuação. A função
+// computeThreat real do HTML é executada contra relatórios mínimos controlados.
 // ---------------------------------------------------------------------------
 check('threat: extração confirmada pesa, imagem C2PA limpa não satura', () => {
   const m = html.match(/function computeThreat\(r\)\s*\{[\s\S]*?\n\}/);
   const mP = html.match(/function resolveProtocolState\(r\)\s*\{[\s\S]*?\n\}/);
   assert(m && mP, 'computeThreat ou resolveProtocolState não encontrados no HTML final');
+  assert(!/\bneuralPro\b/.test(m[0]) && !/\bneuralPro\b/.test(html.match(/function consolidateVerdict\(r, decodedMsg, decodeStatus, fromDeepScan\)\s*\{[\s\S]*?\n\}/)?.[0] || ''),
+    'caminho de decisão voltou a depender do estado morto neuralPro');
   const tStub = k => k;
   const resolveProtocolState = new Function('t', mP[0] + '\nreturn resolveProtocolState;')(tStub);
   const computeThreat = new Function('t','resolveProtocolState', m[0] + '\nreturn computeThreat;')(tStub, resolveProtocolState);
@@ -485,7 +522,7 @@ check('threat: extração confirmada pesa, imagem C2PA limpa não satura', () =>
     color:{rareSuspicious:false}, frequency:{}, c2pa:{}, studio:{available:true}, stegomalware:[],
   });
 
-  // (A) extração nativa confirmada > senha errada, na MESMA imagem
+  // Extração nativa confirmada deve pesar mais que ausência de evidência nativa.
   const errada = computeThreat(base());
   const bCerta = base(); bCerta.studio = {available:true,nativeExtracted:true};
   const certa = computeThreat(bCerta);
@@ -494,10 +531,8 @@ check('threat: extração confirmada pesa, imagem C2PA limpa não satura', () =>
   assert(certa.flags.includes('flagStudioExtracted'),
     'extração nativa confirmada não gerou flag própria');
 
-  // (A2) header localizado SEM conteúdo recuperado ≠ extração confirmada.
-  // Seis ramos do decode terminam com decodedMsg=null depois do header casar
-  // (GCM em corpo corrompido, cifra sem senha, inflate falhando). Chamar isso
-  // de "extraído" afirmaria mensagem onde não houve nenhuma.
+  // Header localizado sem conteúdo recuperado é evidência estrutural, mas não
+  // equivale a uma extração confirmada.
   const bSoHeader = base(); bSoHeader.studio = {available:true,nativeHeaderMatched:true};
   const soHeader = computeThreat(bSoHeader);
   assert(soHeader.score > errada.score,
@@ -509,7 +544,7 @@ check('threat: extração confirmada pesa, imagem C2PA limpa não satura', () =>
   assert(soHeader.flags.includes('flagStudioHeaderOnly'),
     'header localizado sem conteúdo não gerou flag própria');
 
-  // (B) imagem C2PA com sinais MOLES não pode saturar
+  // Contexto C2PA com apenas sinais fracos não pode saturar a pontuação.
   const c2 = base();
   c2.c2pa = {manifestDetected:true};
   c2.lsb.cipherSuspicion = true;                 // janela chi baixa — estatístico
@@ -520,7 +555,7 @@ check('threat: extração confirmada pesa, imagem C2PA limpa não satura', () =>
   assert(limpa.score < 50,
     `imagem C2PA só com sinais moles saturou o threat (${limpa.score}) — a supressão não rodou`);
 
-  // ...mas evidência DURA na mesma imagem C2PA continua acusando
+  // Evidência forte continua relevante mesmo em contexto C2PA.
   const dura = base();
   dura.c2pa = {manifestDetected:true};
   dura.studio = {available:true,hasHeader:true};
@@ -528,15 +563,14 @@ check('threat: extração confirmada pesa, imagem C2PA limpa não satura', () =>
   assert(comHeader.score >= 40,
     `evidência dura foi suprimida pelo contexto C2PA (${comHeader.score}) — escotilha quebrada`);
 
-  // ...e RS forte sozinho (>15%) não é suprimível
+  // RS forte (>15%) também permanece evidência relevante.
   const rsForte = base();
   rsForte.c2pa = {manifestDetected:true};
   rsForte.lsb.lsbrDetected = true; rsForte.lsb.lsbrStrong = true; rsForte.lsb.rsRate = '31.0%';
   assert(computeThreat(rsForte).score >= 45, 'RS forte foi suprimido — não deveria');
 
 
-  // labelVars interpolado também fora da UI (relatório exportado saía com
-  // "{ratio}" cru enquanto o sinal carregava ratio:"2:3").
+  // labelVars também precisa ser interpolado na representação exportável do sinal.
   assert(/for \(const \[k,v\] of Object\.entries\(s\.labelVars\)\)/.test(html),
     'interpolação de labelVars sumiu do caminho de synth.flags');
 
@@ -554,16 +588,9 @@ check('threat: extração confirmada pesa, imagem C2PA limpa não satura', () =>
 // ---------------------------------------------------------------------------
 // CHECK 16 — Threat e Protocolo não podem divergir
 //
-// Origem: smoke test da v2.42.6. Com a senha certa a tela mostrava, ao mesmo
-// tempo, "payload STEGO·STUDIO extraído" no Threat e "Indeterminado (possível
-// cifra)" no Protocolo. Dois renderizadores do MESMO estado que derivaram:
-// o Threat passou a usar a evidência ativa nova, o accordion continuou lendo só
-// o `hasHeader` passivo.
-//
-// Este check roda as DUAS funções reais do HTML construído sobre os mesmos
-// relatórios e exige concordância. É por isso que `resolveProtocolState` foi
-// extraída como função pura — para o teste exercitar a lógica de produção em
-// vez de reimplementá-la e concordar consigo mesmo.
+// Threat, Protocolo e notas interpretativas descrevem a mesma evidência.
+// Este check roda as funções reais do HTML construído sobre os mesmos relatórios
+// e exige uma precedência coerente, sem reimplementar a lógica de produção.
 // ---------------------------------------------------------------------------
 check('Threat e Protocolo concordam sobre a mesma evidência', () => {
   const mT = html.match(/function computeThreat\(r\)\s*\{[\s\S]*?\n\}/);
@@ -583,8 +610,7 @@ check('Threat e Protocolo concordam sobre a mesma evidência', () => {
     studio:{available:true, ...st}, stegomalware:[],
   });
 
-  // Todas as 2³ combinações das três evidências nativas. A divergência da
-  // v2.42.14 vivia justamente numa combinação que os casos manuais não cobriam.
+  // Todas as 2³ combinações das três evidências nativas.
   const casos = [
     ['sem evidência ativa',                 {},                                                        'cipher',     null],
     ['header passivo',                      {hasHeader:true},                                          'passive',    'flagStudioHeader'],
@@ -632,8 +658,7 @@ check('Threat e Protocolo concordam sobre a mesma evidência', () => {
   // Força e redação são decisões diferentes. Um header passivo é evidência forte
   // mesmo quando `headerOnly` vence o rótulo por ser mais específico. Adicionar
   // `nativeHeaderMatched` NÃO pode derrubar o score nem apagar corroboradores da
-  // mesma imagem. Este é o caso que a v2.42.15 regrediu porque o fixture padrão
-  // tinha cipherSuspicion=true e mascarava a perda por outra via.
+  // mesma imagem. O fixture abaixo evita evidências paralelas que mascarariam isso.
   const strengthBase = st => ({
     format:{cat:'lossless'},
     lsb:{available:true,suspicious:false,cipherSuspicion:false,foundText:null,
@@ -654,9 +679,8 @@ check('Threat e Protocolo concordam sobre a mesma evidência', () => {
   }
 
   // ── TERCEIRA superfície: a nota interpretativa do accordion ──
-  // Threat (v2.42.5) e badge do Protocolo (v2.42.7) já concordavam; a NOTA
-  // continuava lendo `hasHeader` e dizia "nenhum texto legível foi recuperado"
-  // logo abaixo de "decifrado com chave ✓". Todas as três precisam derivar de
+  // Threat, badge do Protocolo e nota interpretativa precisam derivar da mesma
+  // decisão; nenhuma pode contradizer uma extração já confirmada.
   // resolveProtocolState.
   const mI = html.match(/if\(key==='studio'\) \{[\s\S]*?\n  \}/);
   assert(mI, 'interpretação do módulo studio não encontrada');
@@ -689,13 +713,8 @@ check('Threat e Protocolo concordam sobre a mesma evidência', () => {
 // ---------------------------------------------------------------------------
 // CHECK 17 — leitura de arquivo não pode travar o pipeline
 //
-// Smoke da v2.42.7: reanalisar a MESMA imagem depois de esvaziar a senha deixava
-// a barra presa em 20% ("Strings & bytes brutos") com o **console limpo**.
-// Causa estrutural: os três `new FileReader()` do forensics.js não tinham
-// `onerror`. Cada um vivia dentro de `new Promise(res => { r.onload = … })`, e
-// uma leitura que falha nunca dispara `onload` — a promessa fica pendente para
-// sempre, sem exceção e sem log. Console limpo + barra congelada é a assinatura
-// exata desse defeito.
+// Toda Promise de leitura precisa resolver ou rejeitar. Um FileReader sem
+// tratamento de erro pode deixar o pipeline pendente indefinidamente.
 // ---------------------------------------------------------------------------
 check('leitura de arquivo: erro vira rejeição, nunca promessa pendente', () => {
   const m = html.match(/function readFileBytes\(file, rotulo='arquivo'\)\s*\{[\s\S]*?\n\}/);
@@ -721,19 +740,15 @@ check('leitura de arquivo: erro vira rejeição, nunca promessa pendente', () =>
   assert(/_analisando = false;/.test(html), 'guarda de reentrância nunca é liberada');
 
   // ── Corrida A→B: execução obsoleta não publica ──
-  // Smoke da v2.42.8: carregar a imagem B durante a análise de A deixava o
-  // preview em B e o RESULTADO em A. A guarda `_analisando` só impede o segundo
-  // clique; não protege a operação viva contra a troca de `decID`/`decFile`.
+  // A guarda `_analisando` impede reentrância, mas a identidade da operação é
+  // necessária para descartar resultados pertencentes a uma imagem substituída.
   assert(/const run\s*=\s*analysisGeneration;/.test(html), 'snapshot de geração ausente na análise');
   assert(/const obsoleta = \(\) => run !== analysisGeneration;/.test(html), 'portão de obsolescência ausente');
   assert(/if \(obsoleta\(\)\) return;/.test(html), 'resultado é publicado sem conferir a geração');
   assert(/function bumpAnalysisGeneration\(\)/.test(html), 'bumpAnalysisGeneration ausente');
 
-  // ⚠️ A versão anterior deste check contava ocorrências TEXTUAIS e exigia ">=3".
-  // Havia exatamente 3: duas chamadas e A PRÓPRIA DEFINIÇÃO. O check ficou verde
-  // enquanto o caminho global de Ctrl+V não invalidava geração nenhuma — falsa
-  // confiança, que é pior que não ter check. Agora se prova a PROPRIEDADE:
-  // existe um ingresso único, e todo caminho de entrada passa por ele.
+  // O contrato correto é estrutural: existe um único ingresso e todo caminho de
+  // entrada passa por ele. A definição da função não conta como call site.
   assert(/async function loadDecoderFile\(file\)/.test(html),
     'ingresso único do Decoder ausente — cada caminho voltaria a duplicar o carregamento');
   assert(/loadDecoderFile\(file\);?\s*\n?\s*\}?\s*\)?/.test(html) || html.includes("setupDrop('dec-drop','dec-file', loadDecoderFile)"),
@@ -764,9 +779,8 @@ check('leitura de arquivo: erro vira rejeição, nunca promessa pendente', () =>
   // preservação de visibilidade simétrica no setLang
   assert(/classList\.toggle\('visible', !!resultsVisible\)/.test(html),
     'setLang não restaura o estado invisível — preservação assimétrica');
-  // a execução usa os snapshots, não o estado global
-  // Só linhas de CÓDIGO: os comentários explicam por que decFmt existe e
-  // mencionam o nome. (Foi assim que a contagem de FileReader errou antes.)
+  // A execução usa snapshots, não o estado global. Remova comentários antes de
+  // procurar identificadores para que a asserção examine somente código executável.
   const corpo = html.slice(html.indexOf("const obsoleta = () =>"), html.indexOf('if (obsoleta()) return;'))
     .split('\n').filter(l => !l.trim().startsWith('//')).join('\n');
   for (const g of ['decID', 'decFile', 'decFmt']) {
@@ -784,7 +798,7 @@ check('leitura de arquivo: erro vira rejeição, nunca promessa pendente', () =>
 });
 
 // ---------------------------------------------------------------------------
-// CHECK 18 — F1 + JPEG robusto: formato, portadora e regras reais de evidência
+// CHECK 18 — mensagens em camadas + JPEG resistente: formato e evidência
 //
 // Este check NÃO promete executar o pipeline DOM inteiro. Ele cobre três camadas
 // distintas e nomeadas honestamente:
@@ -792,8 +806,13 @@ check('leitura de arquivo: erro vira rejeição, nunca promessa pendente', () =>
 //   B) round-trip por uma portadora PNG sintética, incluindo transparência;
 //   C) a função PURA que decide extracted/headerOnly/none no pipeline de produção,
 //      mais guardas de fonte para o flash provisório e status das duas rotas.
+//
+// As catracas de fonte abaixo são DEFESA EM PROFUNDIDADE. A garantia de que
+// estado interno não escapa para o JSON é `serializePublicModules()`; estas
+// asserções servem para forçar revisão consciente antes da fronteira, não para
+// provar confidencialidade por sintaxe.
 // ---------------------------------------------------------------------------
-check('F1 + robusto: formato, portadora e regras de evidência', () => {
+check('camadas + robusto: formato, portadora e regras de evidência', () => {
   // (A) vetores históricos reais: retrocompatibilidade de FORMATO.
   const hist = execSync(`node "${path.join(__dirname, 'test', 'check_layered_fixture.js')}"`,
     { encoding:'utf8', stdio:['ignore','pipe','pipe'] }).trim();
@@ -816,8 +835,8 @@ check('F1 + robusto: formato, portadora e regras de evidência', () => {
     ['principal', {decodedMsg:'A', nativeHeaderMatched:true, nativePayloadRecovered:true, nativeLayerRecovered:false}, 'extracted'],
     ['alternativa', {decodedMsg:'B', nativeHeaderMatched:false, nativePayloadRecovered:false, nativeLayerRecovered:true}, 'extracted'],
     ['header sem conteúdo', {decodedMsg:null, nativeHeaderMatched:true, nativePayloadRecovered:false, nativeLayerRecovered:false}, 'headerOnly'],
-    // Regressão do parecer externo: header nativo casou/falhou e depois OpenStego
-    // produziu a mensagem. A mensagem final NÃO pode ser promovida a nativa.
+    // Se o header nativo casa mas o payload falha e OpenStego produz a mensagem,
+    // o resultado de terceiro NÃO pode ser promovido a evidência nativa.
     ['terceiro após header', {decodedMsg:'OpenStego', nativeHeaderMatched:true, nativePayloadRecovered:false, nativeLayerRecovered:false}, 'headerOnly'],
     ['nenhuma evidência', {decodedMsg:null, nativeHeaderMatched:false, nativePayloadRecovered:false, nativeLayerRecovered:false}, 'none'],
   ];
@@ -827,9 +846,8 @@ check('F1 + robusto: formato, portadora e regras de evidência', () => {
   }
 
   // Não basta a função pura existir e passar a tabela: o PIPELINE precisa consumir
-  // sua decisão DIRETAMENTE. A v2.42.15 ainda guardava o nível numa variável local;
-  // uma cópia mutável intermediária conseguia reabrir a contaminação OpenStego sem
-  // tocar na função testada. O fechamento agora não admite identificador de nível.
+  // sua decisão DIRETAMENTE. Uma cópia mutável intermediária criaria uma segunda
+  // superfície capaz de divergir da função pura testada.
   const resolverCall = /resolveNativeEvidence\(\{\s*decodedMsg,\s*nativeHeaderMatched,\s*nativePayloadRecovered,\s*nativeLayerRecovered\s*\}\)\.level/g;
   const nativeClose = html.slice(html.indexOf('CONSOLIDAÇÃO INICIAL'), html.indexOf('// ── PORTÃO ──'));
   const resolverCalls = nativeClose.match(resolverCall) || [];
@@ -860,6 +878,8 @@ check('F1 + robusto: formato, portadora e regras de evidência', () => {
     'rota do header não registra evidência local');
   assert(!/report\.studio\s*=/.test(headerBranch),
     'rota do header persiste estado no report antes do fechamento');
+  assert(!/report\.studio\s*(?:\.|\[)/.test(headerBranch),
+    'rota do header grava campo aninhado em studio antes do fechamento');
   assert(headerBranch.includes('nativePayloadRecovered=true'),
     'rota principal não registra recuperação local do payload');
 
@@ -871,6 +891,8 @@ check('F1 + robusto: formato, portadora e regras de evidência', () => {
     'rota alternativa não registra recuperação local');
   assert(!/report\.studio\s*=/.test(decoyBlock),
     'rota alternativa publica metadado próprio antes do fechamento');
+  assert(!/report\.studio\s*(?:\.|\[)/.test(decoyBlock),
+    'rota alternativa grava campo aninhado em studio antes do fechamento');
   // O statement precisa ser EXATO, não apenas conter o literal. Um sufixo invisível
   // (ex.: U+200B) em uma das rotas é distinguidor no JSON mesmo parecendo igual na UI.
   const exactValidStatus = /decodeStatus\s*=\s*t\('decStatusDecryptedKey'\)\s*;/g;
@@ -881,7 +903,7 @@ check('F1 + robusto: formato, portadora e regras de evidência', () => {
   assert(headerValidStatus.length === 2,
     `rota principal tem ${headerValidStatus.length} statements exatos de status válido; esperado 2 (AES + XOR legado)`);
 
-  // O erro provisório da rota genérica não pode piscar ANTES da sonda F1.
+  // O erro provisório da rota genérica não pode piscar antes da camada alternativa.
   const genericStart = html.indexOf('// Com chave: tenta decifrar os bytes brutos');
   const genericBlock = html.slice(genericStart, decoyStart);
   assert(genericBlock.includes('pendingKeyFlash=true'),
@@ -898,7 +920,7 @@ check('F1 + robusto: formato, portadora e regras de evidência', () => {
   assert(headerKeyBranch.includes('pendingKeyFlash=true'),
     'falha provisória do header com chave não é adiada');
   assert(!headerKeyBranch.includes('flashKey();'),
-    'rota do header com chave ainda pisca antes de F1/terceiros terminarem');
+    'rota do header com chave ainda pisca antes das rotas alternativas/terceiros terminarem');
   const finalFlash = html.indexOf('if (pendingKeyFlash && !decodedMsg', thirdStart);
   assert(finalFlash > thirdStart,
     'flashKey provisório não foi movido para depois dos motores de extração');
@@ -927,9 +949,9 @@ check('F1 + robusto: formato, portadora e regras de evidência', () => {
   assert(clearAnalysisBlock.includes('clearKeyFlash()'),
     'Limpar análise não remove o estado visual/temporizador de chave');
 
-  // Catraca do FECHAMENTO: foi nesta região que mutações simples conseguiram
-  // reintroduzir `tailLayer` no JSON ou anexar "[F1]" ao decodeStatus sem o
-  // CHECK 18 perceber. Entre consolidateVerdict e lastReport só são permitidos:
+  // Catraca do FECHAMENTO: entre consolidateVerdict e lastReport só são
+  // permitidas as escritas abaixo; campos de rota ou sufixos específicos não
+  // podem aparecer nessa região:
   // (a) a atribuição do status consolidado; (b) o único patch headerOnly.
   const closeStart = html.indexOf('const c0 = consolidateVerdict', thirdStart);
   const closeEnd = html.indexOf('lastReport=createPublicLastReport', closeStart);
@@ -942,10 +964,9 @@ check('F1 + robusto: formato, portadora e regras de evidência', () => {
   assert(closeStatusWrites === 1 && /decodeStatus\s*=\s*c0\.decodeStatus\s*;/.test(closeBlock),
     `fechamento tem ${closeStatusWrites} escritas em decodeStatus — só o veredito consolidado é permitido`);
   assert(!/tailLayer|decoyLayer|alternativeLayer/.test(closeBlock),
-    'fechamento voltou a publicar qual camada F1 venceu');
+    'fechamento voltou a publicar qual camada interna venceu');
 
-  // CATRACA GLOBAL DO HANDLER: as catracas locais deixavam espaços entre blocos
-  // e depois de lastReport. Qualquer nova escrita relevante agora força revisão.
+  // CATRACA GLOBAL DO HANDLER: qualquer nova escrita relevante força revisão.
   const analyzeStart = html.indexOf("document.getElementById('btn-analyze').addEventListener('click'");
   const analyzeEnd = html.indexOf('} finally {', analyzeStart);
   const analyzeBlock = html.slice(analyzeStart, analyzeEnd);
@@ -956,8 +977,8 @@ check('F1 + robusto: formato, portadora e regras de evidência', () => {
     `handler tem ${studioWrites} escritas em report.studio; esperado 11 — revisar autoria/evidência`);
   assert(statusWrites === 31,
     `handler tem ${statusWrites} escritas em decodeStatus; esperado 31 — revisar simetria de status`);
-  // Catraca também para IRMÃOS de report.studio. `report.f1route='tail'` escapava da
-  // contagem anterior e ia direto para lastReport.modules/JSON exportado.
+  // Catraca também para propriedades irmãs de `report.studio`, porque qualquer
+  // campo top-level novo pode alcançar o relatório exportado antes da projeção.
   const topWrites = [...analyzeBlock.matchAll(/report\.([A-Za-z_$][\w$]*)\s*(?:=|\+=|-=|\*=|\/=)/g)]
     .map(m => m[1]);
   const topCounts = topWrites.reduce((acc,k) => (acc[k]=(acc[k]||0)+1, acc), {});
@@ -970,7 +991,7 @@ check('F1 + robusto: formato, portadora e regras de evidência', () => {
   // FRONTEIRA DE EXPORTAÇÃO: catracas de fonte são defesa em profundidade;
   // a propriedade final é que campos não declarados NÃO saem no JSON, qualquer
   // que seja a sintaxe usada para criá-los internamente. Exercita a função real.
-  const allowStart = html.indexOf('//  PUBLIC REPORT ALLOWLIST — v2.42.17');
+  const allowStart = html.indexOf('//  PUBLIC REPORT ALLOWLIST');
   const allowEnd = html.indexOf('// PUBLIC REPORT ALLOWLIST — END', allowStart);
   assert(allowStart >= 0 && allowEnd > allowStart, 'fronteira pública de relatório não encontrada');
   const allowBlock = html.slice(allowStart, allowEnd + '// PUBLIC REPORT ALLOWLIST — END'.length);
@@ -1012,16 +1033,16 @@ check('F1 + robusto: formato, portadora e regras de evidência', () => {
   assert(!publicJSON.includes('tailLayer') && !publicJSON.includes('f1route') && !publicJSON.includes('alternativeLayer'),
     'JSON público contém identificador interno fora da allowlist');
 
-  // Vetor comportamental hostil: envelope robusto válido com senha externa
-  // diferente da senha AES interna. Prova que esse estado é alcançável em entrada
-  // malformada/adversarial mesmo não sendo produzido pelo nosso Encoder normal.
+  // Vetor hostil: envelope robusto válido com senha externa diferente da senha AES
+  // interna. Este estado pode existir em entrada malformada mesmo que o Encoder
+  // normal use uma única senha para as duas camadas.
   const robustHostile = execSync(`node "${path.join(__dirname, 'test', 'check_robust_evidence.js')}"`,
     { encoding:'utf8', stdio:['ignore','pipe','pipe'] }).trim();
   assert(robustHostile.includes('vetor OK'), 'vetor robusto hostil não confirmou o caso locked');
 
   // Pista robusta JPEG: uma vez que robustExtract confirmou o envelope, falha do
   // conteúdo não pode virar "nada encontrado" nem aviso falso de chave.
-  const robustStart = html.indexOf('MODO ROBUSTO (F4) — tentado ANTES');
+  const robustStart = html.indexOf('MODO MAIS RESISTENTE — tentado antes');
   const robustEnd = html.indexOf('MOTOR DE TERCEIRO: OutGuess', robustStart);
   const robustBlock = html.slice(robustStart, robustEnd);
   assert(robustStart >= 0 && robustEnd > robustStart, 'rota robusta JPEG não encontrada');
@@ -1042,12 +1063,119 @@ check('F1 + robusto: formato, portadora e regras de evidência', () => {
   const idxPassive = protoBlock.indexOf('else if(r.studio.hasHeader)');
   assert(idxExtracted >= 0 && idxHeaderOnly > idxExtracted && idxPassive > idxHeaderOnly,
     'renderer não respeita precedência extracted > headerOnly > passive');
-  assert(protoBlock.includes('payloadRecoveredWithKey'),
+  assert(protoBlock.includes('payloadRecovered') && !protoBlock.includes('payloadRecoveredWithKey'),
     'estado extracted não usa texto neutro de payload recuperado');
   assert(/r\.studio\.hasHeader\s*&&\s*r\.studio\.payloadBytes/.test(protoBlock),
     'estado extracted apagou o tamanho passivo do payload quando o header também é visível');
 
   return `${hist} · ${carrier} · ${robustHostile}`;
+});
+
+// ---------------------------------------------------------------------------
+// CHECK 19 — schema público: impedir perda silenciosa de campos já públicos
+//
+// Simétrico da allowlist do CHECK 18. O CHECK 18 prova que campo desconhecido
+// não sai; este helper verifica o outro lado: módulos/chaves literais produzidos
+// pelo código e todos os caminhos do corpus congelado precisam sobreviver à
+// projeção. É uma guarda de regressão, não um parser formal de JavaScript.
+// ---------------------------------------------------------------------------
+check('schema público cobre produtores atuais + corpus congelado', () => {
+  const out = execSync(`node "${path.join(__dirname, 'test', 'check_public_schema_coverage.js')}"`,
+    { encoding:'utf8', stdio:['ignore','pipe','pipe'] }).trim();
+  assert(out.includes('CHECK19 OK'), 'CHECK 19 não confirmou cobertura produtor→schema');
+  return out.replace(/^CHECK19 OK\s*[—-]?\s*/, '');
+});
+
+// ---------------------------------------------------------------------------
+// CHECK 20 — public-source hygiene and generated-artifact attribution
+// ---------------------------------------------------------------------------
+check('higiene da superfície pública + atribuição do artefato', () => {
+  const out = execSync(`node "${path.join(__dirname, 'test', 'check_public_hygiene.js')}"`,
+    { encoding:'utf8', stdio:['ignore','pipe','pipe'] }).trim();
+  assert(out.includes('CHECK20 OK'), 'CHECK 20 não confirmou higiene/atribuição pública');
+  return out.split('\n').filter(Boolean).pop().replace(/^CHECK20 OK\s*[—-]?\s*/, '');
+});
+
+// ---------------------------------------------------------------------------
+// CHECK 21 — Carrier Preflight: detecção limitada + gate explícito
+// ---------------------------------------------------------------------------
+check('Carrier Preflight reconhece remanência óbvia sem prometer limpeza', () => {
+  const out = execSync(`node "${path.join(__dirname, 'test', 'check_carrier_preflight.js')}"`,
+    { encoding:'utf8', stdio:['ignore','pipe','pipe'] }).trim();
+  assert(out.includes('Carrier Preflight OK'), 'Carrier Preflight não passou pelos vetores de regressão');
+
+  const filesSrc = fs.readFileSync(path.join(SRC, 'files.js'), 'utf8');
+  assert(filesSrc.includes('encPreflightBlocked=!!encPreflightResult.suspicious') &&
+         filesSrc.includes('encPreflightAcknowledged=true') &&
+         filesSrc.includes("document.getElementById('enc-file')?.click()"),
+    'UI do preflight não mantém bloqueio/continuação/troca de imagem pelo mesmo estado');
+  assert(html.includes('no obvious prior hidden content detected') &&
+         html.includes('password-protected or content-adaptively placed payloads') &&
+         html.includes('This is not a guarantee'),
+    'resultado negativo do preflight perdeu a limitação visível ou a ressalva');
+  assert(!/carrierPreflightNoObvious[^\n]*(?:clean|safe)/i.test(fs.readFileSync(path.join(SRC,'i18n.js'),'utf8')),
+    'preflight negativo usa linguagem de “clean/safe” que pode soar como certificação');
+  return out;
+});
+
+// ---------------------------------------------------------------------------
+// CHECK 22 — i18n: nenhuma nova chave órfã
+// ---------------------------------------------------------------------------
+check('i18n: baseline de chaves órfãs só pode diminuir', () => {
+  const out = execSync(`node "${path.join(__dirname, 'test', 'check_i18n_orphans.js')}"`,
+    { encoding:'utf8', stdio:['ignore','pipe','pipe'] }).trim();
+  assert(out.includes('i18n orphan gate OK'), 'catraca de chaves i18n órfãs falhou');
+  return out.replace(/^i18n orphan gate OK\s*[—-]?\s*/, '');
+});
+
+// ---------------------------------------------------------------------------
+// CHECK 23 — deep scan: embedding evidence is not recovered-content evidence
+// ---------------------------------------------------------------------------
+check('deep scan não promove ciphertext aleatório a mensagem recuperada', () => {
+  const out = execSync(`node "${path.join(__dirname, 'test', 'check_deepscan_content_gate.js')}"`,
+    { encoding:'utf8', stdio:['ignore','pipe','pipe'] }).trim();
+  assert(out.includes('deep-scan content gate OK'), 'catraca de conteúdo do deep scan falhou');
+  return out.replace(/^deep-scan content gate OK\s*[—-]?\s*/, '');
+});
+
+// ---------------------------------------------------------------------------
+// CHECK 24 — Protocol copy + password/encryption terminology + preflight layout
+// ---------------------------------------------------------------------------
+check('Protocolo e terminologia não confundem senha, chave e criptografia', () => {
+  const out = execSync(`node "${path.join(__dirname, 'test', 'check_protocol_copy_truth.js')}"`,
+    { encoding:'utf8', stdio:['ignore','pipe','pipe'] }).trim();
+  assert(out.includes('protocol copy/terminology gate OK'), 'catraca de copy/terminologia do Protocolo falhou');
+  return out.replace(/^protocol copy\/terminology gate OK\s*[—-]?\s*/, '');
+});
+
+// ---------------------------------------------------------------------------
+// CHECK 25 — accordion display localization/capitalization + preflight hover
+// ---------------------------------------------------------------------------
+check('Accordions localizam modos e mantêm apresentação visual consistente', () => {
+  const out = execSync(`node "${path.join(__dirname, 'test', 'check_accordion_display_polish.js')}"`,
+    { encoding:'utf8', stdio:['ignore','pipe','pipe'] }).trim();
+  assert(out.includes('accordion display polish gate OK'), 'catraca de polimento visual/localização falhou');
+  return out.replace(/^accordion display polish gate OK\s*[—-]?\s*/, '');
+});
+
+// ---------------------------------------------------------------------------
+// CHECK 26 — public technical claims: ratchet against wording already corrected
+// ---------------------------------------------------------------------------
+check('texto público não regride para formulações já corrigidas', () => {
+  const out = execSync(`node "${path.join(__dirname, 'test', 'check_public_claim_truth.js')}"`,
+    { encoding:'utf8', stdio:['ignore','pipe','pipe'] }).trim();
+  assert(out.includes('public claim regression gate OK'), 'catraca de regressão textual pública falhou');
+  return out.replace(/^public claim regression gate OK\s*[—-]?\s*/, '');
+});
+
+// ---------------------------------------------------------------------------
+// CHECK 27 — public report value hygiene
+// ---------------------------------------------------------------------------
+check('valores públicos não vazam resíduos editoriais conhecidos', () => {
+  const out = execSync(`node "${path.join(__dirname, 'test', 'check_public_value_hygiene.js')}"`,
+    { encoding:'utf8', stdio:['ignore','pipe','pipe'] }).trim();
+  assert(out.includes('public value hygiene OK'), 'catraca de valores públicos falhou');
+  return out.replace(/^public value hygiene OK\s*[—-]?\s*/, '');
 });
 
 // ---------------------------------------------------------------------------

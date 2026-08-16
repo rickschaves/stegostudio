@@ -57,9 +57,7 @@ function setupDrop(dId, fId, onFile) {
 // ── PASTE GLOBAL (Ctrl+V em qualquer lugar) ──
 window.addEventListener('load', () => {
   document.getElementById('paste-anchor').focus({preventScroll:true});
-  // Aplica idioma detectado e marca o botão ativo
   setLang(LANG);
-  // Encoder é a aba de entrada — começa com boas-vindas
   resetStatus('enc-status', true);
   resetStatus('dec-status');
 });
@@ -76,6 +74,7 @@ document.addEventListener('paste', async e => {
   if (encActive) {
     flashDrop('enc-drop');
     const fmt = classifyFormat(f);
+    resetCarrierPreflight();
     encID=null; encFormatOk=false; checkEncReady();
     loadToCanvas(f, (id, w, h, src, hadAlpha) => {
       onEncCarrierLoaded(id, w, h, src, hadAlpha, fmt, f);
@@ -88,16 +87,57 @@ document.addEventListener('paste', async e => {
 
 // ── ENCODE DROP ──
 let encID=null, encW=0, encH=0, encOpaque=0, encFormatOk=false;
+let encPreflightBlocked=false;
+let encPreflightResult={checked:false,suspicious:false,signals:[]};
+let encPreflightAcknowledged=false;
+
+function renderCarrierPreflight() {
+  const wrap=document.getElementById('enc-preflight');
+  const ok=document.getElementById('enc-preflight-ok');
+  const warn=document.getElementById('enc-preflight-warn');
+  const actions=document.querySelector('#enc-preflight-warn .carrier-preflight-actions');
+  const continued=document.getElementById('enc-preflight-continued');
+  const use=document.getElementById('enc-preflight-use');
+  if(!wrap||!ok||!warn) return;
+
+  if(!encPreflightResult.checked){
+    wrap.style.display='none';
+    ok.style.display='none';
+    warn.style.display='none';
+    return;
+  }
+
+  wrap.style.display='block';
+  ok.style.display=encPreflightResult.suspicious?'none':'block';
+  warn.style.display=encPreflightResult.suspicious?'block':'none';
+  if(actions) actions.style.display=(encPreflightResult.suspicious&&!encPreflightAcknowledged)?'flex':'none';
+  if(continued) continued.style.display=(encPreflightResult.suspicious&&encPreflightAcknowledged)?'block':'none';
+  if(use) use.disabled=encPreflightAcknowledged;
+}
+
+function resetCarrierPreflight() {
+  encPreflightBlocked=false;
+  encPreflightAcknowledged=false;
+  encPreflightResult={checked:false,suspicious:false,signals:[]};
+  renderCarrierPreflight();
+}
+
+function evaluateCarrierPreflight(imageData, fmt) {
+  encPreflightResult=inspectCarrierPreflight(imageData, fmt);
+  encPreflightAcknowledged=false;
+  encPreflightBlocked=!!encPreflightResult.suspicious;
+  renderCarrierPreflight();
+}
+
 // Preferência MANUAL do usuário para "Modo de Alta Capacidade" — separada do estado
 // forçado (quando a mensagem é grande demais para o furtivo). Permite reverter.
 let encMaxcapManual=false;
 
-// Pós-carregamento da portadora (compartilhado por colar e arrastar). #17: aceita
-// QUALQUER imagem que o navegador decodifica — a saída é SEMPRE um PNG novo (a gente
-// remonta o PNG na mão), então formato lossy de ENTRADA é seguro; só avisamos que
-// será convertido. O gate do botão passa a ser o estado PERSISTENTE encFormatOk
-// (não mais um parâmetro transitório), o que conserta o bug de re-habilitar o botão
-// ao digitar/apagar a senha num formato antes bloqueado.
+// Pós-carregamento da portadora, compartilhado por colar e arrastar. Aceita
+// qualquer imagem que o navegador decodifique; a saída é sempre um PNG novo,
+// portanto o formato lossy de entrada é aceitável. Apenas avisamos que
+// será convertido. O gate do botão usa o estado persistente `encFormatOk`;
+// mudanças na senha não podem reabilitar Encode se a imagem falhou.
 function onEncCarrierLoaded(id, w, h, src, hadAlpha, fmt, file) {
   encID=id; encW=w; encH=h; encOpaque=opaquePixels(id.data).length; encFormatOk=true;
   document.getElementById('enc-prev').src=src;
@@ -109,9 +149,10 @@ function onEncCarrierLoaded(id, w, h, src, hadAlpha, fmt, file) {
   const willConvert = fmt.cat!=='lossless'; // entrada não-PNG → será convertida
   const b=document.getElementById('enc-fbadge');
   b.textContent = fmt.ext;
-  const col = willConvert ? '255,179,0' : '0,255,179';        // âmbar (aviso) vs verde
+  const col = willConvert ? '255,179,0' : '0,255,179';
   const txt = willConvert ? '#ffb300' : 'var(--enc)';
   b.style.cssText=`background:rgba(${col},0.15);color:${txt};border:1px solid rgba(${col},0.3)`;
+  evaluateCarrierPreflight(id, fmt);
   updateCap();
   encStatusLoaded(fmt, w, h, file.size, file);
   checkEncReady();
@@ -119,24 +160,35 @@ function onEncCarrierLoaded(id, w, h, src, hadAlpha, fmt, file) {
 
 setupDrop('enc-drop','enc-file', file=>{
   const fmt=classifyFormat(file);
+  resetCarrierPreflight();
   encID=null; encFormatOk=false; checkEncReady(); // decode falho → botão fica travado
   loadToCanvas(file,(id,w,h,src,hadAlpha)=>{
     onEncCarrierLoaded(id,w,h,src,hadAlpha,fmt,file);
   }, r => showLoadError('enc', r));
 });
 
+(function setupCarrierPreflightActions(){
+  const use=document.getElementById('enc-preflight-use');
+  const choose=document.getElementById('enc-preflight-choose');
+  if(use) use.addEventListener('click',()=>{
+    encPreflightAcknowledged=true;
+    encPreflightBlocked=false;
+    renderCarrierPreflight();
+    checkEncReady();
+  });
+  if(choose) choose.addEventListener('click',()=>{
+    document.getElementById('enc-file')?.click();
+  });
+})();
+
 // ── DECODE DROP ──
 // ── BUSY-STATE EXPLÍCITO DO ANALYZER ─────────────────────────────────────────
-// DECISÃO DE PRODUTO (13/08/2026). Hoje a interface já parece bloqueada durante
-// a análise, mas por acidente: a thread principal fica ocupada e o navegador
-// engole cliques e Ctrl+V. Isso não é contrato — some no dia em que o pipeline
-// ceder a thread, ganhar um `await` mais longo ou migrar para Web Worker, e a
-// interação concorrente volta sem ninguém decidir por isso.
+// O bloqueio é deliberado: durante a análise, controles que poderiam substituir
+// ou re-renderizar o estado ficam indisponíveis. Isso preserva o mesmo contrato
+// mesmo se o pipeline futuramente ceder a thread ou migrar para um Worker.
 //
-// A partir daqui o bloqueio é DELIBERADO e sobrevive a mudanças de arquitetura.
-//
-// Não substitui `analysisGeneration` nem os snapshots: são duas camadas, uma de
-// UX e outra de estado interno, ambas intencionais.
+// `analysisGeneration` e os snapshots continuam necessários como defesa de estado:
+// a trava de UI e a validação da operação corrente resolvem problemas diferentes.
 let _analysisBusy = false;
 function isAnalysisBusy(){ return _analysisBusy; }
 function setAnalysisBusy(v) {
@@ -153,33 +205,25 @@ function setAnalysisBusy(v) {
   }
   const painel = document.getElementById('panel-dec');
   if (painel) painel.setAttribute('aria-busy', String(_analysisBusy));
-  if (!_analysisBusy) checkDecReady();   // ao liberar, recalcula em vez de habilitar cego
+  if (!_analysisBusy) checkDecReady();
 }
 
 let decID=null, decFile=null, decFmt=null;
 // ── IDENTIDADE DA OPERAÇÃO ───────────────────────────────────────────────────
-// A análise é assíncrona e longa. `decID`/`decFile`/`decFmt` podem trocar no
-// meio dela — o smoke da v2.42.8 reproduziu: carregar a imagem B enquanto a
-// análise de A rodava deixava o preview em B e o RESULTADO em A. A guarda
-// `_analisando` só impede um segundo clique; não protege a operação viva.
-// Toda troca de imagem incrementa este contador. A análise tira um snapshot no
-// início e, antes de publicar qualquer coisa, confere se ainda é a corrente.
+// A análise é assíncrona e longa. `decID`/`decFile`/`decFmt` podem mudar antes
+// de a execução terminar; por isso cada troca de imagem incrementa esta geração.
+// A análise trabalha sobre um snapshot e publica somente se ainda for a operação
+// corrente. A guarda `_analisando` evita reentrância, mas não substitui esta regra.
 let analysisGeneration = 0;
 function bumpAnalysisGeneration(){ analysisGeneration++; }
 
 // ── INGRESSO ÚNICO DE IMAGEM NO DECODER ──────────────────────────────────────
-// Havia DOIS caminhos duplicados — `setupDrop` e o `paste` global — e o segundo
-// não incrementava a geração. Ou seja, a correção da corrida A→B foi aplicada a
-// uma superfície e a irmã ficou para trás (quarta vez que esse padrão aparece
-// no projeto). Hoje o defeito fica mascarado porque a thread principal ocupada
-// engole o Ctrl+V durante a análise; qualquer `await` mais longo ou um Worker
-// futuro o traria de volta.
-//
-// Agora existe UM ponto de entrada. Acrescentar um terceiro caminho sem passar
-// por aqui é o que o CHECK 17 impede.
+// Drop, seletor de arquivo e paste precisam passar pelo mesmo ponto de entrada
+// para atualizar a geração e o snapshot de forma consistente. Qualquer novo
+// caminho de carregamento deve reutilizar esta função.
 async function loadDecoderFile(file) {
-  if (isAnalysisBusy()) return;          // busy-state: ver setAnalysisBusy
-  bumpAnalysisGeneration();              // invalida qualquer análise em voo
+  if (isAnalysisBusy()) return;
+  bumpAnalysisGeneration();
   decFile = file;
   // sniff de magic bytes → detecção robusta (pega .jfif, MIME errado, etc.)
   let magic=null; try{ magic=new Uint8Array(await file.slice(0,16).arrayBuffer()); }catch(_){}
@@ -212,14 +256,8 @@ function clearDecKey() {
   if (typeof clearKeyFlash === 'function') clearKeyFlash();
 }
 // ── INSTRUMENTAÇÃO DO ENCODE ────────────────────────────────────────────────
-// O Rick relatou o Encoder "mais lento" nas builds recentes. O histórico
-// v2.42.5–v2.42.8 não tem nenhuma mudança deliberada no núcleo de encode que
-// justifique isso — as alterações foram em Threat, protocolo, renderer e
-// leitura de arquivo do ANALYZER. Logo: é percepção até ser medida.
-//
-// Isto NÃO otimiza nada. Só registra o tempo de cada estágio para que a
-// diferença, se existir, aponte para um deles em vez de virar palpite.
-// Ver no console:  window.__encTimings
+// Mede os estágios do Encoder sem alterar o fluxo. Os dados permitem localizar
+// gargalos antes de qualquer otimização. Ver no console: window.__encTimings
 const __encT = { marcas: [], t0: 0 };
 function encMark(nome) {
   const agora = (typeof performance !== 'undefined' ? performance.now() : Date.now());
@@ -227,18 +265,16 @@ function encMark(nome) {
   __encT.marcas.push({ nome, ms: +(agora - __encT.t0).toFixed(1) });
 }
 function encTimingsReset(){ __encT.marcas = []; __encT.t0 = 0; }
-// `coreTotal` para no PNG; `uiReadyTotal` vai até o botão sair de "Trabalhando".
-// A revisão apontou que o flush anterior parava antes da self-analysis de
-// furtividade e da geração do JPEG resistente — ou seja, media menos do que o
-// usuário percebe entre clicar e a ferramenta terminar.
+// `coreTotal` termina quando o PNG fica pronto; `uiReadyTotal` inclui também a
+// avaliação de furtividade e a geração da saída JPEG mais resistente.
 function encTimingsFlush(final) {
   const m = __encT.marcas;
   if (m.length < 2) return null;
   const fases = m.slice(1).map((x, i) => ({ fase: x.nome, ms: +(x.ms - m[i].ms).toFixed(1) }));
   const png = m.find(x => x.nome === 'png:out');
   const out = {
-    coreTotal:    png ? png.ms : null,                 // até o PNG pronto
-    uiReadyTotal: final ? m[m.length-1].ms : null,     // até a UI liberar
+    coreTotal:    png ? png.ms : null,
+    uiReadyTotal: final ? m[m.length-1].ms : null,
     total: m[m.length-1].ms, fases,
   };
   try {
@@ -292,7 +328,7 @@ function pwStrength(pw){
     '111111','monkey','dragon','football','master','sunshine','superman','princess'];
   let weak=false;
   if(COMMON.some(c=>lower.includes(c))) weak=true;
-  if(/^(.)\1*$/.test(pw)) weak=true;                                   // 1 char repetido
+  if(/^(.)\1*$/.test(pw)) weak=true;
   if(/0123|1234|2345|3456|4567|5678|6789|abcd|bcde|cdef|defg|qwer|asdf|zxcv/.test(lower)) weak=true;
   if(weak) bits = Math.min(bits, 20);
   let level;
@@ -357,7 +393,7 @@ function updateCap() {
   const box = document.getElementById('enc-maxcap');
   const note = document.getElementById('enc-mode-note');
   // Capacidade usada = mensagem real + mensagem-isca (quando ligada), pois as
-  // duas dividem o mesmo pool de pixels opacos (negação plausível, Opção C).
+  // as duas dividem o mesmo pool de pixels opacos usado pelo formato em camadas.
   const realChars = document.getElementById('enc-msg').value.length;
   const decoyOn = document.getElementById('enc-decoy-toggle')?.checked;
   const decoyChars = decoyOn ? (document.getElementById('enc-decoy-msg')?.value.length || 0) : 0;
@@ -372,7 +408,6 @@ function updateCap() {
   if (box) { box.checked = effective; box.disabled = forced; }
   // Aviso sob o campo de mensagem SÓ quando a ferramenta ligou sozinha.
   if (note) note.style.display = (forced && !encMaxcapManual) ? 'block' : 'none';
-  // Teto exibido segue o modo efetivo.
   const max = effective ? rgbMax : stealthMax;
   const pct = Math.min(used/max*100,100);
   document.getElementById('cap-used').textContent=used.toLocaleString()+' '+t('chars');
@@ -405,7 +440,7 @@ document.getElementById('enc-maxcap').addEventListener('change', function(){
 // ════════════════════════════════════════
 function checkEncReady() {
   // Gate persistente: imagem decodificada com sucesso (encFormatOk) + mensagem.
-  // #17: não depende mais de um parâmetro transitório, então digitar/apagar a senha
+  // O gate depende do estado persistente da imagem; digitar/apagar a senha
   // não re-habilita o botão num estado inválido.
   const hasImg=encID&&encFormatOk, hasMsg=document.getElementById('enc-msg').value.trim().length>0;
   const key=document.getElementById('enc-key').value;
@@ -415,12 +450,19 @@ function checkEncReady() {
   const decoyOn=document.getElementById('enc-decoy-toggle')?.checked;
   const decoyMsg=(document.getElementById('enc-decoy-msg')?.value.trim()||'');
   const decoyKey=(document.getElementById('enc-decoy-key')?.value||'');
+  const decoyNeedsMsg = decoyOn && decoyMsg.length===0;
   const decoyNeedsKey = decoyOn && decoyMsg.length>0 && decoyKey.length===0;
   const decoySameKey = decoyOn && decoyMsg.length>0 && decoyKey.length>0 && decoyKey===key;
-  const decoyBlocked = decoyNeedsKey || decoySameKey;
+  const decoyBlocked = decoyNeedsMsg || decoyNeedsKey || decoySameKey;
+  const needMsgAlert=document.getElementById('enc-decoy-needmsg-warn');
   const needKeyAlert=document.getElementById('enc-decoy-needkey-warn');
+  // The gate blocks immediately, but the missing-message warning waits until the
+  // user actually enters an alternate password. This avoids showing an error the
+  // moment the second layer is enabled, before there has been a chance to type.
+  const showNeedMsgAlert = decoyNeedsMsg && decoyKey.length>0;
+  if(needMsgAlert) needMsgAlert.style.display = showNeedMsgAlert ? 'block' : 'none';
   if(needKeyAlert) needKeyAlert.style.display = decoyNeedsKey ? 'block' : 'none';
-  document.getElementById('btn-encode').disabled=!(hasImg&&hasMsg&&!decoyBlocked);
+  document.getElementById('btn-encode').disabled=!(hasImg&&hasMsg&&!decoyBlocked&&!encPreflightBlocked);
   const warn=document.getElementById('enc-key-warn');
   const hint=document.getElementById('enc-key-hint');
   if(key.length===0&&hasMsg){warn.style.display='block';hint.style.display='none';}
@@ -437,9 +479,8 @@ document.getElementById('enc-key').addEventListener('input',()=>checkEncReady())
 // ════════════════════════════════════════
 let encOutURL=null, encOutID=null, rbOutURL=null;
 
-// Limpa a área de saída do Encoder. Usada em DOIS caminhos — ao clicar em
-// codificar e ao trocar a imagem portadora — de propósito: eram duas listas
-// paralelas antes, e listas paralelas divergem na primeira coisa que se adiciona.
+// Centraliza a limpeza de toda a área de saída do Encoder para que encode e
+// troca de portadora restaurem exatamente o mesmo conjunto de elementos.
 function resetEncOutputs() {
   const hide = id => { const e = document.getElementById(id); if (e) e.classList.remove('visible'); };
   ['enc-dl','enc-rb','enc-tips','rb-body','rb-unavailable','enc-stealth'].forEach(hide);
@@ -466,7 +507,7 @@ document.getElementById('btn-encode').addEventListener('click',async ()=>{
   _btn.disabled=true; _btn.classList.add('working');
   _btn.innerHTML='<span class="enc-spinner"></span>'+t('encWorking');
   encTimingsReset();
-  // Item 6: feedback IMEDIATO ao clicar — ampulheta animada no terminal e rolagem
+  // Feedback imediato ao clicar: ampulheta animada no terminal e rolagem
   // até a área de saída ANTES do bloco pesado. Rola para uma âncora SEMPRE VISÍVEL:
   // no primeiro encode é o placeholder; ao recodificar a mesma imagem o placeholder
   // já está escondido (foi substituído pela saída), então rola para a imagem gerada.
@@ -488,10 +529,9 @@ document.getElementById('btn-encode').addEventListener('click',async ()=>{
   const key=document.getElementById('enc-key').value;
   const cipher=key.length>0;
   const maxcap=document.getElementById('enc-maxcap').checked;
-  // STEALTH automático: cifra o header sempre que houver senha (sem downside).
+  // Com senha, mascara o header para reduzir a exposição passiva do formato.
   const stealth=cipher;
   try {
-    // (área de saída já foi limpa por resetEncOutputs() no início do clique)
     // Comprime o corpo (deflate-raw) ANTES de cifrar; usa só se realmente encolher.
     let bodyBytes = new TextEncoder().encode(msg);
     let compressed = false;
@@ -526,7 +566,7 @@ document.getElementById('btn-encode').addEventListener('click',async ()=>{
     encMark('embed:in');
     embedLSB(work, payload, mode, key, adaptive, stealth, stcW);
     encMark('embed:out');
-    // ── NEGAÇÃO PLAUSÍVEL: se ativa, embute a mensagem-isca no FIM (Opção C). ──
+    // ── NEGAÇÃO PLAUSÍVEL: se ativa, embute a mensagem alternativa no fim do pool. ──
     const decoyOn = document.getElementById('enc-decoy-toggle')?.checked;
     const decoyMsg = document.getElementById('enc-decoy-msg')?.value.trim() || '';
     const decoyKey = document.getElementById('enc-decoy-key')?.value || '';
@@ -534,7 +574,7 @@ document.getElementById('btn-encode').addEventListener('click',async ()=>{
     if (decoyOn && decoyMsg.length > 0) {
       if (!decoyKey.length) throw new Error(t('decoyKeyRequired'));
       if (decoyKey === key) throw new Error(t('decoySameKeyWarn'));
-      // pixels usados pela real a partir do início (para a checagem de colisão)
+      // Reserva o trecho já usado pelo payload principal para evitar colisão entre camadas.
       const realUsedPx = useStc
         ? ((HEADER_BYTES+1)*8 + (payload.length-HEADER_BYTES)*8*stcW)
         : payload.length*8;
@@ -586,7 +626,7 @@ document.getElementById('btn-encode').addEventListener('click',async ()=>{
       <div class="stat-impact"><span class="stat-key">${t('encStatVisualImpact')}</span><span class="stat-val sv-enc">${(bitsUsed/totalBits*100).toFixed(4)}%</span></div>`;
     _stopWork(); // para a ampulheta ANTES de escrever o sucesso (senão o timer sobrescreve)
     setStatus('enc-status', t('encSuccess').replace('{bytes}',payload.length)+(cipher?t('encSuffixCipher'):t('encSuffixPlain')), 'ok');
-    // #21 — auto-report de furtividade: mede a saída com o próprio arsenal.
+    // Autoavaliação de furtividade: mede a saída com o mesmo arsenal estatístico.
     // Deferido para a imagem/infos aparecerem na hora; nunca quebra o encode.
     (function(){
       const box=document.getElementById('enc-stealth');
@@ -595,8 +635,8 @@ document.getElementById('btn-encode').addEventListener('click',async ()=>{
       const px=work.data, w=encW, h=encH;
       setTimeout(function(){ try{
         const st=analyzeOutputStealth(px,w,h);
-        const FLOOR=15, SCALE=30;                              // limite (%) e escala da barra (%)
-        const COL={lo:'#00ffb3',mid:'#ffb300',hi:'#ff6464'};   // furtivo / no limite / detectável
+        const FLOOR=15, SCALE=30;
+        const COL={lo:'#00ffb3',mid:'#ffb300',hi:'#ff6464'};
         const tierV=pv=>pv>FLOOR?'hi':(pv>8?'mid':'lo');
         const vCol=COL[st.verdict==='detect'?'hi':(st.verdict==='weak'?'mid':'lo')];
         const barPct=v=>Math.min(v/SCALE*100,100);
@@ -624,7 +664,7 @@ document.getElementById('btn-encode').addEventListener('click',async ()=>{
       }catch(_){ box.classList.remove('visible'); box.textContent=''; _restore(); } }, 30);
     })();
 
-    // ── SEGUNDA SAÍDA: a versão mais resistente (modo robusto, F4) ──────────
+    // ── SEGUNDA SAÍDA: versão mais resistente (JPEG/DCT) ─────────────────
     // Gerada a partir da capa LIMPA, não da imagem com LSB: são duas imagens
     // independentes carregando a MESMA mensagem, com trocas diferentes.
     // Deferida para o PNG aparecer na hora; nunca derruba o encode.

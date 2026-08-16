@@ -130,12 +130,10 @@ async function pngDeflate(u8) {
   return new Uint8Array(await new Response(cs.readable).arrayBuffer());
 }
 // ── Limites contra arquivo hostil ──────────────────────────────────────────
-// Os campos de largura e altura do IHDR vêm do arquivo e podem dizer qualquer
-// coisa: 65535×65535 pede ~17 GB só para o buffer RGBA. E o inflate é uma bomba
-// de descompressão em potencial — poucos KB de IDAT podem virar gigabytes.
-// A alocação acontece ANTES de qualquer validação, então a aba morre antes de
-// qualquer mensagem de erro. Estes tetos falham cedo, com erro legível.
-const PNG_MAX_PIXELS = 80e6;      // ~80 MP: acima de qualquer câmera de consumo
+// Valide dimensões do IHDR antes de alocar o buffer RGBA e limite o raster
+// descomprimido para conter expansão excessiva de IDAT. Os tetos falham cedo
+// com erro legível em vez de permitir alocações descontroladas.
+const PNG_MAX_PIXELS = 80e6;      // limite de segurança da aplicação: 80 MP
 const PNG_MAX_INFLATED = 512e6;   // 512 MB de raster descomprimido
 
 async function pngDecodeRGBA(u8) {
@@ -171,9 +169,8 @@ function canvasDecode(objURL) {
     img.onerror = reject; img.src = objURL;
   });
 }
-// Detecta HEIC/HEIF (HEVC) por assinatura ISO-BMFF. O navegador (exceto Safari) NÃO
-// decodifica HEIC — sem isto, o load falhava em silêncio. AVIF é deixado de fora de
-// propósito: navegadores modernos decodificam AVIF normalmente.
+// Detecta HEIC/HEIF (HEVC) por assinatura ISO-BMFF para emitir um erro específico
+// quando o navegador não oferece decoder. AVIF segue pelo decoder nativo do navegador.
 function isHeic(u8) {
   if (!u8 || u8.length < 12) return false;
   // bytes 4..7 = 'ftyp'

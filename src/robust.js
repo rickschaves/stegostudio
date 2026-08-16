@@ -1,18 +1,16 @@
 // ============================================================================
-// robust.js — MODO ROBUSTO (F4)
+// robust.js — modo mais resistente em JPEG/DCT
 //
-// Embute o payload nos COEFICIENTES DCT de um JPEG, por Quantization Index
-// Modulation, de modo que ele sobreviva à recompressão das redes sociais. O
-// modo LSB continua existindo e continua sendo o mais furtivo; este aqui troca
-// discrição por sobrevivência.
+// Embute o payload nos coeficientes DCT de um JPEG por Quantization Index
+// Modulation. O objetivo é aumentar a resistência às recompressões observadas nos
+// fluxos sociais medidos; não existe promessa universal de sobrevivência. O modo LSB
+// privilegia furtividade, enquanto este modo aceita mais alteração em troca de robustez.
 //
-// Todos os parâmetros vêm de MEDIÇÃO DE CAMPO (ver MEDICAO_REDES_SOCIAIS.md e
-// RESULTADO_TESTE_CAMPO_F4.md), não de estimativa:
-//   · envelope 1080 px  — abaixo disso nenhuma das 4 plataformas redimensiona,
-//                          e encolher 15% já destrói 25% dos bits
-//   · Δ = 80             — no Facebook, Δ=64 ainda deixa 0,15% de erro
-//   · nsym = 32          — AES-GCM morre com UM bit trocado; ECC não é opcional
-//   · tabela q80         — quanto mais grossa, MENOR o custo do embutimento
+// Os parâmetros vêm das medições consolidadas em docs/SOCIAL_PLATFORM_MEASUREMENTS.md:
+//   · envelope 1080 px  — faixa de trabalho dos fluxos medidos
+//   · Δ = 80             — margem escolhida após os ensaios de recompressão
+//   · nsym = 32          — ECC protege o payload autenticado contra erros de bit
+//   · tabela q80         — compromisso medido entre distorção e robustez
 //
 // O payload transportado é o MESMO do modo LSB (buildPayload), então o decoder
 // reaproveita o parser que já existe.
@@ -225,8 +223,8 @@ function rbCrc16(b, n) {
   }
   return c;
 }
-// Reamostragem por MÉDIA DE ÁREA (redução). Sem canvas: evita farbling e mantém
-// a promessa de que nada sai da página.
+// Reamostragem por média de área. Evita canvas para manter o caminho de pixels
+// determinístico e independente de transformações específicas do navegador.
 function rbResize(rgba, w, h, nw, nh) {
   const out = new Uint8ClampedArray(nw * nh * 4);
   const sx = w / nw, sy = h / nh;
@@ -246,10 +244,8 @@ function rbResize(rgba, w, h, nw, nh) {
 }
 // Dimensão de saída do modo robusto: dentro do envelope medido de 1080 px.
 function rbTargetSize(w, h) {
-  // Dentro do envelope: NÃO mexe. O encoder já lida com blocos 8x8 parciais nas
-  // bordas (a DCT direta replica a borda), então cortar para múltiplo de 8 era
-  // zelo desnecessário — e reduzia 460 para 456 sem motivo. Uma imagem que já
-  // cabe sai idêntica.
+  // Dentro do envelope, preserve as dimensões originais: a DCT direta replica
+  // bordas para blocos 8x8 parciais e não exige recorte prévio.
   if (w <= RB_MAX_W && h <= RB_MAX_W) return { w, h };
   // Só quando precisa REDUZIR: aí o múltiplo de 8 evita uma faixa parcial de
   // blocos que a plataforma poderia tratar de forma diferente na recompressão.
@@ -350,7 +346,7 @@ function rbQtableNatural(quality) {
   return JD_ANNEX_K_LUM.map(v => Math.min(255, Math.max(1, Math.floor((v * s + 50) / 100))));
 }
 
-// ── FATIA A: assinatura estatística do próprio modo robusto ──────────────────
+// ── Assinatura estatística do próprio modo robusto ───────────────────────────
 // Detecta o QIM em imagem de TERCEIRO — sem senha, sem extração.
 //
 // Como funciona: o QIM força cada coeficiente usado a um ponto do reticulado, e

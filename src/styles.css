@@ -10,14 +10,12 @@
   --scan: #a78bfa;
   --neutral: #7b8db0;
   --text: #d4daf0;
-  /* --dim media 1,87:1 contra --surface2 — abaixo de qualquer padrão de
-     legibilidade (WCAG pede 4,5:1 para texto normal). Elevado para 4,84:1
-     mantendo o tom azulado. Continua sendo o tom secundário, agora legível. */
+  /* Secondary text keeps at least WCAG 4.5:1 contrast against --surface2. */
   --dim: #7c85a3;
   --mono: 'IBM Plex Mono', monospace;
   --sans: 'IBM Plex Sans', sans-serif;
   --display: 'Bebas Neue', sans-serif;
-  --out-gap: 10px;   /* respiro único entre os blocos das duas saídas */
+  --out-gap: 10px;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -298,6 +296,54 @@ textarea.dec-t:focus { border-color:rgba(255,107,53,0.4); }
   border-radius:3px; font-size:0.6rem; color:#ffb300; line-height:1.7;
 }
 
+.carrier-preflight {
+  margin-top:9px;
+  font-size:0.62rem;
+  line-height:1.65;
+}
+.carrier-preflight-ok {
+  padding:7px 9px;
+  border:1px solid rgba(111,155,209,0.28);
+  background:rgba(111,155,209,0.06);
+  border-radius:3px;
+  color:#8fb5e6;
+}
+.carrier-preflight-warn {
+  padding:9px 10px;
+  border:1px solid rgba(255,179,0,0.34);
+  background:rgba(255,179,0,0.08);
+  border-radius:3px;
+}
+.carrier-preflight-title { color:#ffb300; font-weight:600; margin-bottom:4px; }
+.carrier-preflight-body { color:var(--text); }
+.carrier-preflight-actions { display:flex; gap:7px; flex-wrap:nowrap; margin-top:8px; }
+.carrier-preflight-btn {
+  border:1px solid rgba(255,179,0,0.45);
+  background:rgba(255,179,0,0.08);
+  color:#ffcf66;
+  border-radius:3px;
+  padding:7px 9px;
+  font-family:var(--mono);
+  font-size:0.58rem;
+  cursor:pointer;
+  flex:1 1 0;
+  min-width:0;
+  text-align:center;
+  white-space:normal;
+}
+.carrier-preflight-btn:hover { background:rgba(255,179,0,0.14); }
+.carrier-preflight-btn.secondary {
+  border-color:var(--border2);
+  background:var(--surface2);
+  color:var(--neutral);
+}
+.carrier-preflight-btn.secondary:hover {
+  border-color:rgba(111,155,209,0.55);
+  background:rgba(111,155,209,0.14);
+  color:#b9d7ff;
+}
+.carrier-preflight-continued { margin-top:7px; color:#ffcf66; }
+
 /* HIGH-CAPACITY TOGGLE SWITCH */
 .hicap-row {
   display:flex; align-items:center; gap:11px; margin-bottom:7px;
@@ -311,7 +357,7 @@ textarea.dec-t:focus { border-color:rgba(255,107,53,0.4); }
 .switch input:disabled + .switch-track { opacity:.5; cursor:not-allowed; }
 .switch-track {
   display:inline-block; width:48px; height:20px; border-radius:20px;
-  background:var(--border2); border:1px solid #3d4560; /* borda: tom antigo de propósito */
+  background:var(--border2); border:1px solid #3d4560;
   transition:background 0.25s, border-color 0.25s; position:relative;
 }
 /* Texto OFF — aparece à direita da bolinha quando desligado */
@@ -499,7 +545,7 @@ textarea.dec-t:focus { border-color:rgba(255,107,53,0.4); }
   position:relative;
   border-radius:5px;
   margin-top: 14px;
-  padding:2px; /* espaço para a borda animada */
+  padding:2px;
   background: conic-gradient(
     from var(--angle),
     var(--dec) 0%,
@@ -617,7 +663,6 @@ textarea.dec-t:focus { border-color:rgba(255,107,53,0.4); }
   line-height:0.9; color:var(--text);
 }
 .origin-cell.top .origin-score { color:#c4b5fd; text-shadow:0 0 12px rgba(167,139,250,0.5); }
-/* Barra vertical à direita do número, mesma altura */
 .origin-vbar {
   width:4px; height:38px;
   background:rgba(255,255,255,0.06);
@@ -644,7 +689,7 @@ textarea.dec-t:focus { border-color:rgba(255,107,53,0.4); }
   .origin-grid { grid-template-columns:repeat(2, 1fr); gap:10px; }
 }
 
-/* Sub-seções do módulo "Probabilidade de origem" no accordion */
+/* Sub-seções do módulo de compatibilidade com origem no accordion */
 /* Grid de 4 colunas, igual ao banner superior */
 .origin-sub-grid {
   display:grid;
@@ -733,13 +778,6 @@ textarea.dec-t:focus { border-color:rgba(255,107,53,0.4); }
   color:#d4c08a;
 }
 .origin-note-social b { color:#ffb300; }
-.origin-note-stego {
-  margin-top:8px;
-  background:rgba(167,139,250,0.10);
-  border-left-color:#a78bfa;
-  color:#cbbef0;
-  font-size:0.66rem;
-}
 .origin-note-heuristic {
   margin-top:8px;
   background:rgba(255,179,0,0.08);
@@ -810,11 +848,6 @@ textarea.dec-t:focus { border-color:rgba(255,107,53,0.4); }
 /* Menu de configurações (engrenagem na barra de abas) */
 .settings-menu { position:relative; display:flex; align-items:center; padding:0 16px; gap:10px; }
 
-/* PRO BADGE — visível só quando o backend Pro está ativo (classe .visible) */
-@keyframes proPulse {
-  0%,100% { opacity:1; box-shadow:0 0 6px var(--enc); }
-  50% { opacity:0.35; box-shadow:0 0 2px var(--enc); }
-}
 .settings-gear {
   display:flex; align-items:center; justify-content:center;
   width:34px; height:34px; padding:0;
@@ -919,6 +952,47 @@ textarea.dec-t:focus { border-color:rgba(255,107,53,0.4); }
 }
 .modal-btn-confirm:hover { background:rgba(255,64,64,0.25); }
 
+
+/* About This Project: identity and methodology of the experiment. */
+.about-box { max-width:680px; }
+.about-content { padding-top:22px; }
+.about-content p { margin:9px 0; font-size:0.72rem; line-height:1.85; color:var(--neutral); }
+.about-content b { color:var(--text); }
+.about-kicker {
+  font-family:var(--mono); font-size:0.58rem; letter-spacing:1.7px;
+  color:var(--scan); text-transform:uppercase; margin-bottom:10px;
+}
+.about-lead { font-size:0.78rem !important; color:var(--text) !important; }
+.about-manifesto {
+  margin:18px 0; padding:14px 16px;
+  border-left:3px solid var(--scan); border-radius:3px;
+  background:rgba(167,139,250,0.07);
+  font-family:var(--mono); font-size:0.72rem; line-height:1.75; color:#d8cffd;
+}
+.about-section-title {
+  margin:22px 0 10px; font-family:var(--display); font-size:1rem;
+  letter-spacing:2px; color:#c4b5fd; font-weight:400;
+}
+.about-role-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+.about-role {
+  padding:12px 13px; border:1px solid var(--border); border-radius:5px;
+  background:rgba(255,255,255,0.018);
+}
+.about-role-label {
+  font-family:var(--mono); font-size:0.62rem; letter-spacing:0.8px;
+  color:var(--scan); text-transform:uppercase; margin-bottom:5px;
+}
+.about-role p { margin:0; font-size:0.68rem; line-height:1.7; }
+.about-note {
+  padding:10px 13px; border:1px solid rgba(255,179,0,0.22);
+  border-left:3px solid #ffb300; border-radius:4px; background:rgba(255,179,0,0.05);
+}
+.about-note p:last-child { margin-bottom:0; }
+@media (max-width:640px) {
+  .about-role-grid { grid-template-columns:1fr; }
+  .about-content { padding-left:18px; padding-right:18px; }
+}
+
 /* Changelog */
 .cl-entry { padding:14px 0; border-bottom:1px solid var(--border); }
 .cl-entry:last-child { border-bottom:none; }
@@ -940,8 +1014,7 @@ textarea.dec-t:focus { border-color:rgba(255,107,53,0.4); }
 .cl-tag.fix { background:rgba(255,179,0,0.1); color:#ffb300; border:1px solid rgba(255,179,0,0.25); }
 .cl-li b { color:var(--text); font-weight:600; }
 
-/* ── Seção Neural (Modo Pro) ── */
-/* Linha clicável + painel de interpretação */
+/* Notas e avisos da análise */
 .c2pa-fp-note {
   margin-top:12px; padding:9px 11px; font-size:0.66rem; line-height:1.5;
   color:#cbbef0; background:rgba(167,139,250,0.10);
@@ -955,11 +1028,6 @@ textarea.dec-t:focus { border-color:rgba(255,107,53,0.4); }
   transition:background .15s;
 }
 .c2pa-dl-btn:hover { background:rgba(167,139,250,0.22); }
-.origin-stego-note {
-  margin-top:12px; padding:10px 12px; font-size:0.72rem; line-height:1.5;
-  color:var(--text); background:rgba(167,139,250,0.08);
-  border-left:3px solid #a78bfa; border-radius:3px;
-}
 .offline-limit-note {
   margin-top:14px; padding:11px 13px; font-size:0.72rem; line-height:1.55;
   color:#bfe0e8; background:rgba(53,180,224,0.07);
@@ -1167,7 +1235,7 @@ textarea.dec-t:focus { border-color:rgba(255,107,53,0.4); }
   .tab { padding:9px 12px; font-size:0.78rem; }
 }
 
-/* #21 — relatório de furtividade da saída do encoder (v2.25.0) */
+/* Relatório de furtividade da saída do Encoder */
 .enc-stealth{display:none;padding:12px 14px;border:1px solid var(--border2);border-radius:8px;background:var(--surface2);}
 .enc-stealth.visible{display:block;}
 .sr-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:7px;}
@@ -1197,13 +1265,13 @@ textarea.dec-t:focus { border-color:rgba(255,107,53,0.4); }
 .sr-mapnote{margin-top:5px;font-size:0.58rem;color:var(--neutral);line-height:1.45;}
 
 
-/* spinner "trabalhando" no botão de encode — anima na thread de composição (v2.27.1) */
+/* Spinner de trabalho do botão Encode */
 .enc-spinner{display:inline-block;width:12px;height:12px;margin-right:7px;vertical-align:-1px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:enc-spin 0.6s linear infinite;}
 @keyframes enc-spin{to{transform:rotate(360deg)}}
 .btn.working{cursor:progress;}
 @media (prefers-reduced-motion:reduce){.enc-spinner{animation-duration:1.4s;}}
 
-/* painel de vazamento — legenda, dicas e módulo do Analyzer (v2.28.0) */
+/* Painel de vazamento: legenda, dicas e módulo do Analyzer */
 .leak-legend{margin-top:9px;}
 .leak-legend-bar{height:9px;border-radius:3px;border:1px solid var(--border);background:linear-gradient(90deg,#0d0f14,rgba(150,220,255,.9));}
 .leak-legend-labels{display:flex;justify-content:space-between;margin-top:3px;font-family:var(--mono);font-size:0.56rem;color:var(--neutral);text-transform:uppercase;letter-spacing:0.5px;}
@@ -1224,7 +1292,7 @@ textarea.dec-t:focus { border-color:rgba(255,107,53,0.4); }
 .leak-reading{font-family:var(--mono);font-size:0.72rem;color:var(--text);margin-bottom:4px;}
 .leak-floor{color:var(--neutral);}
 
-/* Encoder em 2 colunas + overlay do mapa na imagem gerada (v2.28.1) */
+/* Encoder em duas colunas + overlay do mapa na imagem gerada */
 .download-wrap.visible{display:block;}
 .enc-left{flex:1 1 280px;min-width:250px;display:flex;flex-direction:column;gap:10px;}
 .enc-right{flex:1 1 300px;min-width:260px;}
@@ -1234,20 +1302,18 @@ textarea.dec-t:focus { border-color:rgba(255,107,53,0.4); }
 .enc-heatmap span{display:block;min-width:0;min-height:0;}
 .sr-maptip{margin-top:11px;font-size:0.72rem;line-height:1.5;color:var(--neutral);}
 
-/* Encoder — layout repensado (v2.28.2) */
+/* Layout do Encoder */
 .enc-cols{display:flex;flex-wrap:wrap;gap:14px;align-items:stretch;}
 .enc-img-wrap img{width:100%;max-height:230px;object-fit:contain;display:block;background:var(--bg);}
 .enc-left .leak-legend{margin-top:0;}
 .enc-left .enc-map-toggle{margin:0;width:100%;}
 .enc-tips-box{border:1px solid var(--border2);border-radius:8px;background:var(--surface2);padding:12px 14px;margin-top:14px;}
 
-/* ── MODO ROBUSTO (F4): segunda saída do Encoder ─────────────────────────── */
+/* ── Segunda saída do Encoder: modo mais resistente ─────────────────────── */
 /* Duas saídas com trocas DIFERENTES, não melhor/pior. O cabeçalho de cada
    bloco diz para que serve, para o usuário não comparar as duas na mesma régua. */
 .rb-head{display:flex;align-items:baseline;gap:.6rem;flex-wrap:wrap;
-  /* Sem margin-bottom: o respiro entre título e imagem é o --out-gap do
-     contêiner. E a borda usava var(--line), que NÃO EXISTE — a declaração
-     era descartada e sobrava só o espaço vazio. */
+  /* O espaçamento vertical é controlado pelo --out-gap do contêiner. */
   margin-bottom:0;padding-bottom:.4rem;border-bottom:1px solid var(--border)}
 .rb-title{font-family:'Bebas Neue',sans-serif;font-size:1.05rem;letter-spacing:.06em;color:var(--fg)}
 .rb-sub{font-size:.66rem;color:var(--dim);font-style:italic}
@@ -1266,7 +1332,7 @@ textarea.dec-t:focus { border-color:rgba(255,107,53,0.4); }
 .rb-axis-level{font-size:.68rem;font-weight:600;letter-spacing:.05em}
 .rb-axis-note{font-size:.64rem;color:var(--dim);line-height:1.5;margin-top:.25rem}
 
-/* ── v2.37.1: as duas saídas lado a lado ─────────────────────────────────── */
+/* As duas saídas ficam lado a lado em telas largas. */
 /* Cada bloco é autocontido (imagem, download, números, relatório), para que a
    leitura seja vertical dentro de cada coluna e a comparação, horizontal. */
 .out-pair{display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start}
@@ -1276,7 +1342,6 @@ textarea.dec-t:focus { border-color:rgba(255,107,53,0.4); }
 /* O corpo da coluna resistente é um contêiner intermediário: sem isto os
    blocos dentro dele encostam uns nos outros enquanto os de fora respiram. */
 .rb-body.visible{display:flex;flex-direction:column;gap:var(--out-gap)}
-/* Mesmo respiro DENTRO das listas de estatística, para o olho ver um ritmo só. */
 .out-pair .stats-wrap{gap:var(--out-gap)}
 .out-pair .enc-stealth{margin:0}
 .out-pair .btn{margin:0}
@@ -1284,10 +1349,8 @@ textarea.dec-t:focus { border-color:rgba(255,107,53,0.4); }
 .out-pair .leak-legend{margin-top:0}
 @media (max-width:900px){ .out-pair{grid-template-columns:1fr} }
 .enc-tips-solo{max-width:720px;margin-left:auto;margin-right:auto}
-/* Nota curta dentro do bloco de estatística, sem virar um parágrafo solto. */
 .stat-note{font-size:.64rem;color:var(--dim);line-height:1.45;margin-top:.25rem;font-style:italic}
 
-/* As dicas acompanham o resultado: nada de painel solto antes do encode. */
 .enc-tips-solo{display:none}
 .enc-tips-solo.visible{display:block}
 
@@ -1297,14 +1360,9 @@ textarea.dec-t:focus { border-color:rgba(255,107,53,0.4); }
    este modificador, um aviso sem JS por trás nunca aparece. */
 .key-warning.kw-static{display:block}
 
-/* ── F9 fatia 2: impressão digital de FERRAMENTA ──────────────────────────────
-   Dois níveis, CONFIRMADO e INDÍCIO, que NUNCA podem ser distinguidos só por
-   cor (o Rick é daltônico). Cada nível carrega, de forma independente:
-   - um ÍCONE distinto (✓ vs ?),
-   - a PALAVRA do nível, em caixa alta,
-   - uma espessura de borda esquerda diferente (4px vs 2px),
-   - um estilo de borda diferente (sólida vs tracejada).
-   Removida a cor, os dois continuam separáveis à primeira vista.            */
+/* Impressão digital de ferramenta.
+   CONFIRMADO e INDÍCIO nunca dependem apenas de cor: cada nível também usa
+   ícone, rótulo textual, espessura e estilo de borda distintos. */
 .toolprint-panel {
   margin-top:14px; padding:14px 16px;
   background:linear-gradient(180deg, rgba(0,255,179,0.07), rgba(0,255,179,0.02));

@@ -1,8 +1,7 @@
 const AES_VERSION = 0x01;        // KDF = PBKDF2-SHA256 (legado; só p/ LER imagens antigas)
-const AES_VERSION_ARGON2 = 0x02; // KDF = Argon2id (padrão desde a #9; ver deriveAesKeyArgon2)
+const AES_VERSION_ARGON2 = 0x02; // KDF = Argon2id; see deriveAesKeyArgon2
 const PBKDF2_ITERS = 150000;
-// Argon2id (RFC 9106) via hash-wasm embutido (wasm base64 inline, offline). Parâmetros
-// definidos na frente #9: m=64MiB, t=3, p=1 — resistente a brute-force por GPU/ASIC.
+// Argon2id (RFC 9106) via hash-wasm embutido. Parâmetros: m=64 MiB, t=3, p=1.
 const ARGON2_PARAMS = { parallelism: 1, iterations: 3, memorySize: 65536 }; // memorySize em KiB
 
 async function deriveAesKey(password, salt) {
@@ -13,10 +12,8 @@ async function deriveAesKey(password, salt) {
     baseKey, { name:'AES-GCM', length:256 }, false, ['encrypt','decrypt']);
 }
 
-// Deriva a chave AES-256 via Argon2id (KDF v2 = byte de versão 0x02). O wasm é
-// carregado/compilado de forma preguiçosa na 1ª chamada (~500ms; depois ~325ms),
-// e fica em cache pela sessão. Se o WASM não estiver disponível, LANÇA — nunca
-// rebaixa silenciosamente para um KDF mais fraco.
+// Deriva AES-256 via Argon2id. O WASM é inicializado sob demanda e fica em cache
+// na sessão; indisponibilidade é erro explícito, nunca downgrade silencioso de KDF.
 async function deriveAesKeyArgon2(password, salt) {
   if (typeof hashwasm === 'undefined' || !hashwasm || !hashwasm.argon2id) {
     throw new Error('argon2-unavailable');
@@ -40,7 +37,7 @@ async function aesEncrypt(text, password) {
 async function aesEncryptBytes(bytes, password) {
   const salt = crypto.getRandomValues(new Uint8Array(16));
   const iv = crypto.getRandomValues(new Uint8Array(12));
-  const key = await deriveAesKeyArgon2(password, salt); // KDF v2 = Argon2id (#9)
+  const key = await deriveAesKeyArgon2(password, salt); // KDF v2 = Argon2id
   const ct = new Uint8Array(await crypto.subtle.encrypt(
     { name:'AES-GCM', iv }, key, bytes));
   const out = new Uint8Array(1 + 16 + 12 + ct.length);
@@ -97,16 +94,15 @@ function isAesPayload(bytes) {
 }
 
 // ─── Camada de NEGAÇÃO PLAUSÍVEL — cripto da mensagem-isca (decoy) ───────────
-// A isca (Opção C) é gravada por LSB no FIM do pool, ancorada num ponto fixo, e
+// A mensagem alternativa é gravada por LSB no FIM do pool, ancorada num ponto fixo, e
 // validada pela TAG do AES-GCM (não por MAGIC). Precisamos de blocos GCM cujo
 // TAMANHO seja previsível a partir SÓ da senha, para o decoder localizar a
 // âncora sem conhecer a mensagem real. Por isso a isca usa um SALT DERIVADO da
 // senha (não aleatório): assim o decoder recria a mesma chave e lê a âncora.
 //
-// Segurança: o salt fixo-por-senha é aceitável aqui porque (a) cada senha gera
-// um salt distinto e (b) o objetivo da isca é ser recuperável sob coação, não
-// resistir a ataque de dicionário como a mensagem real. O nonce (iv) do GCM
-// continua ALEATÓRIO por bloco (nunca reusado), preservando a segurança do GCM.
+// O salt determinístico é requisito de endereçamento desta camada: o decoder
+// precisa derivar a mesma chave antes de conhecer o conteúdo. O IV do GCM continua
+// aleatório por bloco; a força da senha continua relevante contra dicionário.
 //
 // Deriva um salt de 16 bytes determinístico a partir da senha (SHA-256 truncado).
 async function decoySaltFromPassword(password) {

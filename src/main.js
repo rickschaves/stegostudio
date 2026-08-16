@@ -13,8 +13,7 @@ function resolveNativeEvidence({ decodedMsg, nativeHeaderMatched=false, nativePa
 // `nativeHeaderMatched` é útil apenas enquanto temos "header localizado, conteúdo
 // não recuperado". Depois que uma mensagem nativa sobrevive à consolidação, a
 // evidência pública passa a ser `nativeExtracted` independentemente da rota que
-// a encontrou. Isso evita que a camada alternativa da F1 revele, pelo relatório,
-// qual das duas senhas válidas abriu qual caminho interno.
+// a encontrou. Assim, duas senhas válidas não expõem qual caminho interno venceu.
 function markNativeExtracted(report) {
   const studio = {...(report.studio || {}), nativeExtracted:true};
   delete studio.nativeHeaderMatched;
@@ -24,16 +23,16 @@ function markNativeExtracted(report) {
 
 
 // ════════════════════════════════════════
-//  PUBLIC REPORT ALLOWLIST — v2.42.17
+//  PUBLIC REPORT ALLOWLIST
 // ════════════════════════════════════════
 // `report` é o estado de trabalho interno do Analyzer. Ele pode ganhar campos
 // auxiliares no futuro; o JSON público NÃO deve herdar automaticamente esses
 // campos. Esta projeção é a fronteira explícita de exportação: só caminhos
 // listados abaixo podem sair em `lastReport.modules` / Export JSON.
 //
-// Importante para F1: mesmo que uma refatoração futura crie acidentalmente um
-// campo como `tailLayer`, `f1route` ou equivalente em qualquer objeto interno,
-// ele não atravessa esta fronteira sem uma alteração consciente da allowlist.
+// Mesmo que uma refatoração futura crie acidentalmente um campo interno de rota
+// ou depuração, ele não atravessa esta fronteira sem uma alteração consciente
+// da allowlist.
 const PUBLIC_REPORT_SCHEMA = {
   format: {cat:true, ext:true, encOk:true, msg:true, webp:true},
   metadata: {filename:true, size:true, type:true, formatCategory:true, width:true, height:true, pixels:true, lastModified:true},
@@ -173,14 +172,12 @@ function createPublicLastReport(report, decodedMsg, decodeStatus) {
 }
 // PUBLIC REPORT ALLOWLIST — END
 
-let _analisando = false;   // guarda de reentrância — ver comentário abaixo
+let _analisando = false;   // guarda de reentrância
 document.getElementById('btn-analyze').addEventListener('click', async ()=>{
   if(!decID||!decFile) return;
-  // O botão é desabilitado logo abaixo e reabilitado no `finally`, o que já
-  // impede o duplo clique normal. Esta guarda cobre o caso em que a análise
-  // anterior NÃO chegou ao finally — foi exatamente o que o smoke da v2.42.7
-  // produziu: pipeline preso, botão travado, e qualquer caminho que o
-  // reabilitasse dispararia uma segunda execução sobre estado pela metade.
+  // O botão é desabilitado durante a execução, mas esta guarda também protege
+  // contra qualquer caminho excepcional que tente iniciar outra análise antes
+  // de a anterior ter encerrado completamente.
   if(_analisando) return;
   _analisando = true;
   setAnalysisBusy(true);   // contrato de interação, não efeito colateral da thread
@@ -190,9 +187,8 @@ document.getElementById('btn-analyze').addEventListener('click', async ()=>{
   // a análise termina coerente consigo mesma (tudo de A) em vez de misturar o
   // arquivo de A com o preview de B — e o portão `obsoleta()` impede que ela
   // publique qualquer coisa.
-  // Geração NOVA por OPERAÇÃO, não por imagem. Reanalisar a mesma imagem
-  // precisa invalidar o relatório anterior — senão `lastRenderArgs` da execução
-  // passada continua com a mesma geração e o guard de idioma não morde.
+  // Cada operação recebe uma geração própria para invalidar resultados e
+  // re-renderizações pertencentes a uma análise anterior, mesmo na mesma imagem.
   bumpAnalysisGeneration();
   const run     = analysisGeneration;
   const runID   = decID;
@@ -206,14 +202,10 @@ document.getElementById('btn-analyze').addEventListener('click', async ()=>{
 
   try {
     setProgress(0, 'Iniciando pipeline...');
-    // ── F7 (ação 1b): decode DCT ÚNICO POR ANÁLISE, um nível ACIMA ──
-    // O mesmo arquivo chegava a ser decodificado três vezes: uma no
-    // Analyzer-JPEG (dentro do runForensics) e uma por motor do Decoder.
-    // Agora decodifica-se aqui, antes de tudo, e o resultado desce para todos.
-    // `decFmt` vem dos magic bytes lidos no upload (v2.32.1), então é confiável
-    // para esta pré-decisão. Se o decode falhar (ex.: JPEG progressivo), segue
-    // null e cada consumidor faz o próprio tratamento — inclusive a mensagem
-    // amigável do Analyzer, que depende de decodificar para saber o motivo.
+    // ── Decode DCT compartilhado: uma única leitura por análise ──
+    // Os consumidores JPEG compartilham a mesma leitura de coeficientes. `decFmt`
+    // vem dos magic bytes do upload; se o decode compartilhado falhar, cada
+    // consumidor recebe null e aplica seu tratamento específico.
     let sharedDec=null, jpegBytes=null;
     if(runFmt && runFmt.ext==='JPEG' && runFile){
       try{
@@ -237,8 +229,8 @@ document.getElementById('btn-analyze').addEventListener('click', async ()=>{
     let nativePayloadRecovered=false;
     let nativeLayerRecovered=false;
     // A rota genérica pode concluir provisoriamente "chave não revelou texto"
-    // antes da sonda F1. Adiamos o efeito visual até TODAS as rotas terminarem:
-    // uma senha alternativa válida não pode piscar como senha errada por 5 s.
+    // antes da tentativa de camada alternativa. O efeito visual é adiado até
+    // todas as rotas terminarem para evitar um falso aviso de senha errada.
     let pendingKeyFlash=false;
     const isLossless=fmt&&fmt.cat==='lossless';
 
@@ -251,14 +243,14 @@ document.getElementById('btn-analyze').addEventListener('click', async ()=>{
       // sobre a mensagem padrão de "indisponível".
       if(fmt.ext==='JPEG' && runFile){
         try{
-          // F7: reusa os bytes e os coeficientes obtidos no topo do fluxo.
+          // Reusa os bytes e os coeficientes obtidos no topo do fluxo.
           // Se o arquivo só foi reconhecido como JPEG pelo relatório (o decFmt
-          // do upload pode divergir em casos de borda), faz o trabalho aqui,
-          // exatamente como antes — o caminho autônomo continua íntegro.
+          // do upload pode divergir em casos de borda), faz o decode localmente;
+          // o caminho autônomo continua disponível.
           const bytes = jpegBytes || new Uint8Array(await runFile.arrayBuffer());
           let dec = sharedDec;
           if(!dec){ try{ dec=decodeJpegCoefficients(bytes); }catch(_){ } }
-          // ── MODO ROBUSTO (F4) — tentado ANTES dos motores de terceiros ──
+          // ── MODO MAIS RESISTENTE — tentado antes dos motores de terceiros ──
           // Tem assinatura própria e CRC no cabeçalho, então é o teste mais
           // específico e o de menor risco de falso positivo. O estado
           // 'damaged' é o caso honesto: o cabeçalho sobreviveu ao caminho e o
@@ -335,11 +327,10 @@ document.getElementById('btn-analyze').addEventListener('click', async ()=>{
         // foram tentados e qual foi o resultado.
         if(!decodedMsg){
           if(!report.studio?.robust) decodeStatus=t('decStatusJpegNoneFound');
-          // F9 fatia 2 — CONFIRMADO sem extração. O magic do Steghide vive em
-          // posições derivadas da senha: se ele bate, é prova de que o arquivo é
-          // Steghide, mesmo sem conseguirmos ler o conteúdo. Só roda aqui, no
-          // caminho em que TODOS os motores já falharam — nunca duplica um
-          // resultado que a extração já provou.
+          // Identificação confirmada sem extração. O magic do Steghide vive em
+          // posições derivadas da senha: se ele bate, confirma a ferramenta mesmo
+          // quando o conteúdo não pôde ser lido. Só roda depois das tentativas de
+          // extração para não duplicar uma evidência mais forte.
           try{
             const sh=shIdentifyJpeg(bytes, key, dec);
             if(sh) report.toolprint=[...(report.toolprint||[]),
@@ -457,14 +448,14 @@ document.getElementById('btn-analyze').addEventListener('click', async ()=>{
         else if(generic.foundText && generic.foundTextLength >= 12 && !hasC2PA){
           let msg = generic.foundText;
           const hadHeader = !!generic.headerName;
-          // JOI usa um byte de tamanho logo após o header; outros formatos podem
-          // não usar. Só removemos esse byte quando o header é reconhecidamente JOI.
+          // O formato legado JOI_LSB usa um byte de tamanho logo após o header;
+          // outros formatos podem não usar. Só o removemos quando esse header é reconhecido.
           const isJoiHeader = /^JOI_LSB/i.test(generic.headerName || '');
           // Remove headers de ferramentas conhecidas no início (JOI_LSB2, STEGO, etc.)
           msg = msg.replace(/^(JOI_LSB\d?|STEGO|LSB|STEG)[\x00-\x20]*/i, '');
           // Remove caracteres de controle e nulls
           msg = msg.replace(/[\x00-\x1F]/g, '').trim();
-          // Formato JOI/STEGO: header + bytes-nulos + [1 byte de tamanho] + texto.
+          // Formato legado JOI_LSB/STEGO: header + bytes-nulos + [1 byte de tamanho] + texto.
           // A ilha de texto começa no byte de tamanho, que vira o 1º caractere do
           // foundText (ex: 'Q' = 0x51 = 81 ≈ comprimento da msg). Como esse byte
           // pode calhar de ser uma letra ASCII, não dá para distingui-lo pelo
@@ -494,7 +485,7 @@ document.getElementById('btn-analyze').addEventListener('click', async ()=>{
 
     // ── NEGAÇÃO PLAUSÍVEL: sonda da mensagem-isca (decoy) ──
     // Se uma senha foi informada mas NENHUMA mensagem real decodificou com ela,
-    // pode ser a senha da isca (Opção C: isca gravada no FIM via AES-GCM). A
+    // pode ser a senha da mensagem alternativa (gravada no fim via AES-GCM). A
     // sonda SEMPRE roda nesse caso — não depende de flag (marcar a isca vazaria
     // sua existência). A tag do GCM valida: sem isca ou senha errada → null,
     // sem falsa leitura. Rodada só quando lossless (LSB só existe aí).
@@ -557,9 +548,9 @@ document.getElementById('btn-analyze').addEventListener('click', async ()=>{
     }
 
     // Só agora sabemos se o aviso provisório de chave realmente deve aparecer.
-    // Uma extração F1 ou de terceiro bem-sucedida cancela o flash; identificação
-    // de ferramenta de terceiro também cancela, porque "insira a chave" seria
-    // um conselho enganoso se a limitação for do nosso decoder.
+    // Uma extração nativa alternativa ou de terceiro bem-sucedida cancela o flash;
+    // identificação de ferramenta de terceiro também cancela, porque "insira a
+    // chave" seria enganoso quando a limitação é de compatibilidade do decoder.
     if (pendingKeyFlash && !decodedMsg && !report.studio?.thirdParty) flashKey('wrong');
 
     // ── PORTÃO ──
@@ -627,7 +618,7 @@ document.getElementById('btn-analyze').addEventListener('click', async ()=>{
 // ════════════════════════════════════════
 document.getElementById('btn-export-json').addEventListener('click',()=>{
   if(!lastReport) return;
-  const payload={_tool:'STEGO·STUDIO v2.42.17',_schema:'forensic-report-v2',
+  const payload={_tool:'STEGO·STUDIO v2.42.29',_schema:'forensic-report-v2',
     _hint:t('exportHintJSON'),
     ...lastReport};
   const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
@@ -638,7 +629,7 @@ document.getElementById('btn-export-json').addEventListener('click',()=>{
   URL.revokeObjectURL(url);
 });
 
-/* ---- #22 overlay: mapa de vazamento sobre a imagem do Analyzer (v2.27.0) ---- */
+/* Overlay do mapa de vazamento sobre a imagem do Analyzer. */
 function positionLeakOverlay(){
   const img=document.getElementById('leak-img'), hm=document.getElementById('leak-heatmap');
   if(!img||!hm) return;
@@ -664,7 +655,7 @@ function toggleLeakOverlay(){
   hm.classList.add('on'); btn.textContent=t('heatmapHide');
 }
 
-/* ---- overlay do mapa sobre a imagem gerada do Encoder (v2.28.1) ---- */
+/* Overlay do mapa de vazamento sobre a imagem gerada pelo Encoder. */
 function positionEncOverlay(){
   const img=document.getElementById('enc-out-prev'), hm=document.getElementById('enc-heatmap');
   if(!img||!hm) return;
@@ -690,9 +681,7 @@ function toggleEncOverlay(){
   hm.classList.add('on'); btn.textContent=t('encMapHide');
 }
 
-/* ---- Migração onclick -> addEventListener (v2.24.0) ----
-   Reproduz exatamente o comportamento dos antigos atributos inline.
-   Rodando aqui (fim do main.js, fim do <body>), todo o DOM estático já existe. */
+/* Event wiring. Este bloco roda no fim do <body>, quando o DOM estático já existe. */
 (function wireEvents(){
   const on = (sel, ev, fn) => { const el = typeof sel==='string' ? document.querySelector(sel) : sel; if (el) el.addEventListener(ev, fn); };
 
@@ -701,6 +690,7 @@ function toggleEncOverlay(){
   on('#settings-gear', 'click', (e) => toggleSettingsMenu(e));
   on('#settings-help', 'click', () => { showHelpModal(); closeSettingsMenu(); });
   on('#settings-changelog', 'click', () => { showChangelogModal(); closeSettingsMenu(); });
+  on('#settings-about', 'click', () => { showAboutModal(); closeSettingsMenu(); });
   on('#lang-en', 'click', () => setLang('en'));
   on('#lang-pt', 'click', () => setLang('pt'));
 
@@ -709,6 +699,8 @@ function toggleEncOverlay(){
   on('#help-close-btn', 'click', () => hideHelpModal());
   on('#changelog-overlay', 'click', (e) => { if (e.target === e.currentTarget) hideChangelogModal(); });
   on('#changelog-close-btn', 'click', () => hideChangelogModal());
+  on('#about-overlay', 'click', (e) => { if (e.target === e.currentTarget) hideAboutModal(); });
+  on('#about-close-btn', 'click', () => hideAboutModal());
 
   // Accordion dos módulos forenses é gerado dinamicamente -> delegação no document.
   document.addEventListener('click', (e) => {
@@ -720,7 +712,7 @@ function toggleEncOverlay(){
     }
   });
 
-  // #22 — toggle do overlay de vazamento (módulo é dinâmico -> delegação no document)
+  // O módulo de vazamento é dinâmico, portanto o toggle usa delegação no document.
   document.addEventListener('click', (e)=>{ if(e.target.closest && e.target.closest('.leak-toggle')) toggleLeakOverlay(); });
   document.addEventListener('click', (e)=>{ if(e.target.closest && e.target.closest('.enc-map-toggle')) toggleEncOverlay(); });
 })();

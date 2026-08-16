@@ -97,15 +97,9 @@ function escapeHTML(s) {
 // setStatus compatível — uma única linha digitada
 // Escreve UMA linha de status. Recebe TEXTO e classe — nunca HTML.
 //
-// Já foi `div.innerHTML = html` num nó solto, depois `DOMParser`, ambos só para
-// extrair o texto de dentro de uma string. A revisão externa perguntou qual dos
-// dois era melhor e a resposta foi: nenhum. Os três chamadores sempre passaram
-// `<span class="ok|err">…</span>` — markup montado aqui mesmo, imediatamente
-// desmontado ali. Dois deles interpolam `e.message`, que pode carregar conteúdo
-// do arquivo analisado.
-//
-// Texto puro elimina a classe inteira de problema: não há parser, não há DOM
-// intermediário, não há o que sanitizar.
+// Status é texto puro por contrato. Alguns chamadores interpolam mensagens de erro
+// derivadas do arquivo analisado, portanto este caminho deve permanecer texto puro
+// e não passar por um parser de markup intermediário.
 function setStatus(id, text, cls) {
   termWrite(id, [{ text: String(text), cls: cls || null }]);
 }

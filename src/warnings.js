@@ -1,17 +1,8 @@
 // ════════════════════════════════════════════════════════════════════════════
 //  AVISOS DE CONTEÚDO — 100% offline
 //
-//  Extraído do antigo pro.js na v2.40.0. Apesar de morar lá, NADA aqui era
-//  neural nem dependia de backend: os dois avisos operam sobre texto que a
-//  própria ferramenta já extraiu, dentro do navegador. Ficaram no pro.js por
-//  acidente histórico, e apagar aquele módulo inteiro teria levado junto a
-//  detecção de stegomalware.
-//
-//  - renderAdversarialWarning: texto no arquivo que tenta manipular quem analisa.
-//  - renderStegomalwareWarning: mensagem decodificada com cara de script/executável.
-//
-//  Os DETECTORES ficam em outros módulos (detectAdversarialContent em
-//  forensics.js, detectStegomalware em decoder.js); aqui é só a apresentação.
+//  Este módulo apenas renderiza avisos para conteúdo já detectado. Os detectores
+//  permanecem em forensics.js (conteúdo adversarial) e decoder.js (stegomalware).
 // ════════════════════════════════════════════════════════════════════════════
 
 // ════════════════════════════════════════

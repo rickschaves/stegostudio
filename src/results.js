@@ -24,7 +24,7 @@ function renderModule(id, icon, name, badge, badgeClass, bodyHTML) {
   document.getElementById('modules-wrap').appendChild(div);
 }
 
-// Módulo "Probabilidade de origem" — mostra as 4 categorias com seus sinais.
+// Módulo de compatibilidade com origem — mostra as 4 categorias com seus sinais.
 // Cada sinal aparece em todas as categorias às quais se aplica.
 function renderOriginModule(r) {
   const o = r.origin;
@@ -71,17 +71,11 @@ function renderOriginModule(r) {
     body += `</div>`;
   }
   body += '</div>';
-  // Nota destacada: esteganografia pode ter inflado o score sintético.
-  // Aparece quando os modelos neurais detectaram stego numa imagem com synth
-  // alto sem prova C2PA — o score de origem pode ser um falso "sintético".
-  if (r._stegoMimicsAI) {
-    body += `<div class="origin-note origin-note-stego">${t('flagStegoMimicsAI')}</div>`;
-  }
   // Aviso de pipeline de rede social
   const sp = r.socialPipeline;
   if (sp?.detected) {
     const conf = sp.weak ? t('socialMaybeProcessedBy') : t('socialProcessedBy');
-    // F9: a força da evidência fica explícita. Estrutura do arquivo é forte e
+    // A força da evidência fica explícita. Estrutura do arquivo é forte e
     // sobrevive a renomeação; nome de arquivo é frágil e some ao renomear.
     // Primeiro o QUE foi detectado e POR QUE isso importa; só depois COMO foi
     // detectado. A lista de métodos mostra o que de fato disparou — a estrutura
@@ -111,11 +105,8 @@ function renderGroupHeader(label, type) {
 
 // ⚠️ SEGURANÇA — `val` é escapado SEMPRE.
 // Metadados (EXIF, C2PA) e amostras decodificadas vêm de DENTRO do arquivo
-// analisado, e o modelo de ameaça desta ferramenta é justamente "abrir uma
-// imagem suspeita". Um `Make` contendo `<img src=x onerror=...>` executava
-// script na página (corrigido na v2.42.0). Arquivo é hostil por definição.
-// Quem precisa de markup interno usa rowHTML(), e a decisão fica visível na
-// chamada em vez de escondida no dado.
+// analisado, portanto são entrada hostil. Quem precisa de markup interno usa
+// rowHTML(), deixando a decisão explícita no call site.
 function row(label, val, cls='') {
   return rowHTML(label, escapeHTML(val), cls);
 }
@@ -146,17 +137,11 @@ function renderLeakModule(r){
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  ESTADO DO PROTOCOLO — função PURA, fonte única para UI e testes
+//  ESTADO DO PROTOCOLO — função pura, fonte única para UI e testes
 //
-//  Existia como cadeia de `if` dentro do renderer, consultando só `hasHeader`.
-//  `hasHeader` vem do M7, que roda SEM senha: um payload furtivo fica invisível
-//  para ele. Resultado observado em smoke test real: com a senha certa a tela
-//  mostrava "payload STEGO·STUDIO extraído" no Threat e, logo abaixo,
-//  "Indeterminado (possível cifra)" no Protocolo. A mesma evidência, dois
-//  veredictos opostos — exatamente o que este projeto não pode fazer.
-//
-//  Precedência por FORÇA DA EVIDÊNCIA, do mais forte ao mais fraco. Ser função
-//  pura é o que permite o teste exercitar a lógica real em vez de reimplementá-la.
+//  `hasHeader` é uma evidência passiva e pode não existir em payloads furtivos.
+//  Por isso todas as superfícies derivam a decisão desta mesma função, com
+//  precedência da evidência mais forte para a mais fraca.
 // ─────────────────────────────────────────────────────────────────────────────
 function resolveProtocolState(r) {
   const st = r.studio;
@@ -164,15 +149,26 @@ function resolveProtocolState(r) {
   if (st.nativeExtracted)    return { level:'extracted', name:'STEGO·STUDIO',            badge:'STEGO·STUDIO',          cls:'mb-crit' };
   if (st.nativeHeaderMatched)return { level:'headerOnly',name:'STEGO·STUDIO',            badge:'STEGO·STUDIO',          cls:'mb-crit' };
   if (st.hasHeader)          return { level:'passive',   name:'STEGO·STUDIO',            badge:'STEGO·STUDIO',          cls:'mb-crit' };
-  if (st.deepScan && r.lsb?.foundText)
-                             return { level:'generic',   name:t('protoNameGeneric'),     badge:t('protoBadgeGeneric'),  cls:'mb-crit' };
+
+  const printable = parseFloat(r.lsb?.printableRatio) || 0;
+  const toolHeader = !!(st.headerName || r.lsb?.headerName);
+  const reliableGenericText = !!(st.deepScan && r.lsb?.foundText && (toolHeader || printable > 70));
+  if (reliableGenericText)   return { level:'generic',   name:t('protoNameGeneric'),     badge:t('protoBadgeGeneric'),  cls:'mb-crit' };
+
   if (r.lsb?.cipherSuspicion)return { level:'cipher',    name:t('protoNameUndetermined'),badge:t('protoBadgeCipher'),   cls:'mb-warn' };
+
+  const rsRate = parseFloat(r.lsb?.rsRate) || 0;
+  const wsRate = parseFloat(r.lsb?.wsRate) || 0;
+  const wsReliable = r.lsb?.wsReliable !== false;
+  const embeddingEvidence = !!r.lsb?.lsbrDetected || rsRate >= 25 || (wsRate >= 25 && wsReliable);
+  if (embeddingEvidence)     return { level:'embedded',  name:t('protoNameUndetermined'),badge:t('protoBadgeEmbedding'),cls:'mb-warn' };
+
   return                            { level:'none',      name:t('protoNameNone'),        badge:t('protoBadgeNone'),     cls:'mb-ok' };
 }
 
-// ── F9 fatia 2: impressão digital de FERRAMENTA ──────────────────────────────
-// Regra de projeto (a mesma da v2.33.1): CONFIRMADO e INDÍCIO são níveis
-// visivelmente distintos, e a distinção NÃO pode depender de cor. Cada item
+// ── Impressão digital de ferramenta ───────────────────────────────────────
+// CONFIRMADO e INDÍCIO são níveis visivelmente distintos, e a distinção NÃO
+// pode depender de cor. Cada item
 // carrega ícone, palavra do nível e borda própria — remova a cor e continuam
 // separáveis.
 //   CONFIRMADO — o magic do Steghide foi lido. Como ele vive em posições
@@ -242,10 +238,8 @@ function renderResults(r, decodedMsg, decodeStatus) {
     tFlags.map(f=>`<span class="score-flag threat">${f}</span>`).join('');
 
   // ── Nota de limitação do modo offline ──
-  // QUARTA superfície do mesmo estado. Só faz sentido quando há suspeita parcial
-  // sem qualquer evidência confirmada. Não pode aparecer ao lado de payload nativo
-  // extraído, header confirmado, motor de terceiro identificado ou modo robusto
-  // confirmado/danificado — nesses casos já sabemos que existe stego.
+  // Mostre a ressalva apenas para suspeita parcial sem evidência confirmada; ela
+  // seria contraditória ao lado de uma extração ou identificação já estabelecida.
   const offNote = document.getElementById('offline-limit-note');
   if (offNote) {
     const lsbPossible = !!r.lsb?.available;
@@ -267,12 +261,10 @@ function renderResults(r, decodedMsg, decodeStatus) {
   renderStegomalwareWarning(r);
   renderToolprint(r, decodedMsg);
 
-  // ── Aviso de C2PA confirmado (independente do modo Pro) ──
-  // Quando a imagem é certificada como gerada por IA (C2PA), os detectores de
-  // stego — tanto os neurais (treinados em fotos reais) quanto heurísticas
-  // estruturais — podem dar falso-positivo, pois imagens sintéticas estão fora
-  // da distribuição esperada. Aparece sempre que C2PA confirmado, com ou sem
-  // backend neural, abaixo do threat score.
+  // ── Aviso de contexto C2PA ──
+  // Um manifesto C2PA que declara origem sintética pode explicar alguns sinais que
+  // também aparecem em heurísticas de esteganografia. A presença do manifesto é
+  // exibida como contexto; esta build não valida criptograficamente sua assinatura.
   const c2paNote = document.getElementById('c2pa-fp-note');
   if (c2paNote) {
     if (r.c2pa?.manifestDetected) {
@@ -301,18 +293,6 @@ function renderResults(r, decodedMsg, decodeStatus) {
     if (cell) cell.classList.toggle('top', m.cat === topData);
   });
 
-  // Nota: quando a esteganografia pode ter inflado o score sintético (foto
-  // real detectada como stego pelos modelos neurais + synth alto sem C2PA).
-  const origNote = document.getElementById('origin-stego-note');
-  if (origNote) {
-    if (r._stegoMimicsAI) {
-      origNote.textContent = t('flagStegoMimicsAI');
-      origNote.style.display = 'block';
-    } else {
-      origNote.style.display = 'none';
-    }
-  }
-
   // ── GRUPO 1: MENSAGEM OCULTA ──
   renderGroupHeader(t('groupSteg'), 'stego');
 
@@ -336,10 +316,10 @@ function renderResults(r, decodedMsg, decodeStatus) {
     // linha neutra de recuperação só porque a mesma imagem também expõe header.
     if(proto.level==='extracted'){
       // Uma extração bem-sucedida pode vir do payload principal OU da camada
-      // alternativa F1. Não revelar a rota: mostrar apenas a evidência comum.
+      // alternativa. Não revelar a rota: mostrar apenas a evidência comum.
       const recoveredDetail = r.studio.hasHeader && r.studio.payloadBytes
-        ? t('payloadRecoveredWithKey') + ' · ' + r.studio.payloadBytes + ' bytes'
-        : t('payloadRecoveredWithKey');
+        ? t('payloadRecovered') + ' · ' + r.studio.payloadBytes + ' bytes'
+        : t('payloadRecovered');
       stBody+=row(t('rowPayload'), recoveredDetail, 'finding-crit');
     } else if(proto.level==='headerOnly'){
       stBody+=row(t('rowHeader'), t('headerFoundNoContent'), 'finding-crit');
@@ -349,7 +329,7 @@ function renderResults(r, decodedMsg, decodeStatus) {
       stBody+=row(t('rowPayload'), r.studio.payloadBytes+' bytes', 'finding-crit');
     }
     if(r.studio.genericMode){
-      stBody+=row(t('rowExtractionMode'), r.studio.genericMode);
+      stBody+=row(t('rowExtractionMode'), translateMode(r.studio.genericMode));
     }
     // Header identificado pela investigação profunda (magic de outra ferramenta)
     const detectedHeader = r.studio.headerName || r.lsb?.headerName;
@@ -357,13 +337,12 @@ function renderResults(r, decodedMsg, decodeStatus) {
       stBody+=row(t('rowHeaderIdentified'), `"${detectedHeader}"`, 'finding-crit');
     }
     if(r.lsb?.foundText){
-      // Coerência com a consolidação: só afirma "✓ sim" se há mensagem final
-      // exibida (decodedMsg). Se a consolidação descartou como ruído, mostra
-      // "detectado, não extraível" em vez de contradizer o Decode Status.
+      // A janela deslizante pode localizar texto por acaso dentro de ciphertext.
+      // Só o conteúdo que sobreviveu à consolidação é rotulado como recuperado.
       if(decodedMsg){
         stBody+=row(t('rowTextRecovered'), t('valYes'), 'finding-crit');
       } else {
-        stBody+=row(t('rowTextRecovered'), t('valDetectedNotExtractable'), 'finding-warn');
+        stBody+=row(t('rowTextCandidate'), t('valCandidateNotValidated'), 'finding-warn');
       }
     }
     stBody+=row(t('rowDecodeStatus'), decodeStatus||'—');
@@ -399,12 +378,19 @@ function renderResults(r, decodedMsg, decodeStatus) {
   }
   renderModule('lsb','🧬',t('modLSB'),!r.lsb?.available?t('badgeNA'):lsbSusp?t('badgeSuspicious'):t('badgeNormal'),!r.lsb?.available?'mb-scan':lsbSusp?'mb-warn':'mb-ok',lsbBody);
 
-  // JPEG DCT (F3-C) — só aparece para JPEG, com rótulo honesto
+  // JPEG DCT — só aparece para JPEG, com rótulo honesto
   if(r.jpegDCT){
     let dctBody='';
     if(!r.jpegDCT.available){
-      const reason = r.jpegDCT.reason||'';
-      dctBody=`<div class="interp">${t('jdctUnavailable')+(reason?' ('+reason+')':'')}</div>`;
+      const reasonCode = r.jpegDCT.reason||'';
+      const reasonKey = {
+        'analysis-error':'jdctReasonAnalysisError',
+        'decode-failed':'jdctReasonDecodeFailed',
+        'linearization-failed':'jdctReasonLinearizationFailed',
+        'no-ac-coefficients':'jdctReasonNoAC'
+      }[reasonCode];
+      const reason = reasonKey ? t(reasonKey) : reasonCode;
+      dctBody=`<div class="interp">${t('jdctUnavailable')+(reason?' ('+escapeHTML(reason)+')':'')}</div>`;
       renderModule('jpegdct','🧊',t('modJpegDCT'),t('badgeNA'),'mb-scan',dctBody);
     } else {
       const j=r.jpegDCT;
@@ -431,8 +417,8 @@ function renderResults(r, decodedMsg, decodeStatus) {
     strBody+='<div style="margin:4px 0;display:flex;flex-direction:column;gap:6px">';
     for(const s of r.strings.interesting.slice(0,5)){
       strBody+=`<div style="background:rgba(255,179,0,0.06);border:1px solid rgba(255,179,0,0.15);border-radius:3px;padding:6px 8px">
-        <div style="font-size:0.58rem;color:#ffb300;letter-spacing:1px;margin-bottom:3px">[${s.type}]</div>
-        <div class="finding-warn" style="word-break:break-all;white-space:pre-wrap;font-size:0.65rem;line-height:1.6">${s.str}</div></div>`;
+        <div style="font-size:0.58rem;color:#ffb300;letter-spacing:1px;margin-bottom:3px">[${escapeHTML(s.type)}]</div>
+        <div class="finding-warn" style="word-break:break-all;white-space:pre-wrap;font-size:0.65rem;line-height:1.6">${escapeHTML(s.str)}</div></div>`;
     }
     strBody+='</div>';
   }
@@ -461,7 +447,7 @@ function renderResults(r, decodedMsg, decodeStatus) {
   if(r.lsb&&r.lsb.available) renderLeakModule(r);
   renderGroupHeader(t('groupOrigin'), 'ai');
 
-  // Módulo resumo: Probabilidade de origem com sinais por categoria
+  // Módulo resumo: compatibilidade com origem e sinais por categoria
   renderOriginModule(r);
 
   // Entropy
@@ -496,7 +482,7 @@ function renderResults(r, decodedMsg, decodeStatus) {
     if(c2Confirmed||c2Found){
       if(c2Confirmed){
         // `val` sai do CBOR/ASN.1 do manifesto — dado do arquivo, hostil por
-        // definição. Escapar aqui é obrigatório (sink perdido na v2.42.0).
+        // definição. Escapar aqui é obrigatório porque os dados vêm do arquivo.
         const hl = (lbl,val) => val ? `<div style="padding:3px 0;border-top:1px solid rgba(255,255,255,0.06);font-size:0.72rem;line-height:1.5">
           <span style="color:#ffb0b0;text-transform:uppercase;letter-spacing:1px">${escapeHTML(lbl)}:</span> <span style="color:#fff;font-family:var(--mono,monospace);word-break:break-word">${escapeHTML(val)}</span></div>` : '';
         const hlBlock = (r.c2pa.signerCN || r.c2pa.genName || r.c2pa.genVersion)
@@ -520,7 +506,7 @@ function renderResults(r, decodedMsg, decodeStatus) {
       const c2interp=c2Confirmed?t('c2paInterpConfirmed'):t('c2paInterpPartial');
       c2Body+=`<div class="interp">${c2interp}</div>`;
 
-      // ── Assets extraídos (Frente #16/b.1): preview do SVG (sanitizado via <img>
+      // ── Assets C2PA extraídos: preview do SVG (sanitizado via <img>
       //    blob — NÃO executa script) + download do SVG e do manifesto JUMBF. ──
       if (C2PA_ASSETS.svg || C2PA_ASSETS.manifest) {
         let assets = `<div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border)">
@@ -576,7 +562,10 @@ function renderResults(r, decodedMsg, decodeStatus) {
     if(r.exif.noExif){
       exifBody+=`<div style="font-size:0.68rem;color:#ffb300;font-style:italic">${t('exifNoMetadata')}</div>`;
     } else {
-      for(const [k,v] of Object.entries(r.exif.fields||{})) exifBody+=row(k,v,k==='Software'&&r.exif.aiSoftware?'finding-crit':'');
+      for(const [k,v] of Object.entries(r.exif.fields||{})) {
+        if(k==='GPS') continue; // hasGPS below is the canonical visible row; keep fields.GPS in JSON for compatibility
+        exifBody+=row(k,v,k==='Software'&&r.exif.aiSoftware?'finding-crit':'');
+      }
       exifBody+=row(t('rowCameraData'),r.exif.hasCamera?t('valCameraPresent'):t('valCameraAbsent'),r.exif.hasCamera?'finding-ok':'finding-warn');
       exifBody+=row(t('rowGPS'),r.exif.hasGPS?t('valPresent'):t('valAbsent'));
     }
@@ -661,7 +650,7 @@ function renderResults(r, decodedMsg, decodeStatus) {
         // As STRINGS-BASE vêm do i18n (confiáveis, podem conter markup), mas as
         // VARIÁVEIS podem vir do arquivo — `{software}` é o campo Software do
         // EXIF, cru. Escapa-se o valor interpolado, nunca o molde. (Sink
-        // perdido na v2.42.0.)
+        // dado do arquivo: deve permanecer escapado.)
         let lbl = s.labelKey ? t(s.labelKey) : (s.label||'');
         if (s.labelVars) for (const [k,v] of Object.entries(s.labelVars)) lbl = lbl.replace(`{${k}}`, escapeHTML(v));
         let det = s.detailKey ? t(s.detailKey) : (s.detail||'');

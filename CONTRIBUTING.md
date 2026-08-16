@@ -1,75 +1,56 @@
 # Contributing
 
-## Language
+Thanks for your interest in STEGO·STUDIO.
 
-English is the target language for **all public-facing repository documentation**.
-Do not add new Portuguese text to public documentation. Existing Portuguese public
-material is being migrated gradually so historical reasoning is not lost through a
-bulk rewrite.
+The project is intentionally small and dependency-light: the published application is a
+single offline HTML file assembled from the sources in this repository.
 
-Operational handoff material is different: it may remain in Portuguese because it is
-working context for the maintainers, but it belongs under `internal/` and is excluded
-from the public repository by `.gitignore`.
+## Public language
 
-Source comments will stay in Portuguese for now. They explain *why* a decision was
-made — often citing the bug that motivated it — and preserving that reasoning has
-priority over translating comments mechanically.
+English is the target language for public repository documentation. The application
+itself remains bilingual (English and Portuguese).
 
-The in-app interface remains bilingual (English and Portuguese); English is the
-reference locale for new public-facing copy.
-
-## Building
+## Build and test
 
 ```sh
-node unpack_assets.js   # recreates src/fonts/ from ASSETS_BASE64.md
-node build.js           # assembles dist/stego_studio_v<VERSION>.html
-node test.js            # 18 invariants — must be green before any commit
+node unpack_assets.js   # restores binary assets and verifies their SHA-256 hashes
+node build.js           # builds dist/stego_studio_v<VERSION>.html
+node test.js            # runs the project regression checks
 ```
 
-## Version bumps touch exactly five places
+No package install or bundler is required. A green test run means the change is
+consistent with the properties these checks cover; it is not a general proof of
+correctness or security.
 
-1. `build.js` — `const VERSION`
-2. `src/main.js` — the `_tool` string
-3. `template.html` — the version in the header logo (**not** injected by the build)
-4. `src/ui.js` — a new entry at the top of the `CHANGELOG` array
-5. `docs/STEGO_STUDIO_CHANGELOG.md`
+## Before proposing a change
 
-`test.js` verifies the first four from the built HTML. The fifth is manual.
-
-## What the invariants do and do not prove
-
-The 18 invariants check that a build is internally consistent: syntax, i18n key
-parity, literal injection of every source block, the offline guarantee, and that
-data taken from an analysed file cannot become markup.
-
-Four of them exercise behaviour directly: the legacy golden-fixture check, the
-real threat logic, the Threat/Protocol agreement check, and the F1 layered check.
-The F1 check now does two different jobs on purpose: compact bytes taken from a
-real v2.29.0 image prove historical format compatibility, while a deterministic
-64×64 image is encoded with both layers, serialized to PNG, reopened and decoded
-to cover the carrier path (`opaquePixels`, tail anchoring and PNG I/O). It also
-executes the same pure evidence resolver used by production code and a hostile
-robust-JPEG vector where the confirmed outer envelope and the inner AES password
-deliberately diverge.
-
-This is still **partial behavioural coverage**, not a complete security suite. It
-does not cover the full matrix of encoder modes, a malformed-input corpus, or
-browser-only behaviour. Several recent defects were found by manual smoke testing
-rather than by a red build. A green run means *this build is consistent with the
-properties these checks cover*, not *this software is correct*. Treat it that way.
+- Keep the application fully client-side and offline at runtime.
+- Do not add network calls, remote fonts, analytics, telemetry or external runtime assets.
+- Treat image-derived data as hostile input and keep it out of HTML markup unless it is
+  explicitly escaped for that context.
+- Preserve documented compatibility and avoid turning heuristic evidence into certainty.
+- Run the build and test commands above and include a concise description of what changed
+  and why.
+- If a change affects a public report field, update the public schema and its regression
+  coverage.
 
 
-## Regression discipline
+## Source comments
 
-Recent 2.42.x regressions repeatedly came from a correct local refactor changing a
-value that had **other readers elsewhere**. Before replacing, centralising or
-reinterpreting a shared field/state, enumerate every consumer first: renderer,
-Threat scoring, exported JSON, accessibility/help text, reset/cleanup paths and
-third-party fallbacks. A source of truth is only truly single when all dependent
-surfaces have been accounted for.
+Comments in public source are documentation for readers and contributors. Keep them when
+they explain non-obvious logic, security/privacy invariants, compatibility constraints,
+file-format details or maintenance traps that the code alone does not make clear.
 
-Regression checks should protect the **property**, not the exact mutation that was
-last observed. Prefer table-driven behavioural checks and file/handler-wide ratchets
-over narrow text windows. If a mutation demonstrates a green false negative, improve
-the model of the property rather than adding only a regex for that spelling.
+Do not use source comments as a development diary. Personal information, health details,
+private review/release history and attribution of who discovered a bug do not belong in
+public code. `node test.js` includes a hygiene gate for these classes, but human review is
+still expected for whether a comment is actually useful.
 
+## Security-sensitive changes
+
+Changes to cryptography, payload formats, password derivation, parser boundaries or
+plausible-deniability behaviour deserve especially focused review. Please describe the
+intended invariant, not only the code change.
+
+For current security limits and the threat model, see [SECURITY.md](SECURITY.md).
+For decoder coverage, see [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md).

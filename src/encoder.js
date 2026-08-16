@@ -1,4 +1,4 @@
-const MAGIC = [0x53,0x54,0x45,0x47,0x4F]; // "STEGO" (5 bytes; o 6º byte agora é o flag de modo)
+const MAGIC = [0x53,0x54,0x45,0x47,0x4F]; // "STEGO"; mode byte follows
 const MODE_B = 0x00;   // canal B apenas (LSBM padrão)
 const MODE_RGB = 0x01; // alta capacidade: espalha pelos 3 canais R,G,B
 const FLAG_SHUFFLED = 0x02; // bit no byte de modo: corpo embaralhado por senha
@@ -10,23 +10,14 @@ const FLAG_HILLV2 = 0x40; // bit no byte de modo: custo HILL canônico (L1 3x3 +
 // Versiona o mapa de custo do ADAPTATIVO: imagens adaptativas antigas (sem este bit) são
 // decodificadas com o mapa LEGADO; novas, com o V2. O STC não precisa do bit (decode por
 // síndrome é independente de custo).
-const STC_H = 8;       // altura de restrição do trellis (2^h estados). h=8 = ótimo memória/eficiência.
-const STC_WMAX = 16;   // largura máxima da submatriz (= 1/α mínimo); limita memória do path.
+const STC_H = 8;       // altura de restrição do trellis (2^h estados)
+const STC_WMAX = 16;   // largura máxima da submatriz (= 1/α mínimo)
 
 // ════════════════════════════════════════
-//  MODO FURTIVO — header cifrado por senha (ETAPA 1)
-//  O header (MAGIC + modo + tamanho) normalmente fica em claro nos primeiros
-//  pixels, com o MAGIC "STEGO" funcionando como assinatura óbvia — qualquer
-//  ferramenta que saiba procurá-lo detecta a presença da mensagem. No modo
-//  furtivo, derivamos um keystream da SENHA (via o mesmo PRNG do embaralhamento)
-//  e fazemos XOR sobre os bytes do header. Sem a senha, o header parece ruído
-//  aleatório (nenhum MAGIC reconhecível). Com a senha certa, o decoder reverte o
-//  XOR e o MAGIC reaparece — o que serve de auto-validação (senha errada → MAGIC
-//  não bate → rejeitado). O bit de modo também é cifrado, então preservamos a
-//  flag FLAG_STEALTH numa posição derivada para o decoder saber que deve tentar.
-//  ESTRATÉGIA: o byte de modo é XORado mas mantemos a informação de que é furtivo
-//  porque o decoder SEMPRE tenta decifrar com a senha quando uma senha é dada e o
-//  header em claro não valida. Furtivo exige senha (sem senha não há keystream).
+//  MODO FURTIVO — header mascarado por senha
+//  MAGIC, modo e tamanho são XORados com um keystream determinístico da senha.
+//  O decoder tenta desfazer a máscara quando existe senha e o header claro não
+//  valida; o MAGIC recuperado funciona como validação estrutural.
 // ════════════════════════════════════════
 
 // Gera um keystream determinístico de N bytes a partir da senha, para cifrar o
@@ -48,15 +39,10 @@ function xorHeader(headerBytes, password) {
 }
 
 // ════════════════════════════════════════
-//  EMBEDDING ADAPTATIVO — custo HILL (FRENTE 3)
-//  Em vez de embutir em posições fixas/sequenciais (que o RS/WS pega em áreas
-//  lisas), o adaptativo calcula um MAPA DE CUSTO: quão detectável seria alterar
-//  cada pixel. Textura/ruído/bordas = custo baixo (a alteração se esconde no
-//  caos natural); áreas lisas = custo altíssimo. Embute nos pixels de MENOR
-//  custo primeiro. O decoder recalcula o MESMO mapa sobre a imagem-estego
-//  (alterar LSBs quase não muda o custo, que depende dos bits significativos) e
-//  encontra as mesmas posições. Versão pragmática: custo HILL + seleção greedy
-//  dos menores custos (sem STC ótimo, que fica como evolução futura).
+//  EMBEDDING ADAPTATIVO — custo HILL
+//  O mapa atribui custo baixo a textura/ruído/bordas e alto a áreas lisas. O
+//  encoder usa as posições de menor custo; o decoder recalcula o mesmo mapa
+//  ignorando LSBs para reconstruir a ordem determinística.
 // ════════════════════════════════════════
 
 // Calcula o custo HILL por pixel sobre o canal escolhido (luminância aproximada).
@@ -90,10 +76,8 @@ function isLowTextureCover(d) {
   return pal.size <= 4000;
 }
 
-// Box-blur SEPARÁVEL (média k×k) por somas correntes — O(n) independente do raio,
-// com bordas por replicação (clamp), igual ao resto do mapa. Determinístico: encode e
-// decode rodam o MESMO código sobre a MESMA luminância (7 bits), então o resultado é
-// idêntico bit-a-bit (round-trip do adaptativo preservado).
+// PRNG determinístico usado por formatos que precisam reconstruir exatamente a
+// mesma ordem a partir da senha. Não é usado como fonte de aleatoriedade criptográfica.
 function mulberry32(seed) {
   let a = seed >>> 0;
   return function() {
@@ -130,30 +114,25 @@ function shuffledOrder(n, password) {
 
 // Monta o payload completo: MAGIC + flag de modo + comprimento (uint32) + dados.
 // ════════════════════════════════════════
-//  STC — Syndrome-Trellis Codes (FRENTE #13)
-//  Embute o CORPO escolhendo o conjunto de alterações de MENOR custo HILL total,
-//  sujeito a H·y=m, via Viterbi sobre trellis de 2^STC_H estados. Decode = síndrome
-//  (m=H·y), independente de custo → mais robusto que o adaptativo. Validado isolado
-//  em Node: custo exatamente ótimo (vs força bruta), round-trip exato, ~3,4 bits/
-//  mudança vs ~2,0 do LSB-matching. Submatriz Ĥ determinística por seed (reusa
-//  mulberry32). Path bit-packed para limitar memória (~n·2^h/8 bytes).
+//  STC — Syndrome-Trellis Codes
+//  Viterbi escolhe alterações de menor custo HILL sujeitas a H·y=m. O decoder
+//  recupera a mensagem pela síndrome, sem precisar reconstruir o mapa de custo.
+//  A submatriz é determinística e o path é bit-packed para limitar memória.
 // ════════════════════════════════════════
 function buildPayload(data, mode=MODE_B) {
   const bytes = data instanceof Uint8Array ? data : new Uint8Array(data);
   const len = bytes.length;
   const out = new Uint8Array(MAGIC.length + 1 + 4 + len);
   out.set(MAGIC);
-  out[5] = mode & 0xFF; // flag de modo
+  out[5] = mode & 0xFF;
   out[6]=(len)&0xFF; out[7]=(len>>8)&0xFF; out[8]=(len>>16)&0xFF; out[9]=(len>>24)&0xFF;
   out.set(bytes, MAGIC.length+1+4);
   return out;
 }
 
-// Fonte de bits ±1 do LSB Matching. Era Math.random(), que num navegador é um
-// PRNG rápido e previsível — a direção de cada alteração é parte do padrão que
-// um esteganalista observa, então ela merece a mesma aleatoriedade do resto da
-// cripto. Consome de um buffer de crypto.getRandomValues() para não pagar uma
-// chamada por pixel.
+// Fonte CSPRNG para a direção ±1 do LSB Matching. A direção das alterações faz
+// parte do padrão observável, então usa crypto.getRandomValues(); um buffer evita
+// uma chamada ao gerador por pixel.
 const _lsbmBits = { buf: new Uint8Array(0), byte: 0, bit: 8 };
 function lsbmSign() {
   if (_lsbmBits.bit > 7) {
@@ -168,9 +147,9 @@ function lsbmSign() {
 // Escreve um bit via LSB Matching num índice do array de dados (canal já resolvido).
 function writeBitLSBM(d, idx, bit) {
   const cur = d[idx];
-  if ((cur & 1) === bit) return;       // já coincide
-  if (cur === 0) d[idx] = 1;           // não pode subtrair
-  else if (cur === 255) d[idx] = 254;  // não pode somar
+  if ((cur & 1) === bit) return;
+  if (cur === 0) d[idx] = 1;
+  else if (cur === 255) d[idx] = 254;
   else d[idx] = cur + lsbmSign();
 }
 
@@ -184,27 +163,26 @@ function writeBitLSBR(d, idx, bit) {
 
 // O cabeçalho (MAGIC + modo + comprimento = 10 bytes = 80 bits) é SEMPRE escrito
 // no canal B, para que o decoder possa lê-lo da mesma forma e descobrir o modo.
-const HEADER_BYTES = MAGIC.length + 1 + 4; // 10
+const HEADER_BYTES = MAGIC.length + 1 + 4;
 
 function embedLSB(imageData, payload, mode=MODE_B, password='', adaptive=false, stealth=false, stcW=0) {
   const d = imageData.data;
   const w = imageData.width, h = imageData.height;
-  const op = opaquePixels(d);              // pixels utilizáveis (opacos, alfa==255)
+  const op = opaquePixels(d);
   const opCount = op.length;
   const headerBits = HEADER_BYTES * 8;
   const bodyBits = (payload.length - HEADER_BYTES) * 8;
   const shuffle = password.length > 0;
 
-  // ── CORPO via STC (Frente #13): early return. Header(10)+w-byte(1) sequenciais
+  // ── CORPO via STC: early return. Header(10)+w-byte(1) sequenciais
   //    no canal B (LSBR); corpo nos pixels seguintes, escolhendo as alterações de
   //    MENOR custo HILL total (Viterbi). Decode é por síndrome, sem custo. ──
   if (stcW > 0) {
     payload[5] |= FLAG_STC;
     if (stealth) payload[5] |= FLAG_STEALTH;
-    const headBits2 = (HEADER_BYTES + 1) * 8; // 88 = header(80) + w-byte(8)
+    const headBits2 = (HEADER_BYTES + 1) * 8;
     const n = bodyBits * stcW;
     if (opCount < headBits2 + n) throw new Error(t('msgTooLong'));
-    // header(10)+w-byte cifrados juntos no furtivo (keystream é posição-baseado)
     const hb = new Uint8Array(HEADER_BYTES + 1);
     hb.set(payload.slice(0, HEADER_BYTES));
     hb[HEADER_BYTES] = stcW & 0xFF;
@@ -249,17 +227,16 @@ function embedLSB(imageData, payload, mode=MODE_B, password='', adaptive=false, 
     writeBit(d, op[i]*4+2, bit);
   }
 
-  // 2) Corpo
   if (adaptive) {
     // Adaptativo: entre os pixels OPACOS além do header, escolhe os de MENOR custo.
     const cost = hillCostMap(d, w, h);
-    const orderPx = adaptiveOrder(cost, op.subarray(headerBits)); // pixels por custo crescente
+    const orderPx = adaptiveOrder(cost, op.subarray(headerBits));
     const bitOrder = shuffle ? shuffledOrder(bodyBits, password) : null;
     for (let k = 0; k < bodyBits; k++) {
-      const i = bitOrder ? bitOrder[k] : k;     // qual bit do corpo
+      const i = bitOrder ? bitOrder[k] : k;
       const bitGlobal = headerBits + i;
       const bit = (payload[Math.floor(bitGlobal/8)] >> (7-(bitGlobal%8))) & 1;
-      writeBitLSBR(d, orderPx[k]*4 + 2, bit);   // canal B, replacement
+      writeBitLSBR(d, orderPx[k]*4 + 2, bit);
     }
     return imageData;
   }
@@ -287,19 +264,11 @@ function embedLSB(imageData, payload, mode=MODE_B, password='', adaptive=false, 
 }
 
 // ════════════════════════════════════════
-//  NEGAÇÃO PLAUSÍVEL — embed da mensagem-isca (decoy) — Opção C
-//  A isca é gravada por LSB (canal B) a partir do FIM do pool de pixels opacos,
-//  crescendo para trás. Cada bloco é AES-256-GCM (Argon2id, salt derivado da
-//  senha da isca). Validação é pela TAG do GCM — SEM MAGIC, SEM flag no header
-//  da real (marcar a existência da isca seria um distinguidor → quebraria a
-//  negação plausível). A real (STC, do início) e a isca (do fim) não se tocam
-//  desde que caibam juntas — checado em embedDecoyTail via colisão.
-//
-//  Layout no FIM (do último pixel opaco para trás), em blocos de bits:
-//    [ Bloco-len : iv(12) + GCM(len:uint32 BE)+tag = 12+4+16 = 32 bytes fixos ]
-//    [ Bloco-msg : iv(12) + GCM(mensagem)+tag = 12 + len + 16 bytes ]
-//  O bloco-len tem tamanho fixo → âncora localizável só com a senha. Sem a
-//  senha, tudo é ruído LSB indistinguível de uma imagem sem isca.
+//  NEGAÇÃO PLAUSÍVEL — mensagem alternativa
+//  A camada alternativa cresce do fim do pool opaco para trás, em canal B, sem
+//  MAGIC ou flag pública. Dois blocos AES-GCM guardam comprimento e mensagem; a
+//  tag autentica a senha. A checagem de colisão impede sobreposição com a camada
+//  principal que cresce a partir do início.
 // ════════════════════════════════════════
 
 // Escreve `bytes` no canal B dos pixels opacos, do último para trás, a partir
@@ -309,7 +278,7 @@ function writeDecoyTailBits(d, op, bytes, bitOffset) {
   for (let i = 0; i < nBits; i++) {
     const px = op[op.length - 1 - (bitOffset + i)];
     const bit = (bytes[i >> 3] >> (7 - (i & 7))) & 1;
-    d[px * 4 + 2] = (d[px * 4 + 2] & 0xFE) | bit; // canal B
+    d[px * 4 + 2] = (d[px * 4 + 2] & 0xFE) | bit;
   }
   return nBits;
 }
@@ -325,9 +294,9 @@ async function embedDecoyTail(imageData, decoyText, decoyPwd, realUsedPx) {
   // Bloco-len: cifra o comprimento (uint32 BE) → 12 + 4 + 16 = 32 bytes.
   const lenPlain = new Uint8Array(4);
   new DataView(lenPlain.buffer).setUint32(0, msgBytes.length, false);
-  const blockLen = await decoyGcmEncrypt(lenPlain, decoyPwd);   // 32 bytes
+  const blockLen = await decoyGcmEncrypt(lenPlain, decoyPwd);
   // Bloco-msg: cifra a mensagem → 12 + len + 16 bytes.
-  const blockMsg = await decoyGcmEncrypt(msgBytes, decoyPwd);   // 12+len+16
+  const blockMsg = await decoyGcmEncrypt(msgBytes, decoyPwd);
 
   const totalBits = (blockLen.length + blockMsg.length) * 8;
 

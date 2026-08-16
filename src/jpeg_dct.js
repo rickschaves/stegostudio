@@ -1,15 +1,14 @@
 // ════════════════════════════════════════════════════════════════════════
-//  jpeg_dct.js — F3-B: base compartilhada de leitura de coeficientes DCT
+//  jpeg_dct.js — base compartilhada de leitura de coeficientes DCT
 // ════════════════════════════════════════════════════════════════════════
 //  Reimplementa o essencial do jpeg_read_coefficients da libjpeg em JS: parseia
 //  um JPEG baseline e expõe os COEFICIENTES DCT QUANTIZADOS por bloco 8×8, na
 //  ordem NATURAL (row-major) — a mesma da libjpeg. Para ANTES da dequantização
 //  e da IDCT (o navegador só entrega o resultado final da IDCT, sem coefs).
 //
-//  Consumidores desta base (F3-B): motor Steghide-JPEG (F3), Analyzer-JPEG
-//  (F3-C), Modo Robusto (F4), OutGuess/F5 (F5/F6). Cada um só LÊ os coefs — a
-//  base é construída e validada uma vez. Validado coeficiente a coeficiente
-//  contra a libjpeg (12/12 + amostras com stego real).
+//  Consumidores: Steghide-JPEG, Analyzer-JPEG, modo mais resistente e OutGuess.
+//  Cada um só lê os coeficientes; a base é construída uma vez e reutilizada.
+//  A implementação foi validada coeficiente a coeficiente contra a libjpeg.
 //
 //  Suporte: baseline (SOF0/SOF1) E PROGRESSIVO (SOF2), 4:2:0/4:4:4/etc,
 //  byte-stuffing, RSTn/DRI. O progressivo acumula N scans no mesmo buffer de
@@ -376,7 +375,7 @@ function decodeJpegCoefficients(bytes) {
 }
 
 // Enumeração LINEAR dos coeficientes na ordem componente→linha→bloco→coef(0..63),
-// idêntica ao LinDctCoeffs do steghide. Base para consumidores (Steghide, F5...).
+// idêntica ao LinDctCoeffs do Steghide. Base para os consumidores DCT.
 function jpegCoeffsLinear(dec){
   const out=[];
   for(let ci=0; ci<dec.comps.length; ci++){
@@ -391,7 +390,7 @@ function jpegCoeffsLinear(dec){
   return out;
 }
 
-// Histograma dos coeficientes DCT (para o Analyzer-JPEG / F3-C: chi-quadrado).
+// Histograma dos coeficientes DCT para o Analyzer-JPEG (chi-quadrado).
 // Retorna Map(valor → contagem). Opcionalmente ignora DC (i%64===0) e zeros.
 function jpegCoeffHistogram(dec, {skipDC=true, skipZero=true}={}){
   const hist=new Map();
@@ -445,7 +444,7 @@ function jpegCoeffsMCUOrder(dec){
 // subamostragem e comentários — SEM decodificar coeficiente nenhum.
 // Funciona inclusive em JPEG PROGRESSIVO, que o decodificador de coeficientes
 // não abre. Isso importa: Facebook e X publicam progressivo, e é exatamente
-// onde a identificação de origem tem mais valor. [F9]
+// onde a identificação de origem tem mais valor.
 function jpegStructure(bytes){
   if(!bytes || bytes.length<4 || bytes[0]!==0xFF || bytes[1]!==0xD8) return null;
   let i=2, progressive=false, width=0, height=0, sub=null, comment='';
@@ -489,7 +488,7 @@ function jpegStructure(bytes){
 //
 // Espelho do decoder acima: reconstrói um JPEG baseline válido a partir dos
 // coeficientes DCT quantizados, possivelmente MODIFICADOS. É a peça que o Modo
-// Robusto (F4) precisa para gravar o payload QIM sem passar por pixels.
+// O modo mais resistente usa este caminho para gravar o payload QIM sem passar por pixels.
 //
 // Aceita entrada progressiva e emite baseline. Tabelas de Huffman ótimas por
 // padrão (opts.optimize === false usa as do Annex K).

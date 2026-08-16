@@ -1,13 +1,13 @@
 # Security
 
-## Project authorization context
 
-STEGO·STUDIO is an open-source project maintained and reviewed on its own codebase
-and on fixtures/test files the reviewer is authorised to inspect. Security work in
-this repository is framed as **defensive hardening**: code review, vulnerability
-remediation, regression testing, compatibility validation and controlled image
-forensics. Nothing in the project documentation authorises intrusion into third-party
-systems, malware development or unauthorised access.
+## Experimental status
+
+STEGO·STUDIO is an experimental, human-directed AI software project — not a
+certified professional forensic, security, or steganalysis product. Do not rely
+on it as the sole basis for critical security or forensic decisions. The project
+context and development methodology are described in
+[README.md](README.md#about-this-experiment).
 
 ## Threat model
 
@@ -24,8 +24,21 @@ emit a file that would contact the network at runtime.
 These are design limits, not oversights. Stating them plainly is more useful
 than implying coverage that does not exist.
 
-- **Adaptive steganography is not detected.** HILL, UNIWARD, J-UNIWARD and
-  similar generally require specialised trained models. Those models can run
+- **Carriers are not sanitized.** The Encoder overwrites the positions its new
+  payload needs and leaves the rest of the image unchanged. Reusing an image
+  that already contained hidden data can therefore preserve traces of the
+  earlier payload; an earlier unencrypted message may remain partly readable
+  without any password. Encode from an original cover when prior hidden data
+  must not be carried forward. On lossless carriers, Carrier Preflight performs
+  a lightweight password-free check for obvious native headers and coherent
+  readable text in common pixel-LSB layouts before Encode. It can miss
+  password-concealed, non-textual data without a visible native header,
+  adaptive, or unsupported hidden data; a quiet preflight is not evidence that the carrier contains no
+  hidden content.
+- **Content-adaptive steganography is not reliably detected by the built-in statistical analysis.**
+  HILL, UNIWARD, J-UNIWARD and similar may evade the signals used here, and LSB
+  Matching can also avoid the structural patterns associated with LSB Replacement.
+  Specialised detection generally uses trained models. Those models can run
   in browsers through WASM/WebGPU; this offline single-file build deliberately
   does **not include them**. Finding nothing here is not evidence that an image
   is clean.
@@ -63,11 +76,9 @@ than implying coverage that does not exist.
 ## Interaction contract
 
 While an analysis is running, inputs and controls that could change or re-render
-its state are deliberately locked. This used to happen by accident — the work
-occupies the main thread — but relying on that would mean the guarantee quietly
-disappears if the analysis ever becomes smoother or moves to a worker. Internally
-each analysis also carries a generation token and works from a snapshot, so a
-result belonging to a superseded image is discarded rather than displayed.
+its state are deliberately locked. Each analysis also carries a generation token and
+works from a snapshot, so a result belonging to a superseded image is discarded rather
+than displayed.
 
 ## Reporting
 

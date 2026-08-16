@@ -1,6 +1,6 @@
 'use strict';
 
-// Regressão dirigida da pista JPEG robusta (v2.42.15).
+// Vetor dirigido para a pista JPEG mais resistente.
 // O Encoder normal usa a MESMA senha no plano externo de slots e no AES interno;
 // portanto uma senha totalmente errada normalmente nem chega a robustExtract=ok.
 // O Analyzer, porém, abre arquivos hostis. Este vetor sintético constrói de propósito

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 'use strict';
 
-// Round-trip sintético da F1 pela PORTADORA real: cria um pequeno RGBA com alguns
+// Round-trip sintético de mensagens em camadas pela portadora real: cria um pequeno RGBA com alguns
 // pixels transparentes, embute payload principal furtivo + camada alternativa,
 // serializa pelo codec PNG de produção, decodifica e só então tenta as duas senhas. Complementa
 // os vetores históricos compactos: aqueles provam retrocompatibilidade de formato;
@@ -47,7 +47,7 @@ return { aesEncryptBytes, aesDecryptBytes, buildPayload, embedLSB, embedDecoyTai
 
   // O teste cruza a fronteira do codec PNG usado no caminho normal de PNG em produção,
   // em vez de reler o mesmo array alterado. Não simula o fallback canvas de PNG
-  // interlaçado/16-bit nem outros formatos; essa matriz pertence à F17.
+  // interlaçado/16-bit nem outros formatos; a matriz completa de modos é um teste separado.
   const png = await api.pngEncodeRGBA(w, h, id.data);
   const decodedPng = await api.pngDecodeRGBA(png);
   assert(decodedPng.width === w && decodedPng.height === h, 'round-trip PNG mudou dimensões');
