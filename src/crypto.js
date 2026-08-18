@@ -1,3 +1,12 @@
+// ════════════════════════════════════════
+//  CIFRA — AES-256-GCM via Web Crypto
+// ════════════════════════════════════════
+// Escritas atuais usam Argon2id (m=64 MiB, t=3, p=1) para derivar a chave e
+// formato 0x02: [versão | salt(16) | iv(12) | ciphertext+tag]. PBKDF2-SHA256
+// com 150k iterações permanece apenas para LER payloads legados 0x01. AES-GCM
+// autentica o conteúdo: senha errada ou adulteração fazem a descriptografia falhar.
+// ════════════════════════════════════════
+
 const AES_VERSION = 0x01;        // KDF = PBKDF2-SHA256 (legado; só p/ LER imagens antigas)
 const AES_VERSION_ARGON2 = 0x02; // KDF = Argon2id; see deriveAesKeyArgon2
 const PBKDF2_ITERS = 150000;

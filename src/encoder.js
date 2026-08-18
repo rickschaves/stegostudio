@@ -14,8 +14,10 @@ const STC_H = 8;       // altura de restrição do trellis (2^h estados)
 const STC_WMAX = 16;   // largura máxima da submatriz (= 1/α mínimo)
 
 // ════════════════════════════════════════
-//  MODO FURTIVO — header mascarado por senha
-//  MAGIC, modo e tamanho são XORados com um keystream determinístico da senha.
+//  LEGADO — modo furtivo/header mascarado por senha (leitura/sem-senha compat.)
+//  Este bloco pertence ao wire format anterior à F21. Novas gravações lossless
+//  com senha usam src/f21.js + embedLSBV3(), não este PRNG de 32 bits.
+//  No legado, MAGIC, modo e tamanho são XORados com um keystream determinístico da senha.
 //  O decoder tenta desfazer a máscara quando existe senha e o header claro não
 //  valida; o MAGIC recuperado funciona como validação estrutural.
 // ════════════════════════════════════════
@@ -76,8 +78,9 @@ function isLowTextureCover(d) {
   return pal.size <= 4000;
 }
 
-// PRNG determinístico usado por formatos que precisam reconstruir exatamente a
-// mesma ordem a partir da senha. Não é usado como fonte de aleatoriedade criptográfica.
+// PRNG determinístico LEGADO usado por formatos que precisam reconstruir exatamente
+// a mesma ordem a partir da senha. Novas gravações F21 não o usam. Não é fonte de
+// aleatoriedade criptográfica.
 function mulberry32(seed) {
   let a = seed >>> 0;
   return function() {
@@ -88,7 +91,7 @@ function mulberry32(seed) {
   };
 }
 
-// Deriva uma semente inteira de 32 bits a partir da senha (hash simples e estável).
+// LEGADO: deriva uma semente inteira de 32 bits da senha (hash simples e estável).
 function seedFromPassword(password) {
   let h = 0x811C9DC5; // FNV-1a offset
   for (let i = 0; i < password.length; i++) {
@@ -98,8 +101,8 @@ function seedFromPassword(password) {
   return h >>> 0;
 }
 
-// Gera a permutação das posições [0..n-1] embaralhada pela senha (Fisher-Yates
-// com o PRNG semeado). Determinística: a mesma senha sempre produz a mesma
+// LEGADO: gera a permutação [0..n-1] pela senha (Fisher-Yates + PRNG semeado).
+// Determinística: a mesma senha sempre produz a mesma
 // ordem, então o decoder reconstrói exatamente a mesma sequência.
 function shuffledOrder(n, password) {
   const order = new Array(n);
@@ -128,6 +131,27 @@ function buildPayload(data, mode=MODE_B) {
   out[6]=(len)&0xFF; out[7]=(len>>8)&0xFF; out[8]=(len>>16)&0xFF; out[9]=(len>>24)&0xFF;
   out.set(bytes, MAGIC.length+1+4);
   return out;
+}
+
+// O JPEG robusto permanece no wire anterior à F21. Quando o PNG principal usa
+// F21 v3, a segunda saída precisa reconstruir de forma independente o payload
+// que o modo robusto já sabia ler: corpo AES auto-contido + header clássico.
+// As flags abaixo reproduzem o estado que embedLSB() deixava no payload antes
+// de robustEmbed() recebê-lo nas versões pré-F21. Isto evita mudar o formato
+// JPEG só para acompanhar a evolução estrutural do PNG protegido.
+async function buildRobustPayload(bodyBytes, password, {mode=MODE_B, compressed=false, adaptive=false, stcW=0}={}) {
+  const bytes = bodyBytes instanceof Uint8Array ? bodyBytes : new Uint8Array(bodyBytes);
+  const cipher = typeof password === 'string' && password.length > 0;
+  const data = cipher ? await aesEncryptBytes(bytes, password) : bytes;
+  let flags = mode | (compressed ? FLAG_COMPRESSED : 0);
+  if (stcW > 0) {
+    flags |= FLAG_STC;
+    if (cipher) flags |= FLAG_STEALTH;
+  } else {
+    if (cipher) flags |= FLAG_SHUFFLED | FLAG_STEALTH;
+    if (adaptive) flags |= FLAG_ADAPTIVE | FLAG_HILLV2;
+  }
+  return buildPayload(data, flags);
 }
 
 // Fonte CSPRNG para a direção ±1 do LSB Matching. A direção das alterações faz
@@ -259,6 +283,113 @@ function embedLSB(imageData, payload, mode=MODE_B, password='', adaptive=false, 
       const chan = k % 3;
       writeBitLSBM(d, px*4 + chan, bit);
     }
+  }
+  return imageData;
+}
+
+
+// ════════════════════════════════════════
+//  F21 v3 — embedding PNG/lossless protegido por senha
+// ════════════════════════════════════════
+// O formato v3 não reutiliza buildPayload()/embedLSB(): salt + header mascarado
+// formam 448 bits LÓGICOS transportados por STC em 1.792 carriers; o corpo já
+// chega como ciphertext+tag autenticado.
+function f21ModeFlagsForEmbed(mode, compressed=false, adaptive=false, stcW=0) {
+  let flags = (mode & 0x01) | FLAG_STEALTH;
+  if (compressed) flags |= FLAG_COMPRESSED;
+  if (stcW > 0) {
+    flags |= FLAG_STC;
+  } else {
+    flags |= FLAG_SHUFFLED;
+    if (adaptive) flags |= FLAG_ADAPTIVE | FLAG_HILLV2;
+  }
+  return flags;
+}
+
+async function embedLSBV3(imageData, packet, mode=MODE_B, adaptive=false, stcW=0) {
+  if (!packet?.structuralSalt || !packet?.maskedHeader || !packet?.body || !packet?.bodyOrderKey) {
+    throw new Error('f21-packet-required');
+  }
+  const d = imageData.data;
+  const w = imageData.width, h = imageData.height;
+  const op = opaquePixels(d);
+  const prefix = f21Concat(packet.structuralSalt, packet.maskedHeader);
+  if (prefix.length !== F21_PREFIX_BYTES) throw new Error('f21-prefix-length');
+  const body = packet.body;
+  const bodyBits = body.length * 8;
+  const usedPx = f21UsedOpaquePixels(packet.modeFlags, stcW, bodyBits);
+  if (usedPx > op.length) throw new Error(t('msgTooLong'));
+
+  // Bootstrap v3: os 448 bits lógicos (salt + header mascarado) são o
+  // SÍNDROME de um STC fixo sobre 1792 pixels do canal B. O decoder consegue
+  // recuperá-los sem senha, mas não existe uma faixa de 448 LSBs forçados a
+  // aleatoriedade no começo da imagem. O custo é uniforme por desenho: esta
+  // camada só precisa minimizar o número de flips; HILL continua reservado ao
+  // corpo quando o modo escolhido o usa.
+  {
+    const n = F21_PREFIX_CARRIER_PIXELS;
+    const xb = new Uint8Array(n), rho = new Float64Array(n); rho.fill(1);
+    for (let k = 0; k < n; k++) xb[k] = d[op[k]*4+2] & 1;
+    const msg = new Uint8Array(F21_PREFIX_BITS);
+    for (let i = 0; i < F21_PREFIX_BITS; i++) msg[i] = (prefix[i >> 3] >> (7 - (i & 7))) & 1;
+    const Hhat = makeStcSubmatrix(STC_H, F21_BOOTSTRAP_STC_W, F21_BOOTSTRAP_STC_SEED);
+    const y = stcEmbed(xb, msg, rho, STC_H, Hhat);
+    for (let k = 0; k < n; k++) d[op[k]*4+2] = (d[op[k]*4+2] & 0xFE) | y[k];
+  }
+
+  if (stcW > 0) {
+    const n = bodyBits * stcW;
+    const cost = hillCostMap(d, w, h);
+    const Hhat = makeStcSubmatrix(STC_H, stcW);
+    const xb = new Uint8Array(n), rho = new Float64Array(n);
+    for (let k = 0; k < n; k++) {
+      const px = op[F21_PREFIX_CARRIER_PIXELS + k];
+      xb[k] = d[px*4+2] & 1;
+      rho[k] = cost[px];
+    }
+    const m = new Uint8Array(bodyBits);
+    for (let i = 0; i < bodyBits; i++) m[i] = (body[i >> 3] >> (7 - (i & 7))) & 1;
+    const y = stcEmbed(xb, m, rho, STC_H, Hhat);
+    for (let k = 0; k < n; k++) {
+      const px = op[F21_PREFIX_CARRIER_PIXELS + k];
+      d[px*4+2] = (d[px*4+2] & 0xFE) | y[k];
+    }
+    return imageData;
+  }
+
+  // A ordem forte é byte-granular. O corpo já é ciphertext AES-GCM; embaralhar
+  // bytes preserva a separação estrutural sem alocar um Uint32 por bit (8× memória).
+  const byteOrder = await f21ShuffledOrder(body.length, packet.bodyOrderKey);
+  if (adaptive) {
+    const cost = hillCostMap(d, w, h);
+    const orderPx = adaptiveOrder(cost, op.subarray(F21_PREFIX_CARRIER_PIXELS));
+    if (bodyBits > orderPx.length) throw new Error(t('msgTooLong'));
+    for (let k = 0; k < bodyBits; k++) {
+      const outByte = k >> 3, bitInByte = k & 7;
+      const srcByte = byteOrder[outByte];
+      const bit = (body[srcByte] >> (7 - bitInByte)) & 1;
+      writeBitLSBR(d, orderPx[k]*4 + 2, bit);
+    }
+    return imageData;
+  }
+
+  if (mode === MODE_B) {
+    for (let k = 0; k < bodyBits; k++) {
+      const outByte = k >> 3, bitInByte = k & 7;
+      const srcByte = byteOrder[outByte];
+      const bit = (body[srcByte] >> (7 - bitInByte)) & 1;
+      writeBitLSBM(d, op[F21_PREFIX_CARRIER_PIXELS + k]*4 + 2, bit);
+    }
+  } else if (mode === MODE_RGB) {
+    for (let k = 0; k < bodyBits; k++) {
+      const outByte = k >> 3, bitInByte = k & 7;
+      const srcByte = byteOrder[outByte];
+      const bit = (body[srcByte] >> (7 - bitInByte)) & 1;
+      const px = op[F21_PREFIX_CARRIER_PIXELS + Math.floor(k/3)];
+      writeBitLSBM(d, px*4 + (k % 3), bit);
+    }
+  } else {
+    throw new Error('f21-mode-invalid');
   }
   return imageData;
 }

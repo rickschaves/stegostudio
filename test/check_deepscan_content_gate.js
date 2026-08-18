@@ -88,13 +88,49 @@ const hpVerdict = consolidateVerdict(highPrintable, highPrintable.lsb.foundText,
 assert(hpVerdict.decodedMsg === highPrintable.lsb.foundText, 'high-printability deep-scan text was suppressed unexpectedly');
 assert(resolveProtocolState(highPrintable).level === 'generic', 'high-printability deep-scan text no longer resolves as generic');
 
-// A random alphanumeric prefix is not a tool signature. Only framing we actually
-// recognize may raise a candidate to header-backed generic content.
-const fakeHeaderBytes = new Uint8Array(32);
-fakeHeaderBytes.set(Buffer.from('AB\0\0\0\0Hello world'));
-assert(extractHeader(fakeHeaderBytes, 6) === null, 'arbitrary ASCII prefix is still treated as a tool header');
-const knownHeaderBytes = new Uint8Array(32);
-knownHeaderBytes.set(Buffer.from('JOI_LSB2\0Hello world'));
-assert(extractHeader(knownHeaderBytes, 9) === 'JOI_LSB2', 'recognized JOI_LSB header stopped being identified');
+// Header recognition is an evidence contract, not just an implementation detail.
+// Freeze the *current semantic vocabulary* independently of the production regex:
+// JOI_LSB with zero/one decimal suffix, plus STEGO/LSB/STEG, case-insensitive.
+// F9 may deliberately expand this contract later, but such a change must turn this
+// gate red and force an explicit review instead of silently promoting new prefixes.
+function headerBytes(name) {
+  const out = new Uint8Array(Math.max(64, name.length + 16));
+  out.set(Buffer.from(name + '\0Hello world'));
+  return out;
+}
+function expectedHeader(name) {
+  const u=String(name).toUpperCase();
+  return u==='STEGO' || u==='LSB' || u==='STEG' || /^JOI_LSB\d?$/.test(u);
+}
+const knownHeaders = ['JOI_LSB', ...Array.from({length:10},(_,i)=>`JOI_LSB${i}`), 'STEGO', 'LSB', 'STEG'];
+for (const name of [...knownHeaders, ...knownHeaders.map(x=>x.toLowerCase())]) {
+  assert(extractHeader(headerBytes(name), name.length + 1) === name,
+    `recognized header ${name} stopped being identified`);
+}
+
+// Near-miss corpus: forms a future broadening is likely to admit accidentally.
+const negativeHeaders = new Set([
+  'RANDOMHDR','ABCD1','XY_9','THISISALONGPREFIX','A1B2','ZZZ',
+  'JOI_LSBX','JOI_LSB10','JOI_LSB_2','JOI_LS','JOI2',
+  'STEGO2','STEGOX','STEG2','STEGX','LSB2','LSBX'
+]);
+for (const base of knownHeaders) {
+  const variants=[`X${base}`,`${base}X`,`${base}_`,`${base}00`,base.slice(0,-1),base+base.slice(-1)];
+  for(const v of variants) if(v && !expectedHeader(v)) negativeHeaders.add(v);
+}
+// Deterministic fuzz corpus over the only characters the parser currently admits.
+// This is test data, not a claim that the parser must stay restricted to this alphabet.
+let seed=0x5EED1234;
+const alphabet='ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_';
+function rnd(){ seed=(Math.imul(seed,1664525)+1013904223)>>>0; return seed; }
+for(let n=0;n<512;n++){
+  const len=1+(rnd()%20); let v='';
+  for(let i=0;i<len;i++)v+=alphabet[rnd()%alphabet.length];
+  if(!expectedHeader(v))negativeHeaders.add(v);
+}
+for (const name of negativeHeaders) {
+  assert(extractHeader(headerBytes(name), name.length + 1) === null,
+    `unknown prefix ${name} gained protocol trust`);
+}
 
 console.log(`deep-scan content gate OK — false candidate suppressed, Threat ${threat.score}, trusted generic paths preserved`);

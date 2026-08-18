@@ -57,7 +57,7 @@
 <body>
 
 <header>
-  <div class="logo">STEGO<span class="e">·</span>STUDIO <span style="font-size:0.85rem;letter-spacing:2px;color:var(--dim)">v2.42.29 // ENCODER · ANALYZER · DECODER</span></div>
+  <div class="logo">STEGO<span class="e">·</span>STUDIO <span style="font-size:0.85rem;letter-spacing:2px;color:var(--dim)">v2.43.12 // ENCODER · ANALYZER · DECODER</span></div>
   <div class="header-meta"><span data-i18n="tagline1">Esteganografia LSB com criptografia AES-256 opcional</span><br><span data-i18n="tagline2">Análise forense integrada · Exportação JSON</span></div>
 </header>
 
@@ -118,7 +118,7 @@
         <summary><span class="qg-icon">▸</span> <span data-i18n="encGuideSummary">Guia rápido — como ocultar uma mensagem</span></summary>
         <div class="qg-body">
           <p data-i18n-html="encGuide1"><b>1.</b> Carregue uma imagem portadora. <b>PNG, BMP ou WEBP lossless</b> são ideais; outros formatos (JPEG, etc.) são aceitos e convertidos. Todo encode gera <b>duas imagens</b>: um PNG sem perda, que esconde melhor, e um JPG que sobrevive a ser publicado.</p>
-          <p data-i18n-html="encGuide4"><b>2.</b> O embedding é automático: a mensagem é escondida da <b>forma mais furtiva que couber</b>, e o cabeçalho é criptografado sempre que você usa uma senha (removendo a assinatura "STEGO"). Ligue <b>Modo de Alta Capacidade</b> apenas para caber mensagens muito grandes — usa os três canais RGB e fica um pouco mais detectável.</p>
+          <p data-i18n-html="encGuide4"><b>2.</b> O embedding é automático: a mensagem é escondida da <b>forma mais furtiva que couber</b>. Com senha, o cabeçalho protegido deixa de expor uma assinatura "STEGO" reconhecível. Ligue <b>Modo de Alta Capacidade</b> apenas para caber mensagens muito grandes — usa os três canais RGB, prioriza capacidade em vez de minimizar as alterações do embedding e pode deixar traços estatísticos mais fortes em payloads maiores.</p>
           <p data-i18n-html="encGuide2"><b>3.</b> Digite a mensagem secreta. O medidor de capacidade mostra quantos caracteres cabem na imagem escolhida.</p>
           <p data-i18n-html="encGuide3"><b>4.</b> Opcionalmente, defina uma <b>senha</b>. Com senha, a mensagem é criptografada (AES-256-GCM) e tem a ordem dos bits embaralhada antes de ser embutida — nas <b>duas</b> imagens de saída. Sem senha, ela viaja em texto puro nas duas.</p>
           <p data-i18n-html="encGuideDecoy"><b>5.</b> Opcional: ative a <b>Segunda mensagem (negação plausível)</b> para esconder <b>duas</b> mensagens, cada uma com sua própria senha, e poder entregar uma guardando a outra. Ela é escrita nos pixels, então existe apenas no PNG mais furtivo.</p>
@@ -169,7 +169,7 @@
             <span class="switch-track"><span class="switch-thumb"></span></span>
           </label>
         </div>
-        <div class="hint-text" id="enc-maxcap-hint" data-i18n-html="maxcapHint">Usa os 3 canais de cor (R, G, B) para caber mensagens grandes — triplica o espaço disponível. Em troca, a imagem fica um pouco mais detectável. <b>Deixe desligado para furtividade máxima</b>.</div>
+        <div class="hint-text" id="enc-maxcap-hint" data-i18n-html="maxcapHint">Usa os 3 canais de cor (R, G, B) para caber mensagens maiores. Esse modo prioriza capacidade em vez de minimizar as alterações na imagem e pode deixar traços estatísticos mais fortes, especialmente conforme a mensagem cresce. <b>Deixe desligado quando a prioridade for furtividade</b>.</div>
       </div>
 
       <div>
@@ -181,7 +181,12 @@
 
       <div>
         <div class="field-label" data-i18n="fieldMessage">// mensagem secreta</div>
-        <textarea class="enc-t" id="enc-msg" data-i18n-ph="msgPlaceholder" placeholder="Digite a mensagem a ocultar..." rows="4"></textarea>
+        <div class="enc-message-wrap">
+          <textarea class="enc-t enc-message-field" id="enc-msg" data-i18n-ph="msgPlaceholder" placeholder="Digite a mensagem a ocultar..." rows="4"></textarea>
+          <button type="button" class="enc-message-expand" id="enc-message-expand" aria-label="Expandir editor de mensagem">
+            <span aria-hidden="true">⛶</span><span class="sr-only" data-i18n="encMessageExpand">Expandir editor de mensagem</span>
+          </button>
+        </div>
         <div class="hint-text" id="enc-mode-note" data-i18n-html="encModeAutoCapacity" style="display:none; color:#ffb300; margin-top:6px"></div>
       </div>
 
@@ -213,7 +218,12 @@
           <div class="hint-text" id="enc-decoy-hint" data-i18n="decoyToggleHint" style="margin-top:6px;color:#6f9bd1;display:none">Se alguém forçar você a revelar a senha que protege a mensagem oculta, você pode entregar uma diferente. Essa segunda senha revela uma mensagem inofensiva, enquanto sua mensagem real permanece protegida.</div>
           <div id="enc-decoy-fields" style="display:none;margin-top:14px">
             <div class="field-label" id="enc-decoy-msg-label" data-i18n="decoyMsgLabel">// mensagem alternativa</div>
-            <textarea class="enc-t" id="enc-decoy-msg" data-i18n-ph="decoyMsgPlaceholder" placeholder="Uma mensagem plausível e inofensiva…" rows="3"></textarea>
+            <div class="enc-message-wrap">
+              <textarea class="enc-t enc-message-field" id="enc-decoy-msg" data-i18n-ph="decoyMsgPlaceholder" placeholder="Uma mensagem plausível e inofensiva…" rows="3"></textarea>
+              <button type="button" class="enc-message-expand" id="enc-decoy-message-expand" aria-label="Expandir editor da mensagem alternativa">
+                <span aria-hidden="true">⛶</span><span class="sr-only" data-i18n="encDecoyMessageExpand">Expandir editor da mensagem alternativa</span>
+              </button>
+            </div>
             <div class="hint-text" id="enc-decoy-plausible-tip" data-i18n="decoyPlausibleTip" style="margin-top:4px;color:#6f9bd1">Escolha algo plausível — evite mensagens que pareçam isca.</div>
             <div class="key-warning kw-static" id="enc-decoy-pngonly" data-i18n="decoyPngOnlyWarn" style="margin-top:8px">⚠ A mensagem alternativa vai apenas na imagem mais furtiva (PNG). A imagem mais resistente carrega só a mensagem real — se a negação plausível importa para você, é o PNG que você deve guardar e enviar.</div>
             <div class="field-label" id="enc-decoy-key-label" data-i18n="decoyKeyLabel" style="margin-top:12px">// senha alternativa</div>
@@ -298,7 +308,7 @@
         <summary><span class="qg-icon">▸</span> <span data-i18n="decGuideSummary">Guia rápido — como interpretar a análise</span></summary>
         <div class="qg-body">
           <p data-i18n-html="decGuide1"><b>1.</b> Carregue qualquer imagem — <b>qualquer formato</b>. A análise forense roda automaticamente e é independente de senha.</p>
-          <p data-i18n-html="decGuide2"><b>2.</b> O <b>Threat Score</b> indica a suspeita de mensagem oculta (esteganografia). Quanto maior, mais forte a evidência de conteúdo escondido nos pixels.</p>
+          <p data-i18n-html="decGuide2"><b>2.</b> O <b>Threat Score</b> indica suspeita de mensagem oculta. Antes da recuperação direta, a soma heurística tem teto em <b>99</b>; <b>100 / CONFIRMADO</b> fica reservado a conteúdo válido recuperado diretamente por um método suportado.</p>
           <p data-i18n-html="decGuide3"><b>3.</b> Se a imagem contém uma mensagem criptografada, insira a <b>senha</b> e analise de novo para decodificá-la. A senha também é o que revela mensagens em <b>Modo furtivo</b> — o cabeçalho delas é criptografado, então sem a senha são indistinguíveis de ruído. Mensagens em texto puro são recuperadas automaticamente, sem senha. O Decoder também lê imagens do <b>OpenStego</b>, do <b>Steghide</b> e do <b>OutGuess</b> — inclusive Steghide em JPEG (domínio DCT) com AES — automaticamente sem senha, ou com a senha quando informada.</p>
           <p data-i18n-html="decGuide4"><b>4.</b> O <b>Índice de compatibilidade com origem</b> compara a imagem com padrões heurísticos associados a fotografia, screenshot, arte digital e imagens geradas por IA. Os scores são independentes — vários podem ser altos. O maior score indica maior compatibilidade, não uma probabilidade calibrada.</p>
           <p data-i18n-html="decGuide5"><b>5.</b> Abra os <b>indicadores</b> para ver os detalhes técnicos de cada sinal e entender por que cada score foi atribuído.</p>
@@ -366,8 +376,13 @@
         <!-- Decoded message -->
         <div class="decoded-box" id="decoded-box">
           <div class="decoded-inner">
-            <div class="decoded-label" data-i18n="decodedLabel">Mensagem Encontrada e Decodificada</div>
+            <div class="decoded-label" id="decoded-label" data-i18n="decodedLabel">Mensagem Encontrada e Decodificada</div>
+            <div class="decoded-password-note" id="decoded-password-note" style="display:none"></div>
             <div class="decoded-text" id="decoded-text"></div>
+            <div class="decoded-actions" id="decoded-actions">
+              <button type="button" class="decoded-action" id="decoded-copy" data-i18n="decodedCopy">Copiar</button>
+              <button type="button" class="decoded-action" id="decoded-save" data-i18n="decodedSave">Salvar TXT</button>
+            </div>
           </div>
         </div>
 
@@ -443,6 +458,22 @@
   </div>
 </div>
 
+<!-- Editor expandido da mensagem do Encoder -->
+<div class="modal-overlay" id="enc-message-overlay">
+  <div class="enc-message-modal">
+    <div class="help-head">
+      <span class="help-title" data-i18n="encMessageEditorTitle">Editor de mensagem</span>
+      <button type="button" class="help-close enc-message-close" id="enc-message-close"><span aria-hidden="true">✕</span><span class="sr-only" data-i18n="encMessageClose">Fechar editor</span></button>
+    </div>
+    <div class="enc-message-modal-body">
+      <div class="enc-message-modal-meta">
+        <span id="enc-message-modal-count">0 caracteres</span>
+      </div>
+      <textarea class="enc-message-modal-text" id="enc-message-modal-text" data-i18n-ph="msgPlaceholder" placeholder="Digite a mensagem a ocultar..."></textarea>
+    </div>
+  </div>
+</div>
+
 <!-- Modal de confirmação -->
 <div class="modal-overlay" id="modal-overlay">
   <div class="modal-box">
@@ -478,7 +509,7 @@
           <p data-i18n-html="helpS2a">Cada pixel de uma imagem tem valores de cor (vermelho, verde, azul). O bit menos significativo (LSB) de cada valor pode ser alterado sem mudança visível na imagem. A esteganografia LSB escreve a mensagem nesses bits.</p>
           <p data-i18n-html="helpS2b">Por isso a imagem mais furtiva é sempre salva como um <b>PNG novo (sem perda)</b> — os bits do LSB precisam de um formato lossless para sobreviver. Você pode partir de qualquer imagem, inclusive JPEG: a ferramenta a converte e embute a mensagem na saída. O que destrói uma mensagem em LSB é recomprimir <b>depois</b> (salvar como JPEG de novo, ou reenviar por rede social como foto). É exatamente esse problema que a imagem mais resistente resolve — veja a seção seguinte.</p>
           <p data-i18n-html="helpS2c">Há duas formas de escrever o LSB. O <b>LSB Replacement (LSBR)</b> simplesmente sobrescreve o bit — simples, mas deixa uma assimetria par/ímpar estrutural que ataques estatísticos detectam com facilidade. Já o <b>LSB Matching (LSBM)</b> soma ou subtrai 1 aleatoriamente para chegar ao mesmo bit, sem deixar essa assimetria. O STEGO·STUDIO usa <b>LSBM</b>, muito mais difícil de detectar que o LSBR usado por ferramentas como OpenStego e OpenPuff.</p>
-          <p data-i18n-html="helpS2d">Por padrão, a mensagem é escrita só no <b>canal azul</b> (~1 bit por pixel), o que dá o menor impacto visual. O <b>modo alta capacidade (RGB)</b> espalha a mensagem pelos três canais de cor, triplicando o espaço disponível (~3 bits por pixel) — útil para mensagens grandes. Em troca, mexer nos três canais é um pouco mais detectável que mexer só no azul. A imagem registra qual modo foi usado, então a decodificação é automática.</p>
+          <p data-i18n-html="helpS2d">Por padrão, a mensagem usa o <b>canal azul</b> e o caminho STC orientado à furtividade. O <b>modo alta capacidade (RGB)</b> espalha o corpo pelos três canais de cor, triplicando o espaço disponível (~3 bits por pixel) — útil para mensagens maiores. O RGB prioriza espaço em vez de minimizar as alterações do embedding e pode deixar traços estatísticos mais fortes, especialmente com payloads maiores. A imagem registra qual modo foi usado, então a decodificação é automática.</p>
         </div>
       </details>
       <details class="help-section">
@@ -498,7 +529,7 @@
           <p data-i18n-html="helpProtB">A senha também <b>embaralha a ordem</b> em que os bits da mensagem são distribuídos pela imagem. Sem ela, mesmo quem souber que é LSB e extrair os bits na ordem física obtém uma sequência embaralhada.</p>
           <p data-i18n-html="helpProtD">Definir uma senha também <b>oculta o cabeçalho</b>, sem passo extra. Normalmente o cabeçalho carrega uma assinatura fixa ("STEGO") que outras ferramentas usam para perceber que há algo embutido; com senha, ela é criptografada e some — sem a senha, o cabeçalho é indistinguível de ruído. Não é um modo à parte: acontece sozinho sempre que há senha.</p>
           <p data-i18n-html="helpProtC">Independentemente da senha, ao <b>posicionar</b> os bits a ferramenta segue dois caminhos e escolhe sozinha. No padrão (furtividade máxima), usa <b>códigos síndrome-treliça (STC) sobre um mapa de custo HILL</b>: entre todas as formas de codificar a sua mensagem, escolhe a que altera os pixels de <b>menor custo</b> — as regiões de textura e ruído, fugindo das áreas lisas onde os ataques estatísticos RS/WS mais enxergam. É o menor rastro possível para aquela imagem, e usa só o canal azul.</p>
-          <p data-i18n-html="helpProtStc">O outro caminho é o <b>Modo de Alta Capacidade (RGB)</b>: quando você liga "Modo de Alta Capacidade" — ou automaticamente, quando a mensagem não cabe no furtivo — os bits se espalham pelos três canais de cor, triplicando o espaço disponível. Em troca, mexer nos três canais é um pouco mais detectável. A imagem registra qual caminho foi usado, então decodificar é sempre automático.</p>
+          <p data-i18n-html="helpProtStc">O outro caminho é o <b>Modo de Alta Capacidade (RGB)</b>: quando você liga "Modo de Alta Capacidade" — ou automaticamente, quando a mensagem não cabe no furtivo — o corpo se espalha pelos três canais de cor, triplicando o espaço disponível. Esse caminho prioriza capacidade e pode deixar traços estatísticos mais fortes, especialmente com payloads maiores. A imagem registra qual caminho foi usado, então decodificar é sempre automático.</p>
           <p data-i18n-html="helpProtE">Tudo isso se soma automaticamente: uma mensagem com senha fica <b>criptografada (AES-256-GCM)</b>, com <b>ordem embaralhada</b> e <b>sem cabeçalho reconhecível</b>, e o corpo é colocado por <b>STC no mapa HILL</b> no modo padrão. Você não monta nada disso à mão — cada camada cobre um tipo diferente de análise, e a ferramenta aplica o que faz sentido para o que você pediu.</p>
         </div>
       </details>
@@ -514,7 +545,7 @@
       <details class="help-section">
         <summary data-i18n="helpS3Title">Threat Score — suspeita de mensagem oculta</summary>
         <div class="help-text">
-          <p data-i18n-html="helpS3a">Estima o <b>nível de suspeita</b> de conteúdo oculto. Combina vários sinais: evidência de protocolo conhecido, texto recuperado de forma confiável, anomalias estatísticas nos LSBs, strings suspeitas, dados após o fim do arquivo e outros. É um score heurístico, não uma probabilidade calibrada.</p>
+          <p data-i18n-html="helpS3a">Estima o <b>nível de suspeita</b> de conteúdo oculto. Antes da recuperação direta, é um score heurístico com teto em <b>99</b>, não uma probabilidade calibrada. <b>100 / CONFIRMADO</b> fica reservado a conteúdo válido recuperado diretamente por um método suportado.</p>
           <p data-i18n-html="helpS3b">A recuperação confiável de uma mensagem é a evidência mais forte. Payloads criptografados ou ilegíveis ainda podem deixar traços estruturais ou estatísticos, mas esses traços indicam possível embedding — não revelam o payload por si só.</p>
           <p data-i18n-html="helpS3c">O analisador também roda dois <b>ataques estruturais</b> — RS (Regular–Singular) e WS (Weighted Stego) — voltados principalmente a traços associados ao <b>LSB Replacement</b>. A concordância entre eles pode reforçar a suspeita, especialmente em taxas de embedding maiores. Eles são menos confiáveis contra LSB Matching e posicionamento adaptativo ao conteúdo, e um resultado silencioso não prova ausência.</p>
           <p data-i18n-html="helpS3d">Há também uma <b>heurística de embedding tipo GAN</b> que procura um padrão às vezes associado à esteganografia neural: planos LSB incomumente semelhantes entre os canais de cor junto com comportamento simétrico em altas frequências. Quando esse padrão aparece, a ferramenta levanta uma <b>suspeita</b> — nunca uma confirmação. Imagens texturizadas ou sintéticas podem produzir sinais semelhantes. Trate como pista, não veredito.</p>

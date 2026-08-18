@@ -14,7 +14,7 @@ official binaries; none of them ship the original code.
 
 | Tool | PNG / BMP | JPEG | Encrypted payloads | Validation basis |
 |---|---|---|---|---|
-| **STEGO·STUDIO** (own format) | full | full | full | own round-trip; golden fixtures in `test/fixtures/legacy/` |
+| **STEGO·STUDIO** (own format) | full | full | full | own round-trip; immutable legacy + password-protected lossless fixtures in `test/fixtures/` |
 | **OpenStego** | read | — | **detected, not decrypted** | real samples, validated when the engine was built |
 | **Steghide** | BMP not integrated | read | **2 of ~129 cipher/mode pairs** | official binary 0.5.1, **re-measured 2026-08-11** |
 | **OutGuess 0.4** | — | read | RC4 as the tool uses it | real samples when built, incl. a documented field case |
@@ -30,7 +30,8 @@ but it is older, and you should know which is which.
 ## OpenStego
 
 Reads the payload and recovers the original filename. Password-derived pixel
-selection is implemented.
+selection is implemented. When extraction succeeds, recovered file bytes are kept
+byte-exact for local download; binary content is not rewritten as TXT.
 
 **Limit:** when the payload was written with OpenStego's own encryption layer
 enabled, the tool identifies it and reports the filename, but **does not decrypt
@@ -45,6 +46,9 @@ Implemented: the pseudo-random selector seeded from MD5 of the password, the
 lazy Fisher-Yates permutation, the internal EmbData format (24-bit magic, unary
 version, cipher and mode fields, zlib, CRC32, filename), and extraction from
 JPEG DCT coefficients.
+Recovered EmbData bytes are preserved locally for exact-file saving when the
+payload carries a filename or is binary; readable UTF-8 content is still shown
+as text.
 
 **Cipher coverage is the real boundary.** Steghide's header carries 5 bits of
 algorithm and 3 bits of mode — eighteen algorithms across seven modes, roughly
@@ -71,6 +75,8 @@ JPEG was prioritised because it is what turns up in practice.
 Reads JPEG payloads including the RC4 layer as the tool applies it. The known
 quirk where embedding stops at the image boundary is detected and reported
 rather than silently truncating.
+Known binary payload signatures (for example PNG, JPEG, ZIP, PDF and gzip) are
+kept as raw bytes and offered as files rather than decoded through lossy UTF-8.
 
 ## F5 (Westfeld)
 

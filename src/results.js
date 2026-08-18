@@ -58,7 +58,7 @@ function renderOriginModule(r) {
       for (const s of sigs) {
         const w = (s.weight != null) ? `<span class="origin-sig-weight">+${s.weight}</span>` : '';
         // Traduz o rótulo a partir da chave; aplica variáveis (ex.: largura em px)
-        let label = s.labelKey ? t(s.labelKey) : (s.label || '');
+        let label = s.labelKey ? t(s.labelKey) : escapeHTML(s.label || '');
         if (s.labelVars) {
           for (const [k,v] of Object.entries(s.labelVars)) label = label.replace(`{${k}}`, escapeHTML(v));
         }
@@ -84,7 +84,7 @@ function renderOriginModule(r) {
     if(sp.byStructure) ways.push(t('socialByStructure'));
     if(sp.byFilename)  ways.push(t('socialByFilename'));
     const list = ways.map((w,i)=>`${i+1}. ${w}`).join('<br>');
-    body += `<div class="origin-note origin-note-social">${t('socialPipelinePrefix')} ${conf} <b>${sp.platform}</b>. ${t('socialPipelineSuffix')}<br><br><i style="opacity:.8">${t('socialIdentifiedBy')}<br>${list}</i></div>`;
+    body += `<div class="origin-note origin-note-social">${t('socialPipelinePrefix')} ${conf} <b>${escapeHTML(sp.platform)}</b>. ${t('socialPipelineSuffix')}<br><br><i style="opacity:.8">${t('socialIdentifiedBy')}<br>${list}</i></div>`;
   }
   // Nota sobre indicadores compartilhados
   body += `<div class="origin-note">${t('originNoteShared')}</div>`;
@@ -134,6 +134,15 @@ function renderLeakModule(r){
     +'</div>'
     +'</div>';
   renderModule('leak','\u229e',t('leakModuleName'),susp?t('badgeSuspicious'):t('badgeNormal'),susp?'mb-warn':'mb-ok',body);
+}
+
+// A família principal de esteganálise é escolhida pelo formato real. Módulos
+// incompatíveis não são renderizados só para dizer N/A: lossless usa pixels/LSB;
+// JPEG com coeficientes disponíveis usa a superfície DCT.
+function resolveStegoSurface(r) {
+  if (r?.format?.cat === 'lossless') return 'lossless-lsb';
+  if (r?.jpegDCT) return 'jpeg-dct';
+  return 'generic';
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -215,7 +224,110 @@ function renderToolprint(r, decodedMsg) {
   host.style.display = 'block';
 }
 
-function renderResults(r, decodedMsg, decodeStatus) {
+let lastRecoveredFile=null;
+
+function prepareDecodedMessageView(decodedMsg, passwordIgnored=false, recoveredFile=null) {
+  const box = document.getElementById('decoded-box');
+  const text = document.getElementById('decoded-text');
+  const label = document.getElementById('decoded-label');
+  const passwordNote = document.getElementById('decoded-password-note');
+  const copyBtn = document.getElementById('decoded-copy');
+  const saveBtn = document.getElementById('decoded-save');
+  if (!box || !text) return;
+
+  const hasText=typeof decodedMsg==='string' && decodedMsg.length>0;
+  const hasFile=!!(recoveredFile && recoveredFile.bytes instanceof Uint8Array && recoveredFile.bytes.length>0);
+  lastRecoveredFile=hasFile ? recoveredFile : null;
+
+  if (hasText || hasFile) {
+    // textContent é intencional: código/HTML recuperado deve aparecer como texto,
+    // nunca ser interpretado ou executado pelo navegador. white-space:pre-wrap
+    // preserva apenas quebras REAIS já presentes na mensagem; sequências literais
+    // como "\\n" continuam sendo dois caracteres comuns.
+    text.textContent = hasText ? decodedMsg
+      : `${t('decodedBinaryRecovered')} ${recoveredFile.fileName} · ${fmtBytes(recoveredFile.bytes.length)}`;
+    if(label) label.textContent = (!hasText && hasFile) ? t('decodedFileLabel') : t('decodedLabel');
+    if(copyBtn) copyBtn.style.display = hasText ? '' : 'none';
+    if(saveBtn) saveBtn.textContent = hasFile ? t('decodedSaveFile') : t('decodedSave');
+    if(passwordNote){
+      passwordNote.textContent = passwordIgnored ? t('decStatusPlainKeyIgnored') : '';
+      passwordNote.style.display = passwordIgnored ? 'block' : 'none';
+    }
+    box.classList.add('visible');
+  } else {
+    text.textContent = '';
+    lastRecoveredFile=null;
+    if(label) label.textContent=t('decodedLabel');
+    if(copyBtn) copyBtn.style.display='';
+    if(saveBtn) saveBtn.textContent=t('decodedSave');
+    if(passwordNote){ passwordNote.textContent=''; passwordNote.style.display='none'; }
+    box.classList.remove('visible');
+  }
+}
+
+async function copyDecodedMessage() {
+  const text = document.getElementById('decoded-text')?.textContent || '';
+  if (!text) return;
+  let copied = false;
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      copied = true;
+    }
+  } catch(_) { /* fallback abaixo */ }
+  if (!copied) {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly','');
+    ta.style.position = 'fixed'; ta.style.opacity = '0'; ta.style.pointerEvents = 'none';
+    document.body.appendChild(ta); ta.select();
+    try { copied = !!document.execCommand('copy'); } catch(_) { copied = false; }
+    ta.remove();
+  }
+  const btn = document.getElementById('decoded-copy');
+  if (btn && copied) {
+    btn.textContent = t('decodedCopied');
+    setTimeout(() => { if (btn.isConnected) btn.textContent = t('decodedCopy'); }, 1200);
+  }
+}
+
+function safeRecoveredDownloadName(name, fallback='payload.bin') {
+  const rawLeaf=String(name||'').replace(/\\/g,'/').split('/').pop()||'';
+  const leaf=rawLeaf.trim() || fallback;
+  const clean=leaf.replace(/[^a-zA-Z0-9._-]+/g,'_').replace(/^\.+/,'');
+  if (!clean) return fallback;
+  if (clean.length <= 120) return clean;
+  const dot=clean.lastIndexOf('.');
+  // Preserve a plausible final extension while truncating only the basename.
+  // Very long dot-suffixes are treated as part of the basename, not as an extension.
+  if (dot > 0 && dot < clean.length-1) {
+    const ext=clean.slice(dot);
+    if (ext.length < 32) return clean.slice(0,120-ext.length) + ext;
+  }
+  return clean.slice(0,120);
+}
+
+function saveDecodedMessage() {
+  const a = document.createElement('a');
+  let blob=null, download='';
+  if(lastRecoveredFile?.bytes instanceof Uint8Array && lastRecoveredFile.bytes.length>0){
+    blob=new Blob([lastRecoveredFile.bytes], {type:lastRecoveredFile.mime||'application/octet-stream'});
+    download=safeRecoveredDownloadName(lastRecoveredFile.fileName, 'payload.bin');
+  } else {
+    const text = document.getElementById('decoded-text')?.textContent || '';
+    if (!text) return;
+    const src = lastReport?.modules?.metadata?.filename || 'imagem';
+    const base = src.replace(/\.[^.]+$/,'').replace(/[^a-zA-Z0-9._-]+/g,'_').slice(0,80) || 'imagem';
+    blob=new Blob([text], {type:'text/plain;charset=utf-8'});
+    download=base + '_mensagem.txt';
+  }
+  const url = URL.createObjectURL(blob);
+  a.href = url; a.download = download;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
+function renderResults(r, decodedMsg, decodeStatus, renderMeta={}) {
   // Recalcula stegomalware a partir da mensagem decodificada ATUAL, para que o
   // threat e o banner fiquem consistentes em todo render (inicial, neural, idioma).
   r.stegomalware = decodedMsg ? detectStegomalware(decodedMsg) : [];
@@ -223,16 +335,15 @@ function renderResults(r, decodedMsg, decodeStatus) {
 
   document.getElementById('modules-wrap').textContent='';
 
-  const db=document.getElementById('decoded-box');
-  if(decodedMsg){document.getElementById('decoded-text').textContent=decodedMsg;db.classList.add('visible');}
-  else{db.classList.remove('visible');}
+  prepareDecodedMessageView(decodedMsg, !!renderMeta.passwordIgnored, renderMeta.recoveredFile||null);
 
   // Threat Score
   const tColor = tScore>60?'#ff4060':tScore>30?'#ffb300':'var(--enc)';
   const tn=document.getElementById('threat-num');
   tn.textContent=tScore; tn.style.color=tColor; tn.style.textShadow=`0 0 16px ${tColor}`;
   const tl=document.getElementById('threat-level');
-  tl.textContent=tScore>60?t('levelHigh'):tScore>30?t('levelMedium'):tScore>0?t('levelLow'):t('levelClean');
+  const threatConfirmed = r.studio?.nativeExtracted === true || r.studio?.robust === true || resolveThirdPartyEvidence(r).level==='recovered';
+  tl.textContent=threatConfirmed?t('levelConfirmed'):(tScore>60?t('levelHigh'):tScore>30?t('levelMedium'):tScore>0?t('levelLow'):t('levelClean'));
   tl.style.color=tColor;
   document.getElementById('threat-flags').innerHTML=
     tFlags.map(f=>`<span class="score-flag threat">${f}</span>`).join('');
@@ -295,91 +406,78 @@ function renderResults(r, decodedMsg, decodeStatus) {
 
   // ── GRUPO 1: MENSAGEM OCULTA ──
   renderGroupHeader(t('groupSteg'), 'stego');
+  const stegoSurface=resolveStegoSurface(r);
 
-  // Protocolo
-  const proto = resolveProtocolState(r);
-  const protoName = proto.name, protoBadge = proto.badge, protoClass = proto.cls;
-
-  let stBody='';
-  if(!r.studio?.available){
-    stBody=`<div style="padding:10px;background:rgba(167,139,250,0.05);border:1px solid rgba(167,139,250,0.15);border-radius:3px;font-size:0.68rem;color:var(--scan);line-height:1.8">ℹ ${r.studio?.note}</div>`;
-    // O protocolo PRÓPRIO pode estar indisponível (JPEG não tem LSB aproveitável),
-    // mas os motores de terceiro (Steghide, OutGuess) foram tentados assim mesmo.
-    // Suprimir o resultado dessa tentativa escondia informação que existe — e
-    // deixava a nota do painel DCT apontando para uma linha que não aparecia.
-    stBody+=row(t('rowDecodeStatus'), decodeStatus||'—');
-  } else {
-    const protoForte = proto.level==='extracted'||proto.level==='headerOnly'||proto.level==='passive';
-    stBody=row(t('rowProtocolDetected'), protoName, protoForte||r.studio.deepScan?'finding-crit':'');
-    // A ordem aqui precisa seguir resolveProtocolState: evidência de extração
-    // autenticada vence o header passivo. Assim um payload extraído não perde a
-    // linha neutra de recuperação só porque a mesma imagem também expõe header.
-    if(proto.level==='extracted'){
-      // Uma extração bem-sucedida pode vir do payload principal OU da camada
-      // alternativa. Não revelar a rota: mostrar apenas a evidência comum.
-      const recoveredDetail = r.studio.hasHeader && r.studio.payloadBytes
-        ? t('payloadRecovered') + ' · ' + r.studio.payloadBytes + ' bytes'
-        : t('payloadRecovered');
-      stBody+=row(t('rowPayload'), recoveredDetail, 'finding-crit');
-    } else if(proto.level==='headerOnly'){
-      stBody+=row(t('rowHeader'), t('headerFoundNoContent'), 'finding-crit');
-    } else if(r.studio.hasHeader){
-      // Caminho passivo: o M7 leu o header sem senha, então sabe o tamanho.
-      stBody+=row(t('rowHeader'), t('modeChannelBHeader'), 'finding-crit');
-      stBody+=row(t('rowPayload'), r.studio.payloadBytes+' bytes', 'finding-crit');
-    }
-    if(r.studio.genericMode){
-      stBody+=row(t('rowExtractionMode'), translateMode(r.studio.genericMode));
-    }
-    // Header identificado pela investigação profunda (magic de outra ferramenta)
-    const detectedHeader = r.studio.headerName || r.lsb?.headerName;
-    if(detectedHeader && !r.studio.hasHeader){
-      stBody+=row(t('rowHeaderIdentified'), `"${detectedHeader}"`, 'finding-crit');
-    }
-    if(r.lsb?.foundText){
-      // A janela deslizante pode localizar texto por acaso dentro de ciphertext.
-      // Só o conteúdo que sobreviveu à consolidação é rotulado como recuperado.
-      if(decodedMsg){
-        stBody+=row(t('rowTextRecovered'), t('valYes'), 'finding-crit');
-      } else {
-        stBody+=row(t('rowTextCandidate'), t('valCandidateNotValidated'), 'finding-warn');
+  // PNG / LSB — superfície lossless única. Protocolo e estatística continuam
+  // separados conceitualmente, mas aparecem no mesmo accordion porque só fazem
+  // sentido neste caminho de pixels/LSB. JPEG usa a superfície DCT abaixo.
+  if(stegoSurface==='lossless-lsb'){
+    const proto = resolveProtocolState(r);
+    const protoName = proto.name, protoBadge = proto.badge, protoClass = proto.cls;
+    let stBody='';
+    if(!r.studio?.available){
+      stBody=`<div style="padding:10px;background:rgba(167,139,250,0.05);border:1px solid rgba(167,139,250,0.15);border-radius:3px;font-size:0.68rem;color:var(--scan);line-height:1.8">ℹ ${escapeHTML(r.studio?.note||'')}</div>`;
+      stBody+=row(t('rowDecodeStatus'), decodeStatus||'—');
+    } else {
+      const protoForte = proto.level==='extracted'||proto.level==='headerOnly'||proto.level==='passive';
+      stBody=row(t('rowProtocolDetected'), protoName, protoForte||r.studio.deepScan?'finding-crit':'');
+      if(proto.level==='extracted'){
+        const recoveredDetail = r.studio.hasHeader && r.studio.payloadBytes
+          ? t('payloadRecovered') + ' · ' + r.studio.payloadBytes + ' bytes'
+          : t('payloadRecovered');
+        stBody+=row(t('rowPayload'), recoveredDetail, 'finding-crit');
+      } else if(proto.level==='headerOnly'){
+        stBody+=row(t('rowHeader'), t('headerFoundNoContent'), 'finding-crit');
+      } else if(r.studio.hasHeader){
+        stBody+=row(t('rowHeader'), t('modeChannelBHeader'), 'finding-crit');
+        stBody+=row(t('rowPayload'), r.studio.payloadBytes+' bytes', 'finding-crit');
       }
+      if(r.studio.genericMode) stBody+=row(t('rowExtractionMode'), translateMode(r.studio.genericMode));
+      const detectedHeader = r.studio.headerName || r.lsb?.headerName;
+      if(detectedHeader && !r.studio.hasHeader) stBody+=row(t('rowHeaderIdentified'), `"${detectedHeader}"`, 'finding-crit');
+      if(r.lsb?.foundText){
+        if(decodedMsg) stBody+=row(t('rowTextRecovered'), t('valYes'), 'finding-crit');
+        else stBody+=row(t('rowTextCandidate'), t('valCandidateNotValidated'), 'finding-warn');
+      }
+      stBody+=row(t('rowDecodeStatus'), decodeStatus||'—');
+      stBody+=`<div class="interp">${interpretModule('studio',r)}</div>`;
     }
-    stBody+=row(t('rowDecodeStatus'), decodeStatus||'—');
-    stBody+=`<div class="interp">${interpretModule('studio',r)}</div>`;
-  }
-  renderModule('studio','⬡',t('modProtocol'),protoBadge,protoClass,stBody);
 
-  // LSB
-  const lsbSusp=r.lsb?.available&&r.lsb?.suspicious;
-  let lsbBody='';
-  if(!r.lsb?.available){
-    lsbBody=`<div style="padding:10px;background:rgba(255,179,0,0.05);border:1px solid rgba(255,179,0,0.15);border-radius:3px;font-size:0.68rem;color:#ffb300;line-height:1.8">⚠ ${r.lsb?.note}</div>`;
-  } else {
-    lsbBody=row(t('rowChiR'),r.lsb.chiR,lsbSusp?'finding-warn':'finding-ok');
-    lsbBody+=row(t('rowChiG'),r.lsb.chiG,lsbSusp?'finding-warn':'finding-ok');
-    lsbBody+=row(t('rowChiB'),r.lsb.chiB,lsbSusp?'finding-warn':'finding-ok');
-    lsbBody+=rowHTML(t('rowBestMode'),'<span style="color:var(--scan)">'+escapeHTML(translateMode(r.lsb.bestMode))+'</span>');
-    lsbBody+=row(t('rowPrintableRatio'),r.lsb.printableRatio,parseFloat(r.lsb.printableRatio)>30?'finding-warn':'');
-    // Ataques estruturais RS e WS (detecção específica de LSB Replacement)
-    lsbBody+=row(t('rowRSAttack'),r.lsb.rsRate,r.lsb.lsbrDetected?'finding-warn':'');
-    lsbBody+=row(t('rowWSAttack'),r.lsb.wsRate,r.lsb.lsbrDetected?'finding-warn':'');
-    const lsbrVerdict=r.lsb.lsbrDetected?t('lsbrYes'):r.lsb.lsbrPossible?t('lsbrMaybe'):t('lsbrNo');
-    lsbBody+=row(t('rowLSBRVerdict'),lsbrVerdict,r.lsb.lsbrDetected?'finding-crit':r.lsb.lsbrPossible?'finding-warn':'finding-ok');
-    // Heurística de embedding neural (SteganoGAN-like) — honestamente uma suspeita
-    const neuralVerdict=r.lsb.neuralSuspect?t('neuralMaybe'):t('neuralNo');
-    lsbBody+=row(t('rowNeuralStego'),neuralVerdict,r.lsb.neuralSuspect?'finding-warn':'finding-ok');
-    if(r.lsb.neuralSuspect){
-      lsbBody+=`<div style="margin:6px 0;padding:9px 11px;background:rgba(167,139,250,0.07);border:1px solid rgba(167,139,250,0.28);border-radius:3px;font-size:0.63rem;color:var(--scan);line-height:1.75">${t('neuralNote').replace('{ent}',r.lsb.neuralEntSim).replace('{hf}',r.lsb.neuralHfSim)}</div>`;
+    const lsbSusp=r.lsb?.available&&r.lsb?.suspicious;
+    let lsbBody='';
+    if(!r.lsb?.available){
+      lsbBody=`<div style="padding:10px;background:rgba(255,179,0,0.05);border:1px solid rgba(255,179,0,0.15);border-radius:3px;font-size:0.68rem;color:#ffb300;line-height:1.8">⚠ ${escapeHTML(r.lsb?.note||'')}</div>`;
+    } else {
+      lsbBody=row(t('rowChiR'),r.lsb.chiR,lsbSusp?'finding-warn':'finding-ok');
+      lsbBody+=row(t('rowChiG'),r.lsb.chiG,lsbSusp?'finding-warn':'finding-ok');
+      lsbBody+=row(t('rowChiB'),r.lsb.chiB,lsbSusp?'finding-warn':'finding-ok');
+      lsbBody+=rowHTML(t('rowBestMode'),'<span style="color:var(--scan)">'+escapeHTML(translateMode(r.lsb.bestMode))+'</span>');
+      lsbBody+=row(t('rowPrintableRatio'),r.lsb.printableRatio,parseFloat(r.lsb.printableRatio)>30?'finding-warn':'');
+      lsbBody+=row(t('rowRSAttack'),r.lsb.rsRate,r.lsb.lsbrDetected?'finding-warn':'');
+      lsbBody+=row(t('rowWSAttack'),r.lsb.wsRate,r.lsb.lsbrDetected?'finding-warn':'');
+      const lsbrVerdict=r.lsb.lsbrDetected?t('lsbrYes'):r.lsb.lsbrPossible?t('lsbrMaybe'):t('lsbrNo');
+      lsbBody+=row(t('rowLSBRVerdict'),lsbrVerdict,r.lsb.lsbrDetected?'finding-crit':r.lsb.lsbrPossible?'finding-warn':'finding-ok');
+      const neuralVerdict=r.lsb.neuralSuspect?t('neuralMaybe'):t('neuralNo');
+      lsbBody+=row(t('rowNeuralStego'),neuralVerdict,r.lsb.neuralSuspect?'finding-warn':'finding-ok');
+      if(r.lsb.neuralSuspect){
+        lsbBody+=`<div style="margin:6px 0;padding:9px 11px;background:rgba(167,139,250,0.07);border:1px solid rgba(167,139,250,0.28);border-radius:3px;font-size:0.63rem;color:var(--scan);line-height:1.75">${t('neuralNote').replace('{ent}',r.lsb.neuralEntSim).replace('{hf}',r.lsb.neuralHfSim)}</div>`;
+      }
+      lsbBody+=rowHTML(t('rowDecodedSample'),'<span style="font-size:0.62rem;color:var(--dim)">'+escapeHTML(r.lsb.decodedSample.slice(0,80))+'</span>');
+      lsbBody+=`<div class="interp">${interpretModule('lsb',r)}</div>`;
     }
-    // A amostra vem do conteúdo decodificado do arquivo: escapar é obrigatório.
-    lsbBody+=rowHTML(t('rowDecodedSample'),'<span style="font-size:0.62rem;color:var(--dim)">'+escapeHTML(r.lsb.decodedSample.slice(0,80))+'</span>');
-    lsbBody+=`<div class="interp">${interpretModule('lsb',r)}</div>`;
-  }
-  renderModule('lsb','🧬',t('modLSB'),!r.lsb?.available?t('badgeNA'):lsbSusp?t('badgeSuspicious'):t('badgeNormal'),!r.lsb?.available?'mb-scan':lsbSusp?'mb-warn':'mb-ok',lsbBody);
 
-  // JPEG DCT — só aparece para JPEG, com rótulo honesto
-  if(r.jpegDCT){
+    let pngBadge=t('badgeNormal'), pngClass='mb-ok';
+    if(protoClass==='mb-crit'){ pngBadge=protoBadge; pngClass='mb-crit'; }
+    else if(protoClass==='mb-warn'){ pngBadge=protoBadge; pngClass='mb-warn'; }
+    else if(lsbSusp){ pngBadge=t('badgeSuspicious'); pngClass='mb-warn'; }
+    const body=`<div class="module-subhead">${t('modProtocol')}</div>${stBody}<div class="module-subhead module-subhead-gap">${t('modLSB')}</div>${lsbBody}`;
+    const losslessTitle=(r.format?.ext||'PNG')+' / LSB';
+    renderModule('pnglsb','🧬',losslessTitle,pngBadge,pngClass,body);
+  }
+
+  // JPEG / DCT — superfície própria para JPEG. Estatística e evidência de
+  // extração ficam juntas; Decode Status vive aqui, nunca numa família N/A.
+  if(stegoSurface==='jpeg-dct'){
     let dctBody='';
     if(!r.jpegDCT.available){
       const reasonCode = r.jpegDCT.reason||'';
@@ -391,21 +489,51 @@ function renderResults(r, decodedMsg, decodeStatus) {
       }[reasonCode];
       const reason = reasonKey ? t(reasonKey) : reasonCode;
       dctBody=`<div class="interp">${t('jdctUnavailable')+(reason?' ('+escapeHTML(reason)+')':'')}</div>`;
+      dctBody+=row(t('rowDecodeStatus'), decodeStatus||'—');
       renderModule('jpegdct','🧊',t('modJpegDCT'),t('badgeNA'),'mb-scan',dctBody);
     } else {
       const j=r.jpegDCT;
-      const anomaly=j.firstOrderAnomaly;
+      const anomaly=!!j.firstOrderAnomaly;
+      const robustState=r.studio?.robust;
+      const robustRecovered=robustState===true;
+      const thirdParty=r.studio?.thirdParty||null;
+      const methods=[];
+      if(robustRecovered) methods.push(t('jpegMethodStudioRobust'));
+      if(thirdParty) methods.push(thirdParty);
+      const directRecovered=methods.length>0;
+
+      dctBody+=row(t('rowJpegStructure'),j.progressive?t('jpegProgressive'):t('jpegBaseline'));
+      dctBody+=row(t('rowJpegComponents'),j.components);
       dctBody+=row(t('rowJdctNonZero'),`${j.acNonZero.toLocaleString()} / ${j.acTotal.toLocaleString()} (${(j.nonZeroRatio*100).toFixed(1)}%)`);
       dctBody+=row(t('rowJdctDistinct'),j.distinctValues);
       dctBody+=row(t('rowJdctAvgAbs'),j.avgAbsCoeff.toFixed(2));
       dctBody+=row(t('rowJdctBands'),`${t('jdctBandLow')} ${j.bandLow.toLocaleString()} · ${t('jdctBandMid')} ${j.bandMid.toLocaleString()} · ${t('jdctBandHigh')} ${j.bandHigh.toLocaleString()}`);
-      // chi-quadrado — rotulado como indicador FRACO
       const chiVerdict = anomaly ? t('jdctChiAnomaly') : t('jdctChiNoAnomaly');
       dctBody+=row(t('rowJdctChi'),chiVerdict,anomaly?'finding-warn':'finding-ok');
-      // nota honesta permanente: ausência de sinal ≠ ausência de payload
+
+      dctBody+=row(t('rowJpegMethod'),methods.length?methods.join(' · '):t('jpegMethodNone'),directRecovered?'finding-crit':'');
+      if(robustState && !robustRecovered){
+        let robustText='';
+        if(robustState==='locked') robustText=t('jpegRobustLocked');
+        else if(robustState==='damaged') robustText=t('jpegRobustDamaged');
+        else if(robustState==='content-error') robustText=t('jpegRobustContentError');
+        if(robustText) dctBody+=row(t('rowJpegRobustState'),robustText,'finding-warn');
+      }
+      if(Number.isFinite(r.studio?.robustCorrected)){
+        dctBody+=row(t('rowJpegRsCorrections'),t('jpegRsBytes').replace('{n}',String(r.studio.robustCorrected)),robustRecovered?'finding-ok':'');
+      }
+      dctBody+=row(t('rowDecodeStatus'), decodeStatus||'—',directRecovered?'finding-crit':'');
+
+      if(robustRecovered){
+        dctBody+=`<div style="margin:7px 0;padding:9px 11px;background:rgba(255,64,96,0.07);border:1px solid rgba(255,64,96,0.28);border-radius:3px;font-size:0.63rem;color:#ff9aae;line-height:1.75">${t('jpegEvidenceConfirmedNote')}</div>`;
+      } else if(thirdParty){
+        dctBody+=`<div style="margin:7px 0;padding:9px 11px;background:rgba(255,179,0,0.07);border:1px solid rgba(255,179,0,0.28);border-radius:3px;font-size:0.63rem;color:#ffcb5c;line-height:1.75">${t('jpegEvidenceThirdPartyNote')}</div>`;
+      }
       dctBody+=`<div style="margin:6px 0;padding:9px 11px;background:rgba(96,165,250,0.07);border:1px solid rgba(96,165,250,0.28);border-radius:3px;font-size:0.63rem;color:var(--scan);line-height:1.75">${t('jdctHonestNote')}</div>`;
-      const badge = anomaly ? t('badgeSuspicious') : t('badgeNormal');
-      renderModule('jpegdct','🧊',t('modJpegDCT'),badge,anomaly?'mb-warn':'mb-ok',dctBody);
+
+      const badge = directRecovered ? t('jpegBadgeRecovered') : robustState ? t('jpegBadgeEvidence') : anomaly ? t('badgeSuspicious') : t('badgeNormal');
+      const badgeClass = directRecovered ? 'mb-crit' : (robustState||anomaly) ? 'mb-warn' : 'mb-ok';
+      renderModule('jpegdct','🧊',t('modJpegDCT'),badge,badgeClass,dctBody);
     }
   }
 
@@ -422,7 +550,7 @@ function renderResults(r, decodedMsg, decodeStatus) {
     }
     strBody+='</div>';
   }
-  if(r.strings.note) strBody+=`<div style="font-size:0.6rem;color:var(--dim);margin-top:6px;font-style:italic">${r.strings.note}</div>`;
+  if(r.strings.note) strBody+=`<div style="font-size:0.6rem;color:var(--dim);margin-top:6px;font-style:italic">${escapeHTML(r.strings.note||'')}</div>`;
   strBody+=row(t('rowAfterEOF'),r.strings.appendedData?(r.strings.appendedBytes+' bytes'):t('valNo'),r.strings.appendedData?'finding-crit':'');
   strBody+=`<div class="interp">${interpretModule('strings',r)}</div>`;
   renderModule('strings','🔤',t('modStrings'),strSusp?t('badgeSuspicious'):t('badgeClean'),strSusp?'mb-warn':'mb-ok',strBody);
@@ -466,7 +594,7 @@ function renderResults(r, decodedMsg, decodeStatus) {
   colBody+=row(t('rowRareColorClusters'),r.color.rareClusters,r.color.rareSuspicious?'finding-warn':'');
   if(r.color.rareDetails.length>0){
     colBody+='<div style="margin:4px 0 4px 12px">';
-    for(const d of r.color.rareDetails) colBody+=`<div class="finding-warn">· ${d}</div>`;
+    for(const d of r.color.rareDetails) colBody+=`<div class="finding-warn">· ${escapeHTML(d)}</div>`;
     colBody+='</div>';
   }
   colBody+=`<div class="interp">${interpretModule('color',r)}</div>`;
@@ -547,36 +675,50 @@ function renderResults(r, decodedMsg, decodeStatus) {
     renderModule('c2pa','🔏',t('modC2PA'),c2Badge,c2Class,c2Body);
   }
 
-  // EXIF
+  // EXIF / XMP
   if(r.exif) {
-    const exifSusp=r.exif.aiSoftware||(!r.exif.hasCamera&&r.exif.found)||r.exif.noExif;
-    const exifBadge=r.exif.aiSoftware?t('exifBadgeAI'):r.exif.noExif?t('exifBadgeNoExif'):r.exif.hasCamera?t('exifBadgeCamera'):t('exifBadgeNoCamera');
-    const exifClass=r.exif.aiSoftware?'mb-crit':r.exif.noExif?'mb-warn':r.exif.hasCamera?'mb-ok':'mb-warn';
+    const exifUnavailable=r.exif.available===false;
+    const exifPartial=!!r.exif.cameraPartial;
+    const metadataNoCamera=!exifUnavailable && !r.exif.noExif && !!r.exif.found && !r.exif.hasCamera && !exifPartial;
+    const exifBadge=exifUnavailable?t('exifBadgeUnavailable'):
+      r.exif.aiSoftware?t('exifBadgeAI'):
+      r.exif.noExif?t('exifBadgeNoExif'):
+      r.exif.hasCamera?t('exifBadgeCamera'):
+      exifPartial?t('exifBadgePartial'):
+      metadataNoCamera?t('exifBadgeMetadataNoCamera'):t('exifBadgeNoCamera');
+    const exifClass=exifUnavailable?'mb-scan':r.exif.aiSoftware?'mb-crit':r.exif.noExif?'mb-warn':r.exif.hasCamera?'mb-ok':'mb-warn';
     let exifBody='';
-    if(r.exif.aiSoftware){
-      exifBody+=`<div style="padding:8px 10px;background:rgba(255,64,96,0.08);border:1px solid rgba(255,64,96,0.25);border-radius:3px;margin-bottom:8px">
-        <div style="font-size:0.58rem;color:#ff6080;letter-spacing:2px;margin-bottom:3px">${t('exifGeneratorIdentified')}</div>
-        <div style="font-size:0.9rem;color:#fff;font-family:var(--sans)">${escapeHTML(r.exif.aiSoftware)}</div>
-      </div>`;
-    }
-    if(r.exif.noExif){
-      exifBody+=`<div style="font-size:0.68rem;color:#ffb300;font-style:italic">${t('exifNoMetadata')}</div>`;
+    if(exifUnavailable){
+      exifBody+=`<div style="font-size:0.68rem;color:var(--dim);font-style:italic">${t('exifInterpUnavailable')}</div>`;
     } else {
-      for(const [k,v] of Object.entries(r.exif.fields||{})) {
-        if(k==='GPS') continue; // hasGPS below is the canonical visible row; keep fields.GPS in JSON for compatibility
-        exifBody+=row(k,v,k==='Software'&&r.exif.aiSoftware?'finding-crit':'');
+      if(r.exif.aiSoftware){
+        exifBody+=`<div style="padding:8px 10px;background:rgba(255,64,96,0.08);border:1px solid rgba(255,64,96,0.25);border-radius:3px;margin-bottom:8px">
+          <div style="font-size:0.58rem;color:#ff6080;letter-spacing:2px;margin-bottom:3px">${t('exifGeneratorIdentified')}</div>
+          <div style="font-size:0.9rem;color:#fff;font-family:var(--sans)">${escapeHTML(r.exif.aiSoftware)}</div>
+        </div>`;
       }
-      exifBody+=row(t('rowCameraData'),r.exif.hasCamera?t('valCameraPresent'):t('valCameraAbsent'),r.exif.hasCamera?'finding-ok':'finding-warn');
-      exifBody+=row(t('rowGPS'),r.exif.hasGPS?t('valPresent'):t('valAbsent'));
+      if(r.exif.noExif){
+        exifBody+=`<div style="font-size:0.68rem;color:#ffb300;font-style:italic">${t('exifNoMetadata')}</div>`;
+      } else {
+        for(const [k,v] of Object.entries(r.exif.fields||{})) {
+          if(k==='GPS') continue; // hasGPS below is the canonical visible row; keep fields.GPS in JSON for compatibility
+          exifBody+=row(k,v,k==='Software'&&r.exif.aiSoftware?'finding-crit':'');
+        }
+        const cameraValue=r.exif.hasCamera?t('valCameraPresent'):exifPartial?t('valCameraPartial'):t('valCameraAbsent');
+        exifBody+=row(t('rowCameraData'),cameraValue,r.exif.hasCamera?'finding-ok':'finding-warn');
+        exifBody+=row(t('rowGPS'),r.exif.hasGPS?t('valPresent'):t('valAbsent'));
+      }
+      const interp = r.exif.aiSoftware
+        ? t('exifInterpAI').replace('{software}',escapeHTML(r.exif.aiSoftware))
+        : r.exif.noExif
+          ? t('exifInterpNoExif')
+          : r.exif.hasCamera
+            ? t('exifInterpCamera')
+            : exifPartial
+              ? t('exifInterpPartial')
+              : t('exifInterpNoCamera');
+      exifBody+=`<div class="interp">${interp}</div>`;
     }
-    const interp = r.exif.aiSoftware
-      ? t('exifInterpAI').replace('{software}',escapeHTML(r.exif.aiSoftware))
-      : r.exif.noExif
-        ? t('exifInterpNoExif')
-        : r.exif.hasCamera
-          ? t('exifInterpCamera')
-          : t('exifInterpNoCamera');
-    exifBody+=`<div class="interp">${interp}</div>`;
     renderModule('exif','📋',t('modEXIF'),exifBadge,exifClass,exifBody);
   }
 
@@ -638,7 +780,7 @@ function renderResults(r, decodedMsg, decodeStatus) {
       <div class="ai-verdict-text">
         <div class="ai-verdict-label">${t('aiVerdictLabel')}</div>
         <div class="ai-verdict-level ${aiC}">${r.ai.score>=70?t('aiLevelHigh'):r.ai.score>=45?t('aiLevelMedium'):r.ai.score>=20?t('aiLevelLow'):t('aiLevelUnlikely')}</div>
-        ${r.ai.formatCat==='lossy'?'<div style="font-size:0.58rem;color:#ffb300;margin-top:4px">'+t('compressionMayMask').replace('{ext}',r.ai.formatExt)+'</div>':''}
+        ${r.ai.formatCat==='lossy'?'<div style="font-size:0.58rem;color:#ffb300;margin-top:4px">'+t('compressionMayMask').replace('{ext}',escapeHTML(r.ai.formatExt))+'</div>':''}
       </div>
     </div>`;
     if(r.ai.signals.length===0){
@@ -651,11 +793,11 @@ function renderResults(r, decodedMsg, decodeStatus) {
         // VARIÁVEIS podem vir do arquivo — `{software}` é o campo Software do
         // EXIF, cru. Escapa-se o valor interpolado, nunca o molde. (Sink
         // dado do arquivo: deve permanecer escapado.)
-        let lbl = s.labelKey ? t(s.labelKey) : (s.label||'');
+        let lbl = s.labelKey ? t(s.labelKey) : escapeHTML(s.label||'');
         if (s.labelVars) for (const [k,v] of Object.entries(s.labelVars)) lbl = lbl.replace(`{${k}}`, escapeHTML(v));
-        let det = s.detailKey ? t(s.detailKey) : (s.detail||'');
+        let det = s.detailKey ? t(s.detailKey) : escapeHTML(s.detail||'');
         if (s.detailVars) for (const [k,v] of Object.entries(s.detailVars)) det = det.replace(`{${k}}`, escapeHTML(v));
-        aiBody+=`<div class="ai-signal ${s.level}"><div class="ai-signal-label">${lbl}</div><div class="ai-signal-detail">${det}</div></div>`;
+        aiBody+=`<div class="ai-signal ${escapeHTML(s.level)}"><div class="ai-signal-label">${lbl}</div><div class="ai-signal-detail">${det}</div></div>`;
       }
     }
     aiBody+=`<div class="interp" style="margin-top:8px">${t('aiClosingNote')}</div>`;

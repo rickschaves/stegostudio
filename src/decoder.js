@@ -1,3 +1,6 @@
+// LEGADO: decoder do formato lossless anterior à F21. Continua sendo o probe
+// barato/compatível e é tentado antes do caminho v3. Novos PNGs com senha usam
+// extractLSBStudioV3() abaixo; sem senha, a escrita compatível continua neste formato.
 function extractLSBStudio(imageData, password='') {
   const d = imageData.data;
   const hLen = HEADER_BYTES;
@@ -44,6 +47,13 @@ function extractLSBStudio(imageData, password='') {
   if (len<=0||len>5_000_000) return null;
   const payload = new Uint8Array(len);
   payload.compressed = compressed; // anexa o flag para o decoder descomprimir
+  // Metadado LOCAL (não exportado): em formatos legados/hostis a senha pode
+  // participar do framing mesmo quando o corpo final é texto puro. Isso evita
+  // afirmar "senha ignorada" quando ela foi necessária para desmascarar o
+  // header furtivo ou reconstruir a ordem embaralhada do corpo.
+  payload.stealth = stealth;
+  payload.shuffled = shuffled;
+  payload.passwordUsedForFraming = password.length > 0 && (stealth || shuffled);
   const headerBits = hLen*8;
   const bodyBits = len*8;
 
@@ -108,6 +118,93 @@ function extractLSBStudio(imageData, password='') {
     }
   }
   return payload;
+}
+
+
+// ════════════════════════════════════════
+//  F21 v3 — decoder PNG/lossless protegido por senha
+// ════════════════════════════════════════
+// A sonda v3 só roda quando o chamador já tem senha e o probe legado falhou.
+// HMAC do header valida antes de bodyLen/mode/stcW influenciarem alocação ou loops.
+async function extractLSBStudioV3(imageData, password='') {
+  if (!password || password.length === 0) return null;
+  const d = imageData.data;
+  const op = opaquePixels(d);
+  if (op.length < F21_PREFIX_CARRIER_PIXELS) return null;
+
+  // O bootstrap físico não é uma faixa crua de bits: os 448 bits lógicos são
+  // recuperados como síndrome de um STC fixo sobre a região canônica inicial.
+  const yPrefix = new Uint8Array(F21_PREFIX_CARRIER_PIXELS);
+  for (let k = 0; k < yPrefix.length; k++) yPrefix[k] = d[op[k]*4+2] & 1;
+  const prefixBits = stcExtract(yPrefix, F21_PREFIX_BITS, STC_H,
+    makeStcSubmatrix(STC_H, F21_BOOTSTRAP_STC_W, F21_BOOTSTRAP_STC_SEED));
+  const prefix = new Uint8Array(F21_PREFIX_BYTES);
+  for (let i = 0; i < F21_PREFIX_BITS; i++) if (prefixBits[i]) prefix[i >> 3] |= 1 << (7 - (i & 7));
+  const salt = prefix.slice(0, F21_STRUCTURAL_SALT_BYTES);
+  const maskedHeader = prefix.slice(F21_STRUCTURAL_SALT_BYTES);
+  const opened = await f21OpenHeader(salt, maskedHeader, password, op.length);
+  if (!opened) return null;
+
+  const h = opened.parsed;
+  const modeByte = h.modeFlags;
+  const shuffled = !!(modeByte & FLAG_SHUFFLED);
+  const adaptive = !!(modeByte & FLAG_ADAPTIVE);
+  const compressed = !!(modeByte & FLAG_COMPRESSED);
+  const isStc = !!(modeByte & FLAG_STC);
+  const mode = modeByte & ~(FLAG_SHUFFLED | FLAG_ADAPTIVE | FLAG_STEALTH |
+                           FLAG_COMPRESSED | FLAG_STC | FLAG_HILLV2);
+  const bodyBits = h.bodyLen * 8;
+  const body = new Uint8Array(h.bodyLen);
+
+  if (isStc) {
+    const n = bodyBits * h.stcW;
+    const Hhat = makeStcSubmatrix(STC_H, h.stcW);
+    const y = new Uint8Array(n);
+    for (let k = 0; k < n; k++) y[k] = d[op[F21_PREFIX_CARRIER_PIXELS + k]*4+2] & 1;
+    const m = stcExtract(y, bodyBits, STC_H, Hhat);
+    for (let i = 0; i < bodyBits; i++) if (m[i]) body[i >> 3] |= 1 << (7 - (i & 7));
+  } else {
+    // Todo v3 não-STC usa body-order; o validador do header rejeita a combinação
+    // sem FLAG_SHUFFLED antes de chegarmos aqui.
+    if (!shuffled) return null;
+    // Mesma permutação byte-granular do encoder: reduz o pico de memória sem
+    // mudar a fronteira criptográfica (o corpo já é AES-GCM ciphertext).
+    const byteOrder = await f21ShuffledOrder(h.bodyLen, opened.bodyOrderKey);
+    if (adaptive) {
+      const cost = hillCostMap(d, imageData.width, imageData.height);
+      const orderPx = adaptiveOrder(cost, op.subarray(F21_PREFIX_CARRIER_PIXELS));
+      if (bodyBits > orderPx.length) return null;
+      for (let k = 0; k < bodyBits; k++) {
+        const outByte = k >> 3, bitInByte = k & 7;
+        const dstByte = byteOrder[outByte];
+        body[dstByte] |= (d[orderPx[k]*4+2] & 1) << (7 - bitInByte);
+      }
+    } else if (mode === MODE_B) {
+      for (let k = 0; k < bodyBits; k++) {
+        const outByte = k >> 3, bitInByte = k & 7;
+        const dstByte = byteOrder[outByte];
+        body[dstByte] |= (d[op[F21_PREFIX_CARRIER_PIXELS + k]*4+2] & 1) << (7 - bitInByte);
+      }
+    } else if (mode === MODE_RGB) {
+      for (let k = 0; k < bodyBits; k++) {
+        const outByte = k >> 3, bitInByte = k & 7;
+        const dstByte = byteOrder[outByte];
+        const px = op[F21_PREFIX_CARRIER_PIXELS + Math.floor(k/3)];
+        body[dstByte] |= (d[px*4 + (k % 3)] & 1) << (7 - bitInByte);
+      }
+    } else return null;
+  }
+
+  try {
+    const plainBytes = await f21DecryptOpenedBody(body, opened);
+    return { v3:true, headerMatched:true, bodyAuthenticated:true, compressed,
+      plainBytes, modeFlags:modeByte, stcW:h.stcW, bodyLen:h.bodyLen };
+  } catch (_) {
+    // Header válido + corpo GCM inválido é evidência estrutural real, mas não
+    // mensagem recuperada. O chamador mantém essa distinção no relatório/UI.
+    return { v3:true, headerMatched:true, bodyAuthenticated:false, compressed,
+      plainBytes:null, modeFlags:modeByte, stcW:h.stcW, bodyLen:h.bodyLen };
+  }
 }
 
 // ════════════════════════════════════════
@@ -425,7 +522,7 @@ function extractHeader(bytes, islandStart) {
   let header = '';
   for (let i = 0; i < pre.length; i++) {
     const b = pre[i];
-    // ASCII imprimível (letras, números, underscore) = parte do magic
+    // ASCII permitido no token (letras, números, underscore) = parte do magic
     if ((b >= 48 && b <= 57) || (b >= 65 && b <= 90) || (b >= 97 && b <= 122) || b === 95) {
       header += String.fromCharCode(b);
     } else if (header.length > 0) {
@@ -433,10 +530,14 @@ function extractHeader(bytes, islandStart) {
       break;
     }
   }
-  // Only names whose framing is actually known are treated as tool headers. An
-  // arbitrary alphanumeric prefix inside ciphertext is not protocol evidence.
-  // The generic investigator can still expose the text island as a candidate; it
-  // simply cannot gain trust from an unknown prefix.
+  // Two different boundaries live here and must not be conflated:
+  // 1) the accumulation loop above admits only [0-9A-Za-z_], constraining the token;
+  // 2) this allowlist decides which constrained names count as protocol evidence.
+  // Render safety does NOT depend on either guard: downstream HTML sinks escape
+  // headerName independently. That separation lets F9 expand recognition later
+  // without turning a parser change into a markup-injection regression.
+  // An arbitrary alphanumeric prefix can still be exposed as text by the generic
+  // investigator; it simply cannot gain protocol trust from an unknown name.
   if (/^(?:JOI_LSB\d?|STEGO|LSB|STEG)$/i.test(header)) return header;
   return null;
 }
@@ -739,7 +840,7 @@ const STEGOMALWARE_PATTERNS = [
   { key:'malwDownloadExec', sev:'crit', rx:/\b(curl|wget)\b[\s\S]{0,80}\|\s*(sh|bash|python|perl)\b|\b(sh|bash)\s+-c\b|\bchmod\s+\+x\b|\bcertutil\b[\s\S]{0,20}-urlcache/i },
   { key:'malwReverseShell', sev:'crit', rx:/\/dev\/tcp\/\d|\bnc\b\s+-[a-z]*e\b|\bncat\b[\s\S]{0,20}-e\b|\bbash\s+-i\b[\s\S]{0,12}>&|socket\.socket\([\s\S]{0,40}connect/i },
   { key:'malwJsEval', sev:'crit', rx:/\beval\s*\(\s*(atob|unescape|String\.fromCharCode|decodeURIComponent)|new\s+Function\s*\(\s*["'`]|document\.write\s*\(\s*unescape/i },
-  { key:'malwScriptInject', sev:'crit', rx:/<script[\s>]|<iframe\b[\s\S]{0,80}\bsrc\s*=|\bonerror\s*=\s*["']?[a-z(]|<\?php\b/i },
+  { key:'malwScriptInject', sev:'crit', preview:'context', rx:/<script[\s>]|<iframe\b[\s\S]{0,80}\bsrc\s*=|\bonerror\s*=\s*["']?[a-z(]|<\?php\b/i },
   { key:'malwWinScript', sev:'crit', rx:/\bWScript\.Shell\b|\bShell\.Application\b|CreateObject\s*\(\s*["']?(WScript|Scripting\.|Shell)|\b(Auto_?Open|Document_Open|Workbook_Open)\b/i },
   { key:'malwExecHeader', sev:'crit', rx:/^MZ[\x00-\x1f]|\x7fELF|^#!\s*\/(bin|usr)\/(env\s+)?(ba|z)?sh/ },
   // ── Atenção: indicadores suspeitos, não necessariamente maliciosos ──
@@ -747,6 +848,38 @@ const STEGOMALWARE_PATTERNS = [
   { key:'malwUrl', sev:'warn', rx:/\bhttps?:\/\/[^\s"'<>]{4,}/i },
   { key:'malwBase64Blob', sev:'warn', rx:/[A-Za-z0-9+/]{120,}={0,2}/ },
 ];
+function stegomalwareContext(text, index, matchLength) {
+  // Alguns detectores (por exemplo <script>) reconhecem apenas o gatilho e
+  // precisam de uma pequena janela para mostrar o conteúdo relevante ao redor.
+  // Indicadores autocontidos (URL, endereço cripto, Base64 etc.) mostram apenas
+  // o próprio match, evitando repetir trechos grandes da mensagem recuperada.
+  const at = Math.max(0, Number.isFinite(index) ? index : 0);
+  const ml = Math.max(1, Math.min(Number.isFinite(matchLength) ? matchLength : 1, 80));
+  let start = Math.max(0, at - 48);
+  let end = Math.min(text.length, at + ml + 120);
+  // Não parta pares substitutos UTF-16 nas bordas do preview. O detector trabalha
+  // em offsets de JS, mas o trecho exportado/renderizado deve continuar sendo
+  // uma string Unicode persistível em UTF-8 por consumidores externos.
+  if (start > 0) {
+    const c = text.charCodeAt(start);
+    if (c >= 0xDC00 && c <= 0xDFFF) start--;
+  }
+  if (end < text.length && end > 0) {
+    const c = text.charCodeAt(end - 1);
+    if (c >= 0xD800 && c <= 0xDBFF) end--;
+  }
+  let snippet = text.slice(start, end);
+  if (start > 0) snippet = '…' + snippet;
+  if (end < text.length) snippet += '…';
+  return snippet;
+}
+function stegomalwareMatchPreview(match) {
+  const raw = String(match || '');
+  if (!raw) return '';
+  // Limite por code point para nunca cortar surrogate pair no preview curto.
+  const chars = Array.from(raw);
+  return chars.length > 80 ? chars.slice(0,80).join('') + '…' : raw;
+}
 function detectStegomalware(text) {
   if (!text || text.length < 4) return [];
   const out = [], seen = new Set();
@@ -754,7 +887,14 @@ function detectStegomalware(text) {
     const m = text.match(p.rx);
     if (m && !seen.has(p.key)) {
       seen.add(p.key);
-      out.push({ key:p.key, sev:p.sev, snippet:(m[0]||'').slice(0,80) });
+      const match = m[0] || '';
+      out.push({
+        key:p.key,
+        sev:p.sev,
+        snippet:p.preview === 'context'
+          ? stegomalwareContext(text, m.index, match.length)
+          : stegomalwareMatchPreview(match)
+      });
     }
   }
   return out;
@@ -903,6 +1043,45 @@ async function osGunzip(bytes){
   return new Uint8Array(buf);
 }
 
+// Classifica bytes recuperados por motores de terceiros sem destruí-los.
+// A evidência de recuperação é dos BYTES; texto é apenas uma visão quando o
+// conteúdo é UTF-8 legível. Arquivos binários permanecem byte a byte intactos
+// para download local e nunca atravessam o JSON público automaticamente.
+function classifyThirdPartyPayload(bytes, fileName='', source='payload'){
+  if(!(bytes instanceof Uint8Array) || bytes.length===0)
+    return {text:null, binary:false, bytes:null, fileName:fileName||null, mime:'application/octet-stream'};
+
+  const lower=String(fileName||'').toLowerCase();
+  const ext=(lower.match(/\.([a-z0-9]{1,10})$/)||[])[1]||'';
+  let magicExt='', mime='application/octet-stream';
+  if(bytes.length>=8 && bytes[0]===0x89&&bytes[1]===0x50&&bytes[2]===0x4e&&bytes[3]===0x47){ magicExt='png'; mime='image/png'; }
+  else if(bytes.length>=3 && bytes[0]===0xff&&bytes[1]===0xd8&&bytes[2]===0xff){ magicExt='jpg'; mime='image/jpeg'; }
+  else if(bytes.length>=4 && bytes[0]===0x50&&bytes[1]===0x4b&&([0x03,0x05,0x07].includes(bytes[2]))&&([0x04,0x06,0x08].includes(bytes[3]))){ magicExt='zip'; mime='application/zip'; }
+  else if(bytes.length>=4 && bytes[0]===0x25&&bytes[1]===0x50&&bytes[2]===0x44&&bytes[3]===0x46){ magicExt='pdf'; mime='application/pdf'; }
+  else if(bytes.length>=2 && bytes[0]===0x1f&&bytes[1]===0x8b){ magicExt='gz'; mime='application/gzip'; }
+
+  const binaryExts=new Set(['png','jpg','jpeg','gif','webp','bmp','zip','gz','gzip','7z','rar','pdf','exe','dll','bin','dat','mp3','mp4','mov','avi','wav','ogg','woff','woff2','ttf','otf']);
+  const forceBinary=!!magicExt || binaryExts.has(ext);
+  let text=null;
+  if(!forceBinary){
+    try{
+      const candidate=new TextDecoder('utf-8',{fatal:true}).decode(bytes);
+      const chars=Array.from(candidate);
+      let good=0;
+      for(const ch of chars){
+        const c=ch.codePointAt(0);
+        if(c===9||c===10||c===13||(c>=32&&c!==0x7f)) good++;
+      }
+      if(chars.length>0 && good/chars.length>=0.9) text=candidate;
+    }catch(_){ text=null; }
+  }
+
+  if(text!==null) return {text, binary:false, bytes, fileName:fileName||null, mime:'text/plain;charset=utf-8'};
+  const safeSource=String(source||'payload').toLowerCase().replace(/[^a-z0-9_-]+/g,'_')||'payload';
+  const inferred=fileName || `${safeSource}_payload.${magicExt||ext||'bin'}`;
+  return {text:null, binary:true, bytes, fileName:inferred, mime};
+}
+
 // Decodifica uma mensagem OpenStego de imageData, retornando texto ou null.
 // Tenta a senha fornecida E a seed sem-senha (98234782). Descomprime se preciso.
 // A camada AES (useEncryption) ainda não é suportada → retorna null nesse caso
@@ -917,11 +1096,15 @@ async function osDecodeMessage(imageData, password){
     if(res.useEncryption) return { text:null, encrypted:true, fileName:res.fileName };
     let bytes=res.data;
     if(res.useCompression){
-      try{ bytes=await osGunzip(res.data); }catch(_){ /* deixa cru se falhar */ }
+      // Se o framing declara gzip, só há conteúdo recuperado depois de a
+      // descompressão terminar com sucesso. Salvar o stream comprimido com o
+      // nome original seria byte-exato para o wire, mas NÃO para o arquivo.
+      try{ bytes=await osGunzip(res.data); }catch(_){ return null; }
     }
-    let text;
-    try{ text=new TextDecoder('utf-8',{fatal:false}).decode(bytes); }catch(_){ text=null; }
-    return { text, encrypted:false, fileName:res.fileName };
+    const payload=classifyThirdPartyPayload(bytes, res.fileName, 'openstego');
+    return { text:payload.text, data:payload.bytes, binary:payload.binary,
+             fileName:res.fileName, downloadName:payload.fileName, mime:payload.mime,
+             encrypted:false, usedEmptyPassword:pw==='' };
   }
   return null;
 }
@@ -1109,7 +1292,12 @@ async function shDecodeJpeg(jpegBytes, password, dec){
   const attempts = (password && password.length>0) ? [password, ''] : [''];
   for(const pw of attempts){
     const res=await shExtractCore(ev, pw, 3, 2);
-    if(res && res.ok) return { text:res.text, fileName:res.fileName, encrypted:false };
+    if(res && res.ok && res.data instanceof Uint8Array && res.data.length>0){
+      const payload=classifyThirdPartyPayload(res.data, res.fileName, 'steghide');
+      return { text:payload.text, data:payload.bytes, binary:payload.binary,
+               fileName:res.fileName, downloadName:payload.fileName, mime:payload.mime,
+               encrypted:false, usedEmptyPassword:pw==='' };
+    }
   }
   return null;
 }
@@ -1275,8 +1463,10 @@ function ogDecodeJpeg(jpegBytes,password,dec){
   for(const k of attempts){
     const r=ogExtract(bits,k);
     if(r && ogLooksLikeContent(r.data)){
-      return { text:new TextDecoder('utf-8',{fatal:false}).decode(r.data),
-               truncated:r.truncated, len:r.len };
+      const payload=classifyThirdPartyPayload(r.data, '', 'outguess');
+      return { text:payload.text, data:payload.bytes, binary:payload.binary,
+               downloadName:payload.fileName, mime:payload.mime,
+               truncated:r.truncated, len:r.len, usedDefaultKey:k===OG_DEFAULT_KEY };
     }
   }
   return null;

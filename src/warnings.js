@@ -24,10 +24,10 @@ function renderAdversarialWarning(r) {
 
   const rows = items.slice(0, 8).map(it => {
     const reason = t(it.reasonKey || 'advGeneric');
-    const safe = escapeHTML(it.str);
+    const safe = it.str;
     return `<div class="adv-item">
-      <div class="adv-item-reason">${reason}</div>
-      <div class="adv-item-str">"${safe}"</div>
+      <div class="adv-item-reason">${escapeHTML(reason)}</div>
+      <div class="adv-item-str">"${escapeHTML(safe)}"</div>
     </div>`;
   }).join('');
 
@@ -53,7 +53,7 @@ function renderStegomalwareWarning(r) {
   const sevLabel = s => s === 'crit' ? t('malwSevCrit') : t('malwSevWarn');
   const rows = items.slice(0, 8).map(it => `
     <div class="adv-item">
-      <div class="adv-item-reason">[${sevLabel(it.sev)}] ${t(it.key)}</div>
+      <div class="adv-item-reason">[${escapeHTML(sevLabel(it.sev))}] ${escapeHTML(t(it.key))}</div>
       <div class="adv-item-str">"${escapeHTML(it.snippet)}"</div>
     </div>`).join('');
   host.innerHTML = `

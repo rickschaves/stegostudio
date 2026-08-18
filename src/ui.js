@@ -30,9 +30,95 @@ function hideHelpModal() {
 // CHANGELOG contém versões semver (v2.10+). CHANGELOG_LEGACY preserva versões pré-semver (≤ v2.9.1),
 // exibidas com sufixo "— Legacy". O divisor entre os dois é renderizado em renderChangelog.
 const CHANGELOG = [
-  { ver:'v2.42.29', date:'2026-08-16', title:{en:'Security and semantic cleanup after independent review',pt:'Limpeza de segurança e semântica após revisão independente'}, items:[
-    {t:'fix', en:'<b>Suspicious strings recovered from file bytes are now escaped before rendering.</b> Crafted file content can no longer become markup inside the Strings accordion.', pt:'<b>Strings suspeitas recuperadas dos bytes do arquivo agora são escapadas antes da renderização.</b> Conteúdo preparado no arquivo não pode mais virar markup dentro do accordion de Strings.'},
-    {t:'chg', en:'<b>The lowest AI-origin bucket no longer says “Unlikely”, and the low-noise interpretation no longer turns a weak heuristic into a probable origin claim.</b> Both now stay within suspicion/compatibility language.', pt:'<b>O degrau mais baixo de origem por IA não usa mais “Improvável”, e a interpretação de ruído baixo não transforma uma heurística fraca em afirmação de origem provável.</b> Ambos permanecem na linguagem de suspeita/compatibilidade.'},
+  { ver:'v2.43.12', date:'2026-08-18', title:{en:'Cleaner stegomalware previews',pt:'Prévia de stegomalware mais limpa'}, items:[
+    {t:'fix', en:'<b>Self-contained stegomalware indicators no longer repeat unrelated surrounding message text.</b> URLs, crypto addresses and long Base64 blobs show only the matched indicator, while script-like triggers keep the short Unicode-safe context needed to show the relevant code.', pt:'<b>Indicadores autocontidos de stegomalware não repetem mais trechos sem relação da mensagem ao redor.</b> URLs, endereços cripto e blobs Base64 longos mostram apenas o indicador encontrado, enquanto gatilhos como scripts mantêm o contexto curto e Unicode-safe necessário para exibir o código relevante.'},
+  ]},
+  { ver:'v2.43.11', date:'2026-08-18', title:{en:'Unicode-safe warnings and better recovered filenames',pt:'Avisos Unicode íntegros e nomes de arquivos recuperados melhores'}, items:[
+    {t:'fix', en:'<b>Stegomalware context previews no longer split emoji or other supplementary Unicode characters at the crop boundary.</b> Warning snippets stay readable in the interface and remain safe to persist from exported reports.', pt:'<b>Os trechos de contexto do stegomalware não cortam mais emojis ou outros caracteres Unicode suplementares no meio.</b> Os avisos permanecem legíveis na interface e seguros para persistência a partir dos relatórios exportados.'},
+    {t:'fix', en:'<b>Long recovered-file names now keep their final extension when Save file shortens the name.</b> Formats such as .zip, .png and .pdf remain identifiable after download.', pt:'<b>Nomes longos de arquivos recuperados agora preservam a extensão final quando Salvar arquivo encurta o nome.</b> Formatos como .zip, .png e .pdf continuam identificáveis após o download.'},
+    {t:'chg', en:'<b>The Password ignored notice is shorter and clearer.</b> When the supplied password was not needed by the winning recovery path, the panel now states that the message was recovered without a password.', pt:'<b>O aviso Senha ignorada ficou mais curto e claro.</b> Quando a senha informada não foi necessária na rota vencedora, o painel agora informa que a mensagem foi recuperada sem senha.'},
+  ]},
+  { ver:'v2.43.10', date:'2026-08-18', title:{en:'Clearer Threat semantics and richer stegomalware context',pt:'Threat mais claro e contexto mais útil de stegomalware'}, items:[
+    {t:'chg', en:'<b>Threat 100 is now reserved for direct confirmed recovery.</b> Strong heuristic evidence without a validated recovery can still reach 99 / HIGH, but no longer shares the terminal number used by CONFIRMED results.', pt:'<b>O Threat 100 agora fica reservado à recuperação direta confirmada.</b> Evidência heurística forte sem recuperação validada ainda pode chegar a 99 / ALTO, mas não compartilha mais o número terminal usado por resultados CONFIRMADOS.'},
+    {t:'fix', en:'<b>Stegomalware warnings now show useful bounded context around the detected pattern instead of only the fragment that triggered the rule.</b> Recovered code remains inert text and is never interpreted as HTML.', pt:'<b>Os avisos de stegomalware agora mostram um contexto curto e útil ao redor do padrão detectado, em vez de apenas o fragmento que disparou a regra.</b> Código recuperado continua sendo exibido como texto inerte e nunca é interpretado como HTML.'},
+  ]},
+  { ver:'v2.43.9', date:'2026-08-18', title:{en:'Byte-exact recovered files and more accurate password context',pt:'Arquivos recuperados byte a byte e contexto de senha mais preciso'}, items:[
+    {t:'fix', en:'<b>Password ignored is no longer shown when the supplied password was actually required to reveal a concealed header or reconstruct a shuffled legacy payload.</b> The note now explains that the recovered message does not require the supplied password.', pt:'<b>Senha ignorada não aparece mais quando a senha informada foi realmente necessária para revelar um header furtivo ou reconstruir um payload legado embaralhado.</b> O aviso agora explica que a mensagem recuperada não exige a senha informada.'},
+    {t:'fix', en:'<b>Files recovered through compatible third-party methods now preserve their original bytes for saving.</b> Binary payloads are presented as recovered files instead of lossy UTF-8 text, while genuine text remains readable and copyable; declared compressed content is only offered after successful decompression.', pt:'<b>Arquivos recuperados por métodos compatíveis de terceiros agora preservam os bytes originais ao salvar.</b> Payloads binários são apresentados como arquivos recuperados em vez de texto UTF-8 corrompido, enquanto conteúdo textual continua legível e copiável; conteúdo declarado como comprimido só é oferecido após descompressão bem-sucedida.'},
+  ]},
+  { ver:'v2.43.8', date:'2026-08-17', title:{en:'Clearer password handling and consistent modal scrollbars',pt:'Uso de senha mais claro e scrollbars consistentes nos modais'}, items:[
+    {t:'fix', en:'<b>If a password is supplied but recovery succeeds without using it, the decoded-message panel now says Password ignored.</b> An unnecessary password no longer looks like a validated password, and unprotected robust JPEG can fall back to its no-password path.', pt:'<b>Se uma senha for informada mas a recuperação acontecer sem usá-la, o quadro da mensagem agora avisa Senha ignorada.</b> Uma senha desnecessária não parece mais uma senha validada, e o JPEG resistente sem proteção pode voltar corretamente ao caminho sem senha.'},
+    {t:'chg', en:'<b>How it works, Version history and About this project now use the same styled internal scrollbar language as the rest of the interface.</b>', pt:'<b>Como Funciona, Histórico de versões e Sobre este projeto agora usam a mesma linguagem visual de scrollbar interna do restante da interface.</b>'},
+  ]},
+  { ver:'v2.43.7', date:'2026-08-17', title:{en:'Stronger direct-recovery evidence and smaller PNG output',pt:'Evidência direta mais forte e saída PNG menor'}, items:[
+    {t:'chg', en:'<b>Complete direct recovery through supported compatible methods now closes Threat at 100 / CONFIRMED.</b> Identification without recovered content and partial/truncated recovery remain below the terminal state.', pt:'<b>A recuperação direta completa por métodos compatíveis suportados agora fecha o Threat em 100 / CONFIRMADO.</b> Identificação sem conteúdo recuperado e recuperação parcial/truncada permanecem abaixo do estado terminal.'},
+    {t:'chg', en:'<b>Successful Decode Status now uses the same Message recovered ✓ wording across recovery methods.</b> The identified method and protection remain separate evidence.', pt:'<b>O Decode Status de sucesso agora usa a mesma mensagem Mensagem recuperada ✓ entre os métodos de recuperação.</b> O método identificado e a proteção permanecem como evidências separadas.'},
+    {t:'chg', en:'<b>PNG output now uses adaptive lossless row filtering before DEFLATE.</b> This can substantially reduce output size on many images without changing decoded pixels or the hidden payload.', pt:'<b>A saída PNG agora usa filtragem lossless adaptativa por linha antes do DEFLATE.</b> Isso pode reduzir substancialmente o tamanho em muitas imagens sem alterar os pixels decodificados nem o payload oculto.'},
+    {t:'fix', en:'<b>The expanded Encoder editor now covers both real and alternative messages consistently.</b> Compact in-field controls no longer compete with the scrollbar, manual textarea resizing is removed, and the modal shows carrier capacity when available.', pt:'<b>O editor expandido do Encoder agora atende de forma consistente às mensagens real e alternativa.</b> Controles compactos dentro do campo não competem mais com a scrollbar, o redimensionamento manual foi removido e o modal mostra a capacidade da portadora quando disponível.'},
+  ]},
+  { ver:'v2.43.6', date:'2026-08-17', title:{en:'Format-aware steganalysis and safer message editing',pt:'Esteganálise por formato e edição de mensagem mais segura'}, items:[
+    {t:'chg', en:'<b>The Analyzer now shows only the steganalysis family that applies to the file.</b> Lossless images use one format / LSB accordion, while JPEG uses JPEG / DCT; Decode Status now lives in the applicable surface instead of an unavailable panel.', pt:'<b>O Analyzer agora mostra apenas a família de esteganálise aplicável ao arquivo.</b> Imagens lossless usam um único accordion formato / LSB, enquanto JPEG usa JPEG / DCT; o Decode Status agora fica na superfície aplicável em vez de um painel indisponível.'},
+    {t:'chg', en:'<b>JPEG / DCT now reports Method identified instead of separate native/third-party rows.</b> STEGO·STUDIO Robust and compatible third-party methods share the same public label, while locked, damaged and invalid robust states remain separate.', pt:'<b>JPEG / DCT agora informa Método identificado em vez de linhas separadas para o modo nativo e terceiros.</b> STEGO·STUDIO Resistente e métodos compatíveis de terceiros usam o mesmo rótulo público, enquanto estados resistente bloqueado, danificado ou inválido continuam separados.'},
+    {t:'add', en:'<b>The Encoder message field can open a larger synchronized editor.</b> Real line breaks and Unicode formatting are preserved, while literal sequences such as \\n remain literal text. Recovered messages keep the bounded scroll view with Copy and Save TXT.', pt:'<b>O campo de mensagem do Encoder agora pode abrir um editor maior e sincronizado.</b> Quebras de linha reais e Unicode são preservados, enquanto sequências literais como \\n continuam sendo texto literal. Mensagens recuperadas mantêm a visualização limitada com scroll, Copiar e Salvar TXT.'},
+    {t:'fix', en:'<b>An EXIF read failure is no longer scored as missing camera metadata by the origin classifier.</b> Unreadable metadata is treated as unknown instead of generating absence labels and weights.', pt:'<b>Uma falha de leitura EXIF não é mais pontuada como ausência de metadados de câmera pelo classificador de origem.</b> Metadados ilegíveis passam a ser tratados como desconhecidos em vez de gerar rótulos e pesos de ausência.'},
+  ]},
+  { ver:'v2.43.5', date:'2026-08-17', title:{en:'Richer JPEG evidence and better long-message handling',pt:'Evidência JPEG mais rica e mensagens longas melhores'}, items:[
+    {t:'fix', en:'<b>Recovered messages are no longer silently cut at 5,000 characters on robust-JPEG and supported third-party extraction paths.</b> Long messages stay complete in the report while the on-screen box uses internal scroll plus Expand, Copy and Save TXT controls.', pt:'<b>Mensagens recuperadas não são mais cortadas silenciosamente em 5.000 caracteres nos caminhos JPEG robusto e de terceiros compatíveis.</b> Mensagens longas ficam completas no relatório enquanto a caixa na tela usa scroll interno, além de Expandir, Copiar e Salvar TXT.'},
+    {t:'add', en:'<b>The JPEG / DCT panel now brings JPEG structure and direct extraction evidence together.</b> It shows robust-mode state, Reed-Solomon corrections and third-party engine evidence, explaining why a direct recovery can be CONFIRMED even when simple DCT statistics look normal.', pt:'<b>O painel JPEG / DCT agora reúne estrutura JPEG e evidência de extração direta.</b> Ele mostra estado do modo resistente, correções Reed-Solomon e evidência de motores de terceiros, explicando por que uma recuperação direta pode ficar CONFIRMADA mesmo quando estatísticas DCT simples parecem normais.'},
+    {t:'fix', en:'<b>Encoder character counts now match the exact trimmed text that will be encoded.</b> The capacity meter and the post-encode statistics no longer disagree because of leading/trailing whitespace.', pt:'<b>A contagem de caracteres do Encoder agora corresponde exatamente ao texto aparado que será codificado.</b> O medidor de capacidade e as estatísticas após o encode não divergem mais por causa de espaços ou quebras nas bordas.'},
+    {t:'chg', en:'<b>EXIF/XMP badges now call out camera-identification gaps in words.</b> Unavailable metadata, partial camera IDs and metadata with no complete camera ID are distinct states, so the warning no longer depends on color alone.', pt:'<b>Os badges EXIF/XMP agora destacam em texto lacunas na identificação da câmera.</b> Metadados indisponíveis, ID parcial e metadados sem ID completo de câmera são estados distintos, então o alerta não depende mais apenas da cor.'},
+  ]},
+  { ver:'v2.43.4', date:'2026-08-17', title:{en:'Stricter confirmed robust-JPEG recovery',pt:'Confirmação JPEG robusta mais estrita'}, items:[
+    {t:'fix', en:'<b>An authenticated but empty robust-JPEG payload is no longer treated as recovered content or promoted to 100 / CONFIRMED.</b> Valid password-protected and compressed robust messages continue to decode normally.', pt:'<b>Um payload JPEG robusto autenticado, mas vazio, não é mais tratado como conteúdo recuperado nem promovido a 100 / CONFIRMADO.</b> Mensagens robustas válidas com senha e mensagens comprimidas continuam sendo decodificadas normalmente.'},
+  ]},
+  { ver:'v2.43.3', date:'2026-08-17', title:{en:'Safer robust-JPEG recovery validation',pt:'Validação mais segura da recuperação JPEG robusta'}, items:[
+    {t:'fix', en:'<b>Malformed, truncated or unreadable inner content in a STEGO·STUDIO robust JPEG can no longer be promoted to 100 / CONFIRMED.</b> Valid password-protected and compressed no-password robust messages remain supported.', pt:'<b>Conteúdo interno malformado, truncado ou ilegível em um JPEG robusto do STEGO·STUDIO não pode mais ser promovido a 100 / CONFIRMADO.</b> Mensagens robustas válidas com senha e mensagens comprimidas sem senha continuam compatíveis.'},
+  ]},
+  { ver:'v2.43.2', date:'2026-08-17', title:{en:'Confirmed Threat aligned for robust JPEG',pt:'Threat confirmado alinhado no JPEG robusto'}, items:[
+    {t:'fix', en:'<b>A successfully recovered STEGO·STUDIO robust JPEG now shows the same 100 / CONFIRMED Threat state as a directly recovered native PNG.</b> Passive JPEG analysis and failed/no-password attempts keep their existing scores.', pt:'<b>Um JPEG robusto do STEGO·STUDIO recuperado com sucesso agora mostra o mesmo estado Threat 100 / CONFIRMADO de um PNG nativo recuperado diretamente.</b> A análise passiva do JPEG e tentativas sem senha/com falha mantêm os scores existentes.'},
+  ]},
+  { ver:'v2.43.1', date:'2026-08-17', title:{en:'Robust JPEG restored, confirmed Threat, faster mobile swipe',pt:'JPEG robusto restaurado, Threat confirmado e swipe mais rápido'}, items:[
+    {t:'fix', en:'<b>Password-protected encodes once again generate the sturdier JPEG companion image.</b> Protected PNG keeps the new F21 structure, while the robust JPEG keeps its existing compatible payload format.', pt:'<b>Codificações protegidas por senha voltam a gerar a imagem JPEG mais resistente.</b> O PNG protegido mantém a nova estrutura F21, enquanto o JPEG robusto preserva seu formato de payload compatível já existente.'},
+    {t:'chg', en:'<b>When a native STEGO·STUDIO PNG/lossless message is directly recovered, Threat now shows 100 / CONFIRMED.</b> Passive scores and failed/absent-password analyses keep their existing heuristic weights.', pt:'<b>Quando uma mensagem nativa STEGO·STUDIO em PNG/lossless é recuperada diretamente, o Threat agora mostra 100 / CONFIRMADO.</b> Scores passivos e análises com senha ausente/incorreta mantêm os pesos heurísticos existentes.'},
+    {t:'chg', en:'<b>High Capacity Mode now describes its trade-off without promising that every RGB output will score as more detectable.</b> It prioritizes room over minimizing embedding changes and can leave stronger statistical traces, especially with larger payloads; STC remains the stealth-oriented default.', pt:'<b>O Modo de Alta Capacidade agora descreve o trade-off sem prometer que toda saída RGB terá score mais detectável.</b> Ele prioriza espaço em vez de minimizar as alterações do embedding e pode deixar traços estatísticos mais fortes, especialmente com payloads maiores; STC continua sendo o padrão orientado à furtividade.'},
+    {t:'chg', en:'<b>Mobile tab switching now accepts a short fast flick and needs a much shorter normal drag.</b> Vertical scrolling, system edge gestures, reversal before release and touch-click suppression remain preserved.', pt:'<b>A troca de abas no celular agora aceita um flick curto e rápido e exige um arrasto normal bem menor.</b> Rolagem vertical, gestos das bordas do sistema, reversão antes de soltar e supressão do clique pós-swipe continuam preservados.'},
+  ]},
+  { ver:'v2.43.0', date:'2026-08-16', title:{en:'Stronger protection for password-protected PNG payloads',pt:'Proteção mais forte para payloads PNG com senha'}, items:[
+    {t:'chg', en:'<b>New password-protected lossless images now use a fresh structural salt for every encode and independent derived keys for header protection, body order where applicable, and AES-GCM content.</b> The previous 32-bit structural seed is no longer used by this PNG path; effective security still depends on password strength.', pt:'<b>Novas imagens lossless protegidas por senha agora usam um salt estrutural novo a cada codificação e chaves derivadas independentes para proteção do header, ordem do corpo quando aplicável e conteúdo AES-GCM.</b> A antiga seed estrutural de 32 bits não é mais usada nesse caminho PNG; a segurança efetiva continua dependendo da força da senha.'},
+    {t:'fix', en:'<b>Protected header data is authenticated before its mode or declared body size is trusted.</b> If the header is valid but the protected body is damaged, the Decoder now reports that distinction instead of treating it as an ordinary failed recovery.', pt:'<b>Os dados do header protegido são autenticados antes que o modo ou o tamanho declarado do corpo sejam considerados confiáveis.</b> Se o header for válido mas o corpo protegido estiver danificado, o Decoder agora informa essa diferença em vez de tratar o caso como uma falha comum de recuperação.'},
+    {t:'chg', en:'<b>Existing STEGO·STUDIO images remain decodable.</b> New images saved without a password keep the existing format. A passive analysis without the password may not identify the new protected PNG header; that absence is not treated as evidence that no hidden content exists.', pt:'<b>Imagens STEGO·STUDIO existentes continuam decodificáveis.</b> Novas imagens salvas sem senha mantêm o formato existente. Uma análise passiva sem a senha pode não identificar o novo header PNG protegido; essa ausência não é tratada como evidência de que não existe conteúdo oculto.'},
+    {t:'chg', en:'<b>Password-protected PNG capacity now accounts for the stronger bootstrap overhead.</b> Very small carriers may therefore have less usable room than before.', pt:'<b>A capacidade de PNGs protegidos por senha agora considera o overhead do bootstrap mais forte.</b> Por isso, portadoras muito pequenas podem ter menos espaço utilizável do que antes.'},
+    {t:'fix', en:'<b>The Encoder stealth self-check now says only what its built-in checks measured.</b> Passing its threshold is no longer described as being statistically indistinguishable from noise.', pt:'<b>O auto-check furtivo do Encoder agora diz apenas o que as verificações internas mediram.</b> Passar pelo limiar não é mais descrito como ser estatisticamente indistinguível de ruído.'},
+  ]},
+  { ver:'v2.42.35', date:'2026-08-16', title:{en:'Smoother mobile swipe',pt:'Swipe móvel mais fluido'}, items:[
+    {t:'chg', en:'<b>Mobile swipe now starts across almost the whole working panel, including image drop areas, buttons, labels and accordion headers.</b> A normal tap still acts normally; once a horizontal drag is clearly established, the panel follows the finger and the accidental click that would follow the swipe is suppressed.', pt:'<b>O swipe móvel agora pode começar em quase todo o painel de trabalho, inclusive áreas de imagem, botões, labels e cabeçalhos de accordion.</b> Um toque normal continua funcionando normalmente; quando um arrasto horizontal fica claro, o painel acompanha o dedo e o clique acidental que viria depois do swipe é suprimido.'},
+    {t:'chg', en:'<b>Changing tabs now requires a substantially longer drag.</b> Short and indecisive movements return to the current tab, making accidental tab changes much less likely.', pt:'<b>Trocar de aba agora exige um arrasto consideravelmente mais longo.</b> Movimentos curtos ou indecisos retornam à aba atual, reduzindo bastante trocas acidentais.'},
+    {t:'fix', en:'<b>Switching tabs no longer restarts the terminal typing animation.</b> The existing terminal state is preserved, reducing unnecessary work and making repeated swipes feel smoother on mobile.', pt:'<b>Trocar de aba não reinicia mais a animação de digitação do terminal.</b> O estado existente do terminal é preservado, reduzindo trabalho desnecessário e deixando swipes repetidos mais suaves no celular.'},
+  ]},
+  { ver:'v2.42.34', date:'2026-08-16', title:{en:'Interactive mobile swipe',pt:'Swipe móvel interativo'}, items:[
+    {t:'chg', en:'<b>The mobile swipe now follows the finger continuously.</b> The current panel moves out while the neighboring panel enters at the same rate; reversing the finger reverses the interface before release.', pt:'<b>O swipe móvel agora acompanha continuamente o dedo.</b> O painel atual sai enquanto o painel vizinho entra na mesma proporção; inverter o movimento do dedo também inverte a interface antes de soltar.'},
+    {t:'chg', en:'<b>Releasing early snaps back; crossing the commit distance completes the transition smoothly.</b> Vertical scrolling remains native until horizontal intent is clear, and browser/system edge space stays reserved.', pt:'<b>Soltar cedo faz a interface voltar; ultrapassar a distância de confirmação completa a transição suavemente.</b> A rolagem vertical permanece nativa até a intenção horizontal ficar clara, e as bordas continuam reservadas ao navegador/sistema.'},
+    {t:'fix', en:'<b>The neighboring panel is anchored to the live mobile viewport during the gesture.</b> Mobile browser chrome changes no longer cancel a valid swipe, and an explicit tab tap immediately clears any pending swipe animation.', pt:'<b>O painel vizinho fica ancorado ao viewport móvel real durante o gesto.</b> Mudanças nas barras do navegador móvel não cancelam mais um swipe válido, e tocar explicitamente numa aba limpa imediatamente qualquer animação pendente.'},
+  ]},
+  { ver:'v2.42.33', date:'2026-08-16', title:{en:'First mobile swipe',pt:'Primeiro swipe móvel'}, items:[
+    {t:'add', en:'<b>Introduced the first optional mobile swipe between Encode and Analyze · Decode.</b> The initial implementation changed tabs after a completed horizontal gesture while keeping the visible tabs as the canonical controls.', pt:'<b>Introduziu o primeiro swipe móvel opcional entre Encode e Analyze · Decode.</b> A implementação inicial trocava de aba após a conclusão de um gesto horizontal, mantendo as abas visíveis como controles canônicos.'},
+    {t:'fix', en:'<b>The first swipe preserved vertical scrolling, rejected multi-touch/cancelled sequences and reserved browser/system edge gestures.</b>', pt:'<b>O primeiro swipe preservava a rolagem vertical, rejeitava sequências multitouch/canceladas e reservava gestos de borda do navegador/sistema.</b>'},
+  ]},
+  { ver:'v2.42.32', date:'2026-08-16', title:{en:'Safer Analyzer result rendering',pt:'Renderização mais segura dos resultados do Analyzer'}, items:[
+    {t:'fix', en:'<b>Additional Analyzer values are now displayed safely as text.</b> Crafted file content in these result surfaces cannot be interpreted as HTML markup.', pt:'<b>Valores adicionais do Analyzer agora são exibidos com segurança como texto.</b> Conteúdo preparado no arquivo nessas superfícies de resultado não pode ser interpretado como markup HTML.'},
+    {t:'fix', en:'<b>Unknown header-like prefixes found during deep scan remain untrusted and are displayed safely as text.</b>', pt:'<b>Prefixos desconhecidos semelhantes a headers encontrados no deep scan continuam sem confiança e são exibidos com segurança como texto.</b>'},
+    {t:'chg', en:'<b>Legacy forensic-report-v2 values remain unchanged for compatibility.</b>', pt:'<b>Valores legados do forensic-report-v2 permanecem inalterados por compatibilidade.</b>'},
+  ]},
+  { ver:'v2.42.31', date:'2026-08-16', title:{en:'Safer display of forensic values',pt:'Exibição mais segura dos valores forenses'}, items:[
+    {t:'fix', en:'<b>More forensic result fields are now displayed safely as text.</b> This includes Strings notes and types, detected header names, rare-color details, social-platform labels and AI format labels.', pt:'<b>Mais campos dos resultados forenses agora são exibidos com segurança como texto.</b> Isso inclui notas e tipos de Strings, nomes de header detectados, detalhes de cores raras, rótulos de plataformas sociais e rótulos de formato da IA.'},
+  ]},
+  { ver:'v2.42.30', date:'2026-08-16', title:{en:'Clearer AI labels and safer unavailable messages',pt:'Rótulos de IA mais claros e mensagens de indisponibilidade mais seguras'}, items:[
+    {t:'fix', en:'<b>Vector/icon and digital-graphic AI labels no longer imply likelihood or a negative origin verdict.</b> They describe observed patterns while keeping the heuristic score capped.', pt:'<b>Os rótulos de IA para arte vetorial/ícones e gráficos digitais não implicam mais probabilidade nem um veredito negativo de origem.</b> Eles descrevem padrões observados mantendo o score heurístico limitado.'},
+    {t:'fix', en:'<b>Unavailable Protocol and LSB notes are now displayed safely as text.</b>', pt:'<b>Notas de indisponibilidade de Protocolo e LSB agora são exibidas com segurança como texto.</b>'},
+  ]},
+  { ver:'v2.42.29', date:'2026-08-16', title:{en:'Security and semantic cleanup',pt:'Limpeza de segurança e semântica'}, items:[
+    {t:'fix', en:'<b>Suspicious strings recovered from file bytes are escaped before being rendered.</b> Crafted file content can no longer become markup in the Strings panel.', pt:'<b>Strings suspeitas recuperadas dos bytes do arquivo são escapadas antes da renderização.</b> Conteúdo preparado no arquivo não pode mais virar markup no painel Strings.'},
+    {t:'fix', en:'<b>The lowest AI-origin state now uses very-low suspicion/compatibility wording instead of “Unlikely”.</b> Low-noise interpretation no longer implies a probable synthetic origin or an unmeasured causal steganography claim.', pt:'<b>O nível mais baixo de origem por IA agora usa linguagem de suspeita/compatibilidade muito baixa em vez de “Improvável”.</b> A interpretação de baixo ruído não implica mais origem sintética provável nem uma relação causal não medida com esteganografia.'},
     {t:'fix', en:'<b>Public report values no longer leak Portuguese prose in the known format/string/DCT paths.</b> DCT failure reasons use stable codes and are localized only when displayed.', pt:'<b>Valores do relatório público não vazam mais texto em português nos caminhos conhecidos de formato/strings/DCT.</b> Motivos de falha DCT usam códigos estáveis e são traduzidos somente na exibição.'},
     {t:'fix', en:'<b>GPS is shown once in the EXIF panel while the existing <code>fields.GPS = "present"</code> report field is retained for compatibility.</b> Carrier Preflight fallbacks are also consistently English before i18n applies.', pt:'<b>GPS aparece uma única vez no painel EXIF, enquanto o campo existente <code>fields.GPS = "present"</code> é preservado no relatório por compatibilidade.</b> Os fallbacks do Carrier Preflight também ficam consistentemente em inglês antes da aplicação do i18n.'},
   ]},
@@ -63,23 +149,15 @@ const CHANGELOG = [
   { ver:'v2.42.23', date:'2026-08-15', title:{en:'Carrier Preflight warns before reusing a suspicious cover',pt:'Carrier Preflight avisa antes de reutilizar uma portadora suspeita'}, items:[
     {t:'add', en:'<b>The Encoder now performs a lightweight Carrier Preflight when a lossless cover is loaded.</b> If it finds an obvious existing STEGO·STUDIO header or coherent readable text in common pixel-LSB layouts, Encode is blocked until you choose another image or explicitly continue with the current carrier.', pt:'<b>O Encoder agora faz uma pré-verificação leve da portadora quando uma imagem sem perda é carregada.</b> Se encontrar um header STEGO·STUDIO evidente ou texto coerente legível em layouts comuns de LSB nos pixels, o Encode fica bloqueado até você escolher outra imagem ou confirmar que deseja continuar com a portadora atual.'},
     {t:'chg', en:'<b>A negative preflight result is presented only as “no obvious prior hidden content detected”, never as proof that the carrier is clean.</b> Password-concealed or unsupported hidden data can still exist.', pt:'<b>Um resultado negativo da pré-verificação é apresentado apenas como “nenhum conteúdo oculto anterior óbvio foi detectado”, nunca como prova de que a portadora está limpa.</b> Dados ocultos protegidos por senha ou fora dos padrões verificados ainda podem existir.'},
-    {t:'chg', en:'<b>The public About text now describes Claude review as independence of context rather than third-party certification and states explicitly that AI reviewers can also be wrong.</b>', pt:'<b>O texto público de Sobre agora descreve a revisão com Claude como independência de contexto, não certificação por terceiros, e afirma explicitamente que revisores de IA também podem errar.</b>'},
   ]},
-  { ver:'v2.42.22', date:'2026-08-15', title:{en:'About This Project: the experiment behind the tool',pt:'Sobre este projeto: o experimento por trás da ferramenta'}, items:[
-    {t:'add', en:'<b>A new “About This Project” section explains what STEGO·STUDIO is beyond the feature list.</b> It describes the project as a human-directed AI software-development experiment, outlines the roles of human direction, GPT and Claude, and states clearly that the tool is experimental rather than a certified forensic or security product.', pt:'<b>Uma nova seção “Sobre este projeto” explica o que é o STEGO·STUDIO além da lista de recursos.</b> Ela apresenta o projeto como um experimento de desenvolvimento de software por IA sob direção humana, descreve os papéis da direção humana, do GPT e do Claude e deixa claro que a ferramenta é experimental, não um produto certificado de perícia ou segurança.'},
-    {t:'chg', en:'<b>Project attribution now states human direction as well as AI development.</b> The public footer and generated artifact identify RASC as concept/human direction and JOI explicitly as AI.', pt:'<b>Os créditos do projeto agora registram a direção humana além do desenvolvimento por IA.</b> O rodapé público e o artefato gerado identificam RASC como idealização/direção humana e JOI explicitamente como IA.'},
-  ]},
-  { ver:'v2.42.21', date:'2026-08-15', title:{en:'Public-source hygiene and obsolete neural paths removed',pt:'Higiene do fonte público e remoção de caminhos neurais obsoletos'}, items:[
-    {t:'chg', en:'<b>Public source comments were reduced to implementation-relevant technical documentation.</b> Personal information and private development-process notes were removed from the public tree.', pt:'<b>Os comentários do código-fonte público foram reduzidos à documentação técnica relevante para a implementação.</b> Informações pessoais e notas do processo privado de desenvolvimento foram removidas da árvore pública.'},
-    {t:'fix', en:'<b>Unreachable decision branches left behind by the removed neural/Pro path were deleted.</b> The Analyzer keeps the same reachable behaviour without carrying dormant logic that could be mistaken for an active capability.', pt:'<b>Ramos de decisão inalcançáveis deixados pelo antigo caminho neural/Pro foram removidos.</b> O Analyzer mantém o mesmo comportamento alcançável sem carregar lógica dormente que poderia ser confundida com uma capacidade ativa.'},
-    {t:'chg', en:'<b>Public authorship now states explicitly that JOI is AI and that RASC provides concept and human direction.</b>', pt:'<b>Os créditos públicos agora deixam explícito que JOI é IA e que RASC responde pela idealização e direção humana.</b>'},
+  { ver:'v2.42.22', date:'2026-08-15', title:{en:'About This Project',pt:'Sobre este projeto'}, items:[
+    {t:'add', en:'<b>Added About This Project to the in-app menu.</b> It explains the project scope and makes clear that STEGO·STUDIO is experimental rather than a certified forensic or security product.', pt:'<b>Adicionada a seção Sobre este projeto ao menu do aplicativo.</b> Ela explica o escopo do projeto e deixa claro que o STEGO·STUDIO é experimental, não um produto forense ou de segurança certificado.'},
   ]},
   { ver:'v2.42.20', date:'2026-08-15', title:{en:'Alternate-message validation feedback refined',pt:'Feedback de validação da mensagem alternativa refinado'}, items:[
     {t:'fix', en:'<b>The missing alternate-message warning now appears directly below the alternate password field that triggered it.</b> It disappears immediately when a non-blank alternate message begins.', pt:'<b>O aviso de mensagem alternativa ausente agora aparece diretamente abaixo do campo de senha alternativa que o disparou.</b> Ele desaparece imediatamente quando começa uma mensagem alternativa não vazia.'},
   ]},
-  { ver:'v2.42.19', date:'2026-08-15', title:{en:'Safer alternate-layer setup and public-source privacy cleanup',pt:'Configuração mais segura da camada alternativa e limpeza de privacidade do fonte público'}, items:[
+  { ver:'v2.42.19', date:'2026-08-15', title:{en:'Safer alternate-layer setup',pt:'Configuração mais segura da camada alternativa'}, items:[
     {t:'fix', en:'<b>Enabling the alternate message can no longer silently produce a one-layer image.</b> Encode stays disabled until the alternate layer has a non-blank message and its own password, or the layer is turned off.', pt:'<b>Ativar a mensagem alternativa não pode mais gerar silenciosamente uma imagem com uma camada só.</b> O Encode permanece desabilitado até que a camada alternativa tenha uma mensagem não vazia e sua própria senha, ou seja desativada.'},
-    {t:'chg', en:'<b>Public code comments and repository-facing documentation were cleaned up to remove private development context and unnecessary personal references.</b>', pt:'<b>Comentários do código público e documentação voltada ao repositório foram limpos para remover contexto privado de desenvolvimento e referências pessoais desnecessárias.</b>'},
   ]},
   { ver:'v2.42.18', date:'2026-08-15', title:{en:'Enter shortcuts for Encode and Analyze',pt:'Atalhos de Enter para Encode e Analyze'}, items:[
     {t:'add', en:'<b>Pressing Enter in the Encoder password fields starts Encode when the real button is available.</b> Message textareas keep normal multiline behaviour.', pt:'<b>Pressionar Enter nos campos de senha do Encoder inicia o Encode quando o botão real está disponível.</b> As áreas de mensagem mantêm o comportamento normal de múltiplas linhas.'},
@@ -115,17 +193,15 @@ const CHANGELOG = [
   ]},
   { ver:'v2.42.10', date:'2026-08-13', title:{en:'The interface locks during analysis on purpose now',pt:'A interface trava durante a análise de propósito agora'}, items:[
     {t:'chg', en:'<b>While an analysis runs, everything that could change it is now deliberately locked.</b> It already behaved that way, but only by accident: the work occupies the browser so thoroughly that clicks and pasted images were simply never noticed. That is not a promise — it would quietly disappear the day the analysis becomes smoother or moves to a background thread, and interaction would return without anyone choosing it. Loading an image, editing the password, clearing, and switching language now wait for the analysis to finish, and say so rather than appearing to ignore you.', pt:'<b>Enquanto uma análise roda, tudo que poderia alterá-la fica deliberadamente travado.</b> Já se comportava assim, mas por acidente: o trabalho ocupa o navegador de tal forma que cliques e imagens coladas simplesmente não eram percebidos. Isso não é uma promessa — sumiria no dia em que a análise ficasse mais fluida ou fosse para uma thread de fundo, e a interação voltaria sem ninguém ter escolhido. Carregar imagem, editar a senha, limpar e trocar de idioma agora aguardam a análise terminar, e dizem isso em vez de parecer que estão ignorando você.'},
-    {t:'fix', en:'<b>Pasting an image with Ctrl+V followed a separate path that did not invalidate a running analysis.</b> Dragging a file in and pasting one were two copies of the same loading routine, and only the first had been taught to discard results in flight. There is now a single entry point that both use, and a build check refuses any future path that bypasses it. Two smaller repairs travel with it: finishing an analysis no longer re-enables the Analyse button without checking whether an image is actually loaded, and re-analysing the same image now supersedes the previous report instead of sharing its identity.', pt:'<b>Colar uma imagem com Ctrl+V seguia um caminho separado que não invalidava a análise em andamento.</b> Arrastar um arquivo e colar um eram duas cópias da mesma rotina de carregamento, e só a primeira havia sido ensinada a descartar resultados em voo. Agora existe um ponto de entrada único que os dois usam, e uma checagem de build recusa qualquer caminho futuro que o contorne. Dois reparos menores vêm junto: terminar uma análise não reabilita mais o botão Analisar sem conferir se há imagem carregada, e reanalisar a mesma imagem agora substitui o relatório anterior em vez de compartilhar a identidade dele.'},
-    {t:'fix', en:'<b>The build was reporting its own size in characters and calling them bytes.</b> The file contains accented text and symbols, which occupy more than one byte each, so the number shown after every build was smaller than the file actually on disk — by about nineteen thousand bytes. It now reports both, labelled correctly. Encoder timings were also extended to cover the stealth self-check and the sturdier JPEG, which happen after the main work and are part of what you wait for.', pt:'<b>O build reportava o próprio tamanho em caracteres e os chamava de bytes.</b> O arquivo contém texto acentuado e símbolos, que ocupam mais de um byte cada, então o número exibido após cada build era menor que o arquivo realmente em disco — cerca de dezenove mil bytes menor. Agora reporta os dois, rotulados corretamente. Os tempos do codificador também passaram a cobrir a autoverificação de furtividade e o JPEG resistente, que acontecem depois do trabalho principal e fazem parte do que você espera.'},
+    {t:'fix', en:'<b>Pasting an image with Ctrl+V followed a separate path that did not invalidate a running analysis.</b> Dragging a file in and pasting one were two copies of the same loading routine, and only the first had been taught to discard results in flight. There is now a single entry point that both use. Two smaller repairs travel with it: finishing an analysis no longer re-enables the Analyse button without checking whether an image is actually loaded, and re-analysing the same image now supersedes the previous report instead of sharing its identity.', pt:'<b>Colar uma imagem com Ctrl+V seguia um caminho separado que não invalidava a análise em andamento.</b> Arrastar um arquivo e colar um eram duas cópias da mesma rotina de carregamento, e só a primeira havia sido ensinada a descartar resultados em voo. Agora existe um ponto de entrada único que os dois usam. Dois reparos menores vêm junto: terminar uma análise não reabilita mais o botão Analisar sem conferir se há imagem carregada, e reanalisar a mesma imagem agora substitui o relatório anterior em vez de compartilhar a identidade dele.'},
   ]},
   { ver:'v2.42.9', date:'2026-08-13', title:{en:'Loading a new image mid-analysis showed the old one\u2019s results',pt:'Carregar imagem nova no meio da análise mostrava o resultado da antiga'}, items:[
     {t:'fix', en:'<b>If you loaded a second image while the first was still being analysed, the preview changed but the results that appeared belonged to the previous image.</b> An analysis takes several seconds and reads the current image repeatedly along the way, so swapping the image underneath it left the two halves describing different files. Each analysis now works from a copy taken when it started, and checks before showing anything whether it is still the current one — if not, it finishes quietly and shows nothing. Changing the language mid-analysis could bring the old results back the same way, and no longer does.', pt:'<b>Se você carregasse uma segunda imagem enquanto a primeira ainda era analisada, o preview mudava mas os resultados que apareciam eram da imagem anterior.</b> Uma análise leva alguns segundos e consulta a imagem atual várias vezes no caminho, então trocar a imagem por baixo dela deixava as duas metades descrevendo arquivos diferentes. Cada análise agora trabalha a partir de uma cópia tirada quando começou, e confere antes de exibir qualquer coisa se ainda é a corrente — se não for, termina em silêncio e não mostra nada. Trocar o idioma no meio da análise trazia os resultados antigos de volta pelo mesmo caminho, e não traz mais.'},
     {t:'fix', en:'<b>A file that could not be read was being reported as a file with no camera metadata.</b> Those are different things, and the second one feeds the origin classifier — so a read failure was quietly becoming evidence about the image. The report now distinguishes not read from read and empty.', pt:'<b>Um arquivo que não pôde ser lido era reportado como um arquivo sem metadados de câmera.</b> São coisas diferentes, e a segunda alimenta o classificador de origem — então uma falha de leitura virava, em silêncio, evidência sobre a imagem. O relatório agora distingue não lido de lido e vazio.'},
-    {t:'add', en:'<b>The encoder now records how long each of its stages takes.</b> A report of it feeling slower could not be checked against anything, and nothing in recent versions changed the encoding itself. Rather than guess at an optimisation, the timings are available in the browser console as <code>__encTimings</code> so a real comparison can be made first.', pt:'<b>O codificador agora registra quanto tempo cada estágio dele leva.</b> Um relato de que estava mais lento não podia ser conferido contra nada, e nada nas versões recentes mudou a codificação em si. Em vez de chutar uma otimização, os tempos ficam disponíveis no console do navegador como <code>__encTimings</code> para que uma comparação real possa ser feita antes.'},
   ]},
   { ver:'v2.42.8', date:'2026-08-13', title:{en:'A frozen progress bar and a note that argued with itself',pt:'Uma barra travada e uma nota que discordava de si mesma'}, items:[
     {t:'fix', en:'<b>Analysing a second time could leave the progress bar stuck forever with nothing in the console.</b> Reading the file was wrapped in a promise that waited only for success — if the read failed, no error was raised, nothing was logged, and the wait simply never ended. That is why the failure looked like a freeze rather than a fault. File reading now reports failure, cancellation and silence alike, gives up after a minute rather than waiting indefinitely, and a second analysis cannot start while one is still running.', pt:'<b>Analisar uma segunda vez podia deixar a barra de progresso travada para sempre, sem nada no console.</b> A leitura do arquivo estava embrulhada numa promessa que esperava apenas pelo sucesso — se a leitura falhasse, nenhum erro era levantado, nada era registrado, e a espera simplesmente não terminava. É por isso que a falha parecia um congelamento e não um defeito. A leitura de arquivo agora reporta falha, cancelamento e silêncio igualmente, desiste após um minuto em vez de esperar indefinidamente, e uma segunda análise não começa enquanto uma ainda está rodando.'},
-    {t:'fix', en:'<b>The protocol panel showed the recovered message and, just below it, said no readable text had been recovered.</b> Three separate places describe the same finding — the threat tags, the panel heading, and its explanatory note — and each learned about confirmed extraction at a different time, so the last one was still describing the old state. All three now read the same source, and a build check compares them against each other so they cannot drift apart again.', pt:'<b>O painel de protocolo mostrava a mensagem recuperada e, logo abaixo, dizia que nenhum texto legível havia sido recuperado.</b> Três lugares distintos descrevem o mesmo achado — as tags de ameaça, o título do painel e a nota explicativa — e cada um aprendeu sobre extração confirmada em momento diferente, então o último ainda descrevia o estado antigo. Os três agora leem a mesma fonte, e uma checagem de build os compara entre si para que não voltem a divergir.'},
+    {t:'fix', en:'<b>The protocol panel showed the recovered message and, just below it, said no readable text had been recovered.</b> Three separate places describe the same finding — the threat tags, the panel heading, and its explanatory note — and each learned about confirmed extraction at a different time, so the last one was still describing the old state. All three now read the same state, so they no longer contradict each other.', pt:'<b>O painel de protocolo mostrava a mensagem recuperada e, logo abaixo, dizia que nenhum texto legível havia sido recuperado.</b> Três lugares distintos descrevem o mesmo achado — as tags de ameaça, o título do painel e a nota explicativa — e cada um aprendeu sobre extração confirmada em momento diferente, então o último ainda descrevia o estado antigo. Os três agora leem o mesmo estado, para que não se contradigam.'},
   ]},
   { ver:'v2.42.7', date:'2026-08-12', title:{en:'Two panels disagreeing about the same message',pt:'Dois painéis discordando sobre a mesma mensagem'}, items:[
     {t:'fix', en:'<b>With the right password, one panel said a payload had been extracted while the panel below called the protocol undetermined.</b> Both were describing the same file at the same moment. The Protocol panel only ever consulted the passive scan, which runs without your password and cannot see a payload whose header is hidden — so once the password revealed one, that panel had no idea and fell back to guessing. It now reads the same evidence the threat score does, ordered by strength, and distinguishes a header confirmed with your password from one merely spotted without it.', pt:'<b>Com a senha certa, um painel dizia que um payload havia sido extraído enquanto o painel logo abaixo chamava o protocolo de indeterminado.</b> Os dois descreviam o mesmo arquivo no mesmo instante. O painel Protocolo consultava apenas a varredura passiva, que roda sem a sua senha e não enxerga payload de cabeçalho escondido — então, quando a senha revelava um, aquele painel não sabia de nada e voltava a adivinhar. Agora ele lê a mesma evidência que o score de ameaça lê, ordenada por força, e distingue um cabeçalho confirmado com a sua senha de um apenas avistado sem ela.'},
@@ -139,8 +215,8 @@ const CHANGELOG = [
     {t:'fix', en:'<b>Two smaller repairs.</b> The exported report printed a placeholder instead of the image proportion it had already calculated. And the invisible element that catches a pasted image was marked as hidden from screen readers while still receiving keyboard focus, which leaves someone using one with no idea where they are.', pt:'<b>Dois reparos menores.</b> O relatório exportado imprimia um marcador de lugar em vez da proporção da imagem que ele já havia calculado. E o elemento invisível que captura uma imagem colada estava marcado como oculto para leitores de tela enquanto ainda recebia o foco do teclado, o que deixa quem usa um deles sem saber onde está.'},
   ]},
   { ver:'v2.42.4', date:'2026-08-11', title:{en:'The help was promising something the tool cannot do',pt:'A ajuda prometia algo que a ferramenta não faz'}, items:[
-    {t:'fix', en:'<b>The help said this tool reads Steghide files in BMP. It does not.</b> The BMP method was written and tested, but never wired up: a canvas hands over pixels top to bottom while Steghide reads them bottom to top, which shifts every position it looks at. So anyone opening a Steghide BMP here was told nothing was found — and could reasonably have concluded the file was clean. The help now says JPEG only, and admits that of the many ciphers Steghide offers, only its default is decrypted; the others are named rather than read.', pt:'<b>A ajuda dizia que esta ferramenta lê arquivos Steghide em BMP. Não lê.</b> O método BMP foi escrito e testado, mas nunca ligado: o canvas entrega os pixels de cima para baixo e o Steghide os lê de baixo para cima, o que desloca cada posição que ele procura. Então quem abrisse um BMP do Steghide aqui era informado de que nada foi encontrado — e poderia razoavelmente concluir que o arquivo estava limpo. A ajuda agora diz apenas JPEG, e admite que das muitas cifras que o Steghide oferece só a padrão é decifrada; as demais são nomeadas, não lidas.'},
-    {t:'chg', en:'<b>The status line at the bottom of each panel no longer builds any markup.</b> It used to be handed a formatted snippet and immediately take it apart again to recover the text inside — twice rewritten to do that more safely, when the honest fix was to stop doing it. Two of the three places that write there pass an error message, which can carry text drawn from the file being examined. It now receives plain text and a status class instead of HTML.', pt:'<b>A linha de status no rodapé de cada painel não monta mais marcação nenhuma.</b> Ela recebia um trecho formatado e imediatamente o desmontava para recuperar o texto de dentro — reescrita duas vezes para fazer isso com mais segurança, quando a correção honesta era parar de fazer. Duas das três chamadas passam uma mensagem de erro, que pode carregar texto vindo do arquivo em exame. Agora ela recebe texto simples e uma classe de status em vez de HTML.'},
+    {t:'fix', en:'<b>Steghide BMP files are not supported.</b> The previous help incorrectly implied they were, which could make a Steghide BMP appear clean when it was simply unreadable by this tool. The help now says JPEG only and clarifies that, among Steghide\'s many cipher choices, only the default is decrypted here; the others can be identified but not read.', pt:'<b>Arquivos Steghide em BMP não são suportados.</b> A ajuda anterior dava a entender incorretamente que eram, o que poderia fazer um BMP do Steghide parecer limpo quando na verdade a ferramenta apenas não conseguia lê-lo. A ajuda agora diz somente JPEG e esclarece que, entre as várias opções de cifra do Steghide, apenas a padrão é decifrada aqui; as demais podem ser identificadas, mas não lidas.'},
+    {t:'chg', en:'<b>Status messages are now rendered as plain text.</b> Error text can include information derived from the file being examined, so the status line no longer treats that content as markup.', pt:'<b>As mensagens de status agora são renderizadas como texto simples.</b> O texto de erro pode incluir informações derivadas do arquivo analisado, então a linha de status não trata mais esse conteúdo como marcação.'},
   ]},
   { ver:'v2.42.3', date:'2026-08-11', title:{en:'Fewer doors, and an honest page about what this tool can read',pt:'Menos portas, e uma página honesta sobre o que a ferramenta consegue ler'}, items:[
     {t:'add', en:'<b>A page now states exactly what this tool can and cannot read from other steganography tools.</b> Saying "supports Steghide" would be misleading: Steghide can encrypt with eighteen algorithms across seven modes, and this decoder implements two of those combinations \u2014 which means even its default cipher fails in six of its seven modes. That is measured against the real program, not estimated. The page also records that OpenStego payloads written with its own encryption are identified but not decrypted, and that F5 is only ever guessed at, never extracted.', pt:'<b>Uma página agora diz exatamente o que esta ferramenta consegue e não consegue ler de outras ferramentas de esteganografia.</b> Dizer "suporta Steghide" seria enganoso: o Steghide cifra com dezoito algoritmos em sete modos, e este decodificador implementa duas dessas combinações \u2014 o que significa que mesmo a cifra padrão dele falha em seis dos sete modos. Isso foi medido contra o programa real, não estimado. A página também registra que payloads do OpenStego escritos com a criptografia dele são identificados mas não decifrados, e que o F5 é apenas suposto, nunca extraído.'},
@@ -170,12 +246,8 @@ const CHANGELOG = [
   ]},
   { ver:'v2.39.0', date:'2026-08-11', title:{en:'When it cannot read the message, it can still name the tool',pt:'Quando não consegue ler a mensagem, ainda sabe nomear a ferramenta'}, items:[
     {t:'add', en:'<b>A new panel names the tool that hid the message, even when the message itself stays locked.</b> It appears only when every engine has failed \u2014 if the text came out, that is already the stronger proof and repeating it here would be noise. Two levels, kept deliberately far apart: <b>Confirmed</b> means Steghide\u2019s internal signature was actually read, which is proof rather than a guess, because that signature sits at positions derived from the password itself. <b>Indication</b> means something merely resembles a known tool. The two are told apart by icon, by the word itself, and by border style \u2014 never by colour alone.', pt:'<b>Um painel novo nomeia a ferramenta que escondeu a mensagem, mesmo quando a mensagem continua trancada.</b> Ele aparece só quando todos os motores falharam \u2014 se o texto saiu, essa já é a prova mais forte e repetir aqui seria ruído. Dois níveis, mantidos deliberadamente distantes: <b>Confirmado</b> significa que a assinatura interna do Steghide foi de fato lida, o que é prova e não palpite, porque essa assinatura fica em posições derivadas da própria senha. <b>Indício</b> significa que algo apenas se parece com uma ferramenta conhecida. Os dois se distinguem por ícone, pela palavra e pelo estilo da borda \u2014 nunca só por cor.'},
-    {t:'chg', en:'<b>The tool now says exactly which cipher defeated it.</b> Steghide can encrypt with any of eighteen algorithms across seven modes; this decoder implements two of those combinations. Instead of falling silent on the rest, it now reports the precise pair \u2014 <code>blowfish/CBC</code>, <code>rijndael-128/CTR</code> \u2014 so you know whether to reach for another tool or whether the file is simply damaged. The algorithm and mode tables were mapped by running the real Steghide once per combination, not copied from documentation.', pt:'<b>A ferramenta agora diz exatamente qual cifra a derrotou.</b> O Steghide pode cifrar com dezoito algoritmos em sete modos; este decodificador implementa duas dessas combinações. Em vez de silenciar diante das demais, ele passa a informar o par exato \u2014 <code>blowfish/CBC</code>, <code>rijndael-128/CTR</code> \u2014 para você saber se deve buscar outra ferramenta ou se o arquivo está simplesmente danificado. As tabelas de algoritmo e modo foram mapeadas rodando o Steghide real uma vez por combinação, não copiadas de documentação.'},
+    {t:'chg', en:'<b>The tool now says exactly which cipher defeated it.</b> Steghide can encrypt with any of eighteen algorithms across seven modes; this decoder implements two of those combinations. Instead of falling silent on the rest, it now reports the precise pair \u2014 <code>blowfish/CBC</code>, <code>rijndael-128/CTR</code> \u2014 so you know whether to reach for another tool or whether the file is simply damaged.', pt:'<b>A ferramenta agora diz exatamente qual cifra a derrotou.</b> O Steghide pode cifrar com dezoito algoritmos em sete modos; este decodificador implementa duas dessas combinações. Em vez de silenciar diante das demais, ele passa a informar o par exato \u2014 <code>blowfish/CBC</code>, <code>rijndael-128/CTR</code> \u2014 para você saber se deve buscar outra ferramenta ou se o arquivo está simplesmente danificado.'},
     {t:'fix', en:'<b>A failed decompression no longer leaves an error hanging in the background.</b> When the extracted bytes were not valid compressed data, the tool recovered correctly but left an untended rejected promise behind, which the browser reports as an unhandled error. Nothing visible broke; the noise is simply gone now.', pt:'<b>Uma descompressão que falha não deixa mais um erro pendurado em segundo plano.</b> Quando os bytes extraídos não eram dados comprimidos válidos, a ferramenta se recuperava corretamente mas deixava para trás uma promessa rejeitada sem tratamento, que o navegador reporta como erro não capturado. Nada visível quebrava; o ruído apenas deixou de existir.'},
-  ]},
-  { ver:'v2.38.2', date:'2026-08-10', title:{en:'The build was quietly eating characters',pt:'O build comia caracteres em silêncio'}, items:[
-    {t:'fix', en:'<b>Three characters were being deleted from the embedded cryptography library every time the tool was built.</b> The build assembles this single file by pasting each piece of source into place, and the paste step treated <code>$$</code> as an instruction rather than as text — so it swallowed one of each pair. No error, no warning, nothing in the output to look at. The affected lines belong to a formatting routine this tool never calls, so nothing it does today was wrong; the danger was that the next library embedded here might not be so lucky.', pt:'<b>Três caracteres eram apagados da biblioteca de criptografia embutida a cada build da ferramenta.</b> O build monta este arquivo único colando cada pedaço do código no lugar, e a etapa de colagem tratava <code>$$</code> como instrução em vez de texto — engolindo um de cada par. Sem erro, sem aviso, sem nada visível no resultado. As linhas afetadas pertencem a uma rotina de formatação que esta ferramenta nunca chama, então nada do que ela faz hoje estava errado; o perigo era a próxima biblioteca embutida aqui não ter a mesma sorte.'},
-    {t:'add', en:'<b>A new build check compares every assembled piece against its source, character for character.</b> The defect above produced a working tool and a clean test run, which is exactly why it survived so long. The check was confirmed by putting the defect back on purpose and watching it fail.', pt:'<b>Uma nova checagem de build compara cada peça montada com a sua fonte, caractere a caractere.</b> O defeito acima gerava uma ferramenta funcionando e uma bateria de testes limpa, que é precisamente por que ele durou tanto. A checagem foi confirmada reintroduzindo o defeito de propósito e vendo o teste falhar.'},
   ]},
   { ver:'v2.38.1', date:'2026-07-20', title:{en:'Two field fixes: needless resizing, and copy-paste',pt:'Dois consertos de campo: redimensionamento à toa e copiar-colar'}, items:[
     {t:'fix', en:'<b>Images already within the size limit are no longer resized.</b> The sturdier mode was cropping every image down to a multiple of 8 pixels — turning a 460×460 picture into 456×456 for no reason. The encoder already handles partial blocks at the edges, so the crop was needless. It now only applies when an image genuinely has to be shrunk to fit the 1080 px envelope.', pt:'<b>Imagens já dentro do limite de tamanho não são mais redimensionadas.</b> O modo resistente cortava toda imagem para um múltiplo de 8 pixels — transformando uma foto 460×460 em 456×456 sem motivo. O encoder já lida com blocos parciais nas bordas, então o corte era desnecessário. Agora ele só se aplica quando a imagem de fato precisa ser reduzida para caber no envelope de 1080 px.'},
@@ -213,18 +285,9 @@ const CHANGELOG = [
     {t:'chg', en:'When the message is too long for the sturdier version, it says so with the numbers — how much you need and how much fits — and points you to the PNG plus a channel that preserves files. It never generates a broken image.', pt:'Quando a mensagem é longa demais para a versão mais resistente, ela diz isso com os números — quanto você precisa e quanto cabe — e aponta para o PNG somado a um canal que preserva arquivos. Nunca gera uma imagem quebrada.'},
     {t:'fix', en:'Error correction refuses to guess. If the damage is beyond what it can repair, it reports failure rather than handing back a message that looks fine and is wrong.', pt:'A correção de erro se recusa a adivinhar. Se o estrago passa do que ela consegue reparar, ela reporta falha em vez de devolver uma mensagem que parece boa e está errada.'},
   ]},
-  { ver:'v2.36.1', date:'2026-07-19', title:{en:'Groundwork: the JPEG writer',pt:'Fundação: o escritor JPEG'}, items:[
-    {t:'add', en:'<b>The tool can now WRITE a JPEG from DCT coefficients</b>, not only read one. Until now the coefficient layer was read-only. This is the piece the robust mode needs in order to place a payload directly into the coefficients, without ever going through pixels — where it would be lost.', pt:'<b>A ferramenta agora sabe ESCREVER um JPEG a partir dos coeficientes DCT</b>, não só ler. Até aqui a camada de coeficientes era só de leitura. É a peça de que o modo robusto precisa para gravar um payload direto nos coeficientes, sem passar por pixels — onde ele se perderia.'},
-    {t:'chg', en:'Validated on 11 samples with a double check: the coefficients survive a round trip through our own reader, <b>and libjpeg reads the result as a normal JPEG</b> with every coefficient identical. Also verified from the final build, with progressive input and with deliberately modified coefficients.', pt:'Validado em 11 amostras com dupla checagem: os coeficientes sobrevivem à ida e volta pelo nosso leitor <b>e a libjpeg lê o resultado como um JPEG normal</b>, com todos os coeficientes idênticos. Verificado também a partir do build final, com entrada progressiva e com coeficientes deliberadamente modificados.'},
-    {t:'chg', en:'The writer builds optimal Huffman tables rather than reusing the standard ones. Files come out about 11% smaller, and — more to the point — they do not carry the signature of a naive encoder.', pt:'O escritor monta tabelas de Huffman ótimas em vez de reaproveitar as padrão. Os arquivos saem ~11% menores e, mais importante, não carregam a assinatura de um codificador ingênuo.'},
-    {t:'fix', en:'The forensic report now records whether the JPEG was progressive. Without it there was no way to tell, reading a report, which decoding path had been used.', pt:'O relatório forense agora registra se o JPEG era progressivo. Sem isso não havia como saber, lendo um relatório, qual caminho de decodificação foi usado.'},
-    {t:'chg', en:'No change to what you see or do in the tool — this is groundwork for the robust mode, which is still being built.', pt:'Nada muda no que você vê ou faz na ferramenta — isto é fundação para o modo robusto, que ainda está sendo construído.'},
-  ]},
   { ver:'v2.36.0', date:'2026-07-19', title:{en:'Progressive JPEG: the DCT reader finally opens it',pt:'JPEG progressivo: o leitor DCT finalmente abre'}, items:[
     {t:'add', en:'<b>Progressive JPEG (SOF2) is now read.</b> Until now the DCT coefficient reader refused these files, and that blind spot mattered: <b>Facebook and X publish progressive</b>. On those images the JPEG Analyzer showed nothing and the Decoder did not even attempt Steghide or OutGuess — on X in particular, which is the one platform that preserves payloads byte for byte.', pt:'<b>JPEG progressivo (SOF2) agora é lido.</b> Até aqui o leitor de coeficientes DCT recusava esses arquivos, e o ponto cego pesava: <b>Facebook e X publicam progressivo</b>. Nessas imagens o Analyzer-JPEG não mostrava nada e o Decoder nem tentava Steghide ou OutGuess — justamente no X, a única plataforma que preserva os payloads byte a byte.'},
     {t:'add', en:'The reader now accumulates the multiple scans a progressive file is built from, covering all four cases (DC first and refinement, AC first and refinement), plus EOB runs and successive approximation.', pt:'O leitor agora acumula os múltiplos scans que compõem um arquivo progressivo, cobrindo os quatro casos (DC primeira e refinamento, AC primeira e refinamento), mais EOB runs e aproximação sucessiva.'},
-    {t:'chg', en:'<b>Validated coefficient by coefficient against libjpeg</b> — the same method that validated the baseline reader. 30 cases: progressive, progressive with restart markers, 4:2:0, 4:2:2, 4:4:4, greyscale, odd dimensions, and real Steghide files. Every coefficient of every block identical. End to end, a Steghide message was recovered from a progressive file.', pt:'<b>Validado coeficiente a coeficiente contra a libjpeg</b> — o mesmo método que validou o leitor baseline. 30 casos: progressivo, progressivo com restart markers, 4:2:0, 4:2:2, 4:4:4, tons de cinza, dimensões ímpares e arquivos reais do Steghide. Todos os coeficientes de todos os blocos idênticos. Ponta a ponta, uma mensagem do Steghide foi recuperada de um arquivo progressivo.'},
-    {t:'chg', en:'<b>Nothing changed for baseline JPEG.</b> Proven by equivalence against the previous reader across 11 files, block by block, before integration.', pt:'<b>Nada mudou para JPEG baseline.</b> Provado por equivalência contra o leitor anterior em 11 arquivos, bloco a bloco, antes da integração.'},
     {t:'fix', en:'Removed the texts that said progressive was unsupported — the friendly notice on the DCT panel and the honest-limits item in the help. They would now be lying.', pt:'Removidos os textos que diziam que progressivo não era suportado — o aviso amigável do painel DCT e o item dos limites honestos na ajuda. Eles passariam a mentir.'},
   ]},
   { ver:'v2.35.2', date:'2026-07-18', title:{en:'The platform notice stops crediting the wrong method',pt:'O aviso de plataforma para de creditar o método errado'}, items:[
@@ -251,11 +314,9 @@ const CHANGELOG = [
   ]},
   { ver:'v2.33.3', date:'2026-07-18', title:{en:'Faster still: one read per analysis',pt:'Mais rápido ainda: uma leitura por análise'}, items:[
     {t:'chg', en:'The previous version stopped the two Decoder engines from repeating the same heavy work. This one finishes the job: the Analyzer was <i>also</i> decoding the same JPEG separately. The image is now decoded <b>once per analysis</b> and the result is shared by everything that needs it — up to <b>43% faster</b> on large photos, on top of the previous gain.', pt:'A versão anterior impediu que os dois motores do Decoder repetissem o mesmo trabalho pesado. Esta termina o serviço: o Analyzer <i>também</i> decodificava o mesmo JPEG por conta própria. Agora a imagem é decodificada <b>uma vez por análise</b> e o resultado é compartilhado por tudo que precisa dele — até <b>43% mais rápido</b> em fotos grandes, somado ao ganho anterior.'},
-    {t:'chg', en:'Again, nothing changed in what the tool finds or reports. Verified module by module, including the friendly message for progressive JPEGs, which depends on the decode failing — that path was preserved exactly.', pt:'De novo, nada mudou no que a ferramenta encontra ou reporta. Verificado módulo a módulo, incluindo a mensagem amigável para JPEG progressivo, que depende de o decode falhar — esse caminho foi preservado exatamente.'},
   ]},
   { ver:'v2.33.2', date:'2026-07-18', title:{en:'Decoder is faster on JPEG',pt:'Decoder mais rápido em JPEG'}, items:[
     {t:'chg', en:'When reading a JPEG, the Decoder was doing the same heavy work twice: the Steghide engine decoded the image\'s DCT coefficients, found nothing, and the OutGuess engine decoded exactly the same thing all over again. It now decodes once and shares the result. Around <b>25% faster</b> on JPEG, and the gain is biggest on large photos — where the wait was most noticeable.', pt:'Ao ler um JPEG, o Decoder fazia o mesmo trabalho pesado duas vezes: o motor Steghide decodificava os coeficientes DCT da imagem, não achava nada, e o motor OutGuess decodificava exatamente a mesma coisa de novo. Agora decodifica uma vez e compartilha o resultado. Cerca de <b>25% mais rápido</b> em JPEG, com o maior ganho nas fotos grandes — justamente onde a espera incomodava mais.'},
-    {t:'chg', en:'Nothing changed in what the Decoder finds — this is the same work, done once instead of twice. Verified engine by engine, on Steghide images, OutGuess images and clean images.', pt:'Nada mudou no que o Decoder encontra — é o mesmo trabalho, feito uma vez em vez de duas. Verificado motor a motor, em imagens do Steghide, do OutGuess e limpas.'},
   ]},
   { ver:'v2.33.1', date:'2026-07-18', title:{en:'A digital image is not an AI image',pt:'Imagem digital não é imagem de IA'}, items:[
     {t:'fix', en:'Rendered text, diagrams, flat art and exported screens saved as JPEG could be reported as <b>high probability of AI</b>. The signals behind that were real, but they only ever said "this is not a photograph" — none of them is specific to AI. The tool now recognises these as digital graphics, caps the AI score and classifies them under <b>digital art</b> instead.', pt:'Texto renderizado, diagramas, arte flat e telas exportadas em JPEG podiam ser reportados como <b>alta probabilidade de IA</b>. Os sinais por trás disso eram reais, mas eles só diziam "isto não é uma fotografia" — nenhum é específico de IA. A ferramenta agora reconhece esses casos como gráfico digital, limita o score de IA e classifica em <b>arte digital</b>.'},
@@ -768,6 +829,7 @@ document.getElementById('btn-clear-dec').addEventListener('click', () => {
     () => {
       bumpAnalysisGeneration();   // limpar também invalida análise em voo
       decID = null; decFile = null; decFmt = null; lastReport = null; lastRenderArgs = null;
+      if(typeof lastRecoveredFile!=='undefined') lastRecoveredFile=null;
       document.getElementById('dec-prev').src = '';
       document.getElementById('dec-pw').style.display = 'none';
       document.getElementById('dec-hint').style.display = 'flex';
@@ -794,30 +856,366 @@ document.getElementById('btn-clear-dec').addEventListener('click', () => {
     }
   );
 });
-function switchTab(t) {
+let tabSwitchGeneration = 0;
+let mobileSwipeAbortForTabSwitch = null;
+function switchTab(t, options) {
+  options = options || {};
+  // Navegação explícita vence imediatamente qualquer preview/settle de swipe.
+  // O commit interno do próprio swipe passa fromSwipe para não cancelar a si mesmo.
+  if (!options.fromSwipe && typeof mobileSwipeAbortForTabSwitch === 'function') {
+    mobileSwipeAbortForTabSwitch();
+  }
+  tabSwitchGeneration++;
   document.querySelectorAll('.tab').forEach(e => e.classList.remove('active'));
   document.querySelectorAll('.panel').forEach(e => e.classList.remove('active'));
   document.querySelector('.tab.'+t).classList.add('active');
   document.getElementById('panel-'+t).classList.add('active');
   document.getElementById('paste-anchor').focus({preventScroll:true});
 
-  // Re-dispara a digitação inicial se a aba estiver no estado vazio
-  if (t === 'enc' && !encID) {
-    resetStatus('enc-status', false);
-  } else if (t === 'dec' && !decID) {
-    resetStatus('dec-status');
+  // Trocar de aba é somente navegação: o terminal mantém exatamente o estado
+  // que já tinha. Reiniciar a digitação aqui causava re-renderizações repetidas do terminal e
+  // trabalho desnecessário justamente durante swipes repetidos no celular.
+}
+
+
+// ── Swipe móvel interativo entre as duas áreas principais ──────────────────
+// No mobile, o painel acompanha o dedo. A troca só vira estado real quando o
+// gesto é concluído; se o usuário recuar ou soltar cedo, ambos os painéis
+// retornam às posições de origem. O scroll vertical continua nativo até a
+// intenção horizontal ficar clara; só então o touchmove é bloqueado para que
+// o painel permaneça fisicamente preso ao dedo.
+const MOBILE_TAB_SWIPE = Object.freeze({
+  maxWidth: 700,
+  edge: 32,
+  lockX: 8,
+  dominance: 1.20,
+  verticalCancel: 12,
+  minCommitX: 85,
+  commitRatio: 0.28,
+  maxCommitX: 180,
+  flickMinX: 55,
+  flickVelocity: 0.45, // px/ms — gesto curto e rápido, estilo feed/galeria
+  settleMs: 210,
+  clickSuppressX: 14,
+});
+
+function mobileSwipeBlockedTarget(target) {
+  if (!target || typeof target.closest !== 'function') return false;
+  // O gesto deve poder nascer sobre quase todo o painel. Bloqueamos somente
+  // superfícies cujo próprio gesto horizontal precisa vencer (slider/edição ativa)
+  // ou um controle nativo que abre UI do sistema. Tap sem arrasto continua normal.
+  if (target.closest('input[type="range"], select, option, [contenteditable]:not([contenteditable="false"])')) return true;
+  const editable = target.closest('input:not([type="range"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="checkbox"]):not([type="radio"]):not([type="file"]), textarea');
+  return !!(editable && document.activeElement === editable);
+}
+
+function mobileSwipeDirection(tab) {
+  if (tab === 'enc') return -1;
+  if (tab === 'dec') return 1;
+  return 0;
+}
+
+function evaluateMobileSwipeMotion(startX, startY, x, y, startTab, viewportWidth, locked, cancelled) {
+  if (cancelled || !Number.isFinite(viewportWidth) || viewportWidth <= 0 || viewportWidth > MOBILE_TAB_SWIPE.maxWidth) {
+    return {state:'cancelled', offsetX:0};
+  }
+  if (startX <= MOBILE_TAB_SWIPE.edge || startX >= viewportWidth - MOBILE_TAB_SWIPE.edge) {
+    return {state:'cancelled', offsetX:0};
+  }
+  const direction = mobileSwipeDirection(startTab);
+  if (!direction) return {state:'cancelled', offsetX:0};
+
+  const dx = x - startX;
+  const dy = y - startY;
+  const ax = Math.abs(dx);
+  const ay = Math.abs(dy);
+
+  if (!locked) {
+    if (ay >= MOBILE_TAB_SWIPE.verticalCancel && ay > ax) return {state:'cancelled', offsetX:0};
+    if (ax < MOBILE_TAB_SWIPE.lockX || ax < ay * MOBILE_TAB_SWIPE.dominance) return {state:'pending', offsetX:0};
+    // Não há wrap: mover inicialmente para o lado sem aba vizinha não bloqueia
+    // o scroll nem o gesto; o usuário ainda pode voltar e cruzar a origem.
+    if (Math.sign(dx) !== direction) return {state:'pending', offsetX:0};
+  }
+
+  let offsetX = dx;
+  if (direction < 0) offsetX = Math.min(0, dx);
+  else offsetX = Math.max(0, dx);
+  offsetX = Math.max(-viewportWidth, Math.min(viewportWidth, offsetX));
+  return {state:'locked', offsetX};
+}
+
+function shouldCommitMobileSwipe(offsetX, panelWidth, elapsedMs=Infinity) {
+  if (!Number.isFinite(panelWidth) || panelWidth <= 0) return false;
+  const distance = Math.abs(offsetX);
+  const threshold = Math.min(
+    MOBILE_TAB_SWIPE.maxCommitX,
+    Math.max(MOBILE_TAB_SWIPE.minCommitX, panelWidth * MOBILE_TAB_SWIPE.commitRatio)
+  );
+  if (distance >= threshold) return true;
+  if (!Number.isFinite(elapsedMs) || elapsedMs <= 0) return false;
+  return distance >= MOBILE_TAB_SWIPE.flickMinX &&
+         (distance / elapsedMs) >= MOBILE_TAB_SWIPE.flickVelocity;
+}
+
+function bindMobileTabSwipe() {
+  const panels = Array.from(document.querySelectorAll('.panel'));
+  if (panels.length < 2) return;
+  let gesture = null;
+  let settling = false;
+  let settlingGesture = null;
+  let settleTimer = null;
+
+  function activeTabName() {
+    const active = document.querySelector('.tab.active');
+    if (!active) return null;
+    if (active.classList.contains('enc')) return 'enc';
+    if (active.classList.contains('dec')) return 'dec';
+    return null;
+  }
+
+  function panelFor(tab) { return document.getElementById('panel-'+tab); }
+  function otherTab(tab) { return tab === 'enc' ? 'dec' : 'enc'; }
+  function viewportWidth() {
+    return (window.visualViewport && window.visualViewport.width) ||
+           document.documentElement.clientWidth || window.innerWidth || 0;
+  }
+  function raf(fn) { return typeof window.requestAnimationFrame === 'function' ? window.requestAnimationFrame(fn) : fn(); }
+  function reducedMotion() {
+    return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  }
+
+  function clearPreviewPanel(panel) {
+    if (!panel) return;
+    panel.classList.remove('swipe-preview','swipe-animating');
+    panel.style.transform = '';
+    panel.style.top = '';
+    panel.style.left = '';
+    panel.style.width = '';
+    panel.style.height = '';
+    panel.style.zIndex = '';
+    panel.style.pointerEvents = '';
+    panel.style.transitionDuration = '';
+    if (panel.dataset.swipeAriaHidden === 'absent') panel.removeAttribute('aria-hidden');
+    else if (panel.dataset.swipeAriaHidden != null) panel.setAttribute('aria-hidden', panel.dataset.swipeAriaHidden);
+    delete panel.dataset.swipeAriaHidden;
+  }
+
+  function clearCurrentPanel(panel) {
+    if (!panel) return;
+    panel.classList.remove('swipe-current','swipe-animating');
+    panel.style.transform = '';
+    panel.style.willChange = '';
+    panel.style.transitionDuration = '';
+  }
+
+  function cleanupPanels(g) {
+    if (!g) return;
+    clearCurrentPanel(g.currentPanel);
+    clearPreviewPanel(g.nextPanel);
+  }
+
+  function preparePanels(g) {
+    if (g.prepared) return true;
+    const current = panelFor(g.tab);
+    const next = panelFor(g.nextTab);
+    if (!current || !next) return false;
+    const rect = current.getBoundingClientRect();
+    if (!rect || rect.width <= 0 || rect.height <= 0) return false;
+    g.currentPanel = current;
+    g.nextPanel = next;
+    g.panelWidth = rect.width;
+    g.prepared = true;
+
+    current.classList.add('swipe-current');
+    current.style.willChange = 'transform';
+
+    next.dataset.swipeAriaHidden = next.hasAttribute('aria-hidden') ? (next.getAttribute('aria-hidden') || '') : 'absent';
+    next.setAttribute('aria-hidden','true');
+    next.classList.add('swipe-preview');
+    next.style.top = rect.top+'px';
+    next.style.left = rect.left+'px';
+    next.style.width = rect.width+'px';
+    next.style.height = rect.height+'px';
+    next.style.zIndex = '20';
+    next.style.pointerEvents = 'none';
+
+    const offscreen = -g.direction * g.panelWidth;
+    current.style.transform = 'translate3d(0,0,0)';
+    next.style.transform = `translate3d(${offscreen}px,0,0)`;
+    return true;
+  }
+
+  function renderOffset(g, offsetX) {
+    if (!g || !g.prepared) return;
+    const clamped = g.direction < 0 ? Math.min(0, offsetX) : Math.max(0, offsetX);
+    g.offsetX = Math.max(-g.panelWidth, Math.min(g.panelWidth, clamped));
+    const nextX = g.offsetX - g.direction * g.panelWidth;
+    g.currentPanel.style.transform = `translate3d(${g.offsetX}px,0,0)`;
+    g.nextPanel.style.transform = `translate3d(${nextX}px,0,0)`;
+  }
+
+  function finishSettle(g, commit) {
+    if (settlingGesture !== g) return;
+    if (settleTimer) { clearTimeout(settleTimer); settleTimer = null; }
+    try {
+      if (commit && tabSwitchGeneration === g.tabGeneration &&
+          activeTabName() === g.tab && viewportWidth() === g.viewportWidth) {
+        switchTab(g.nextTab, {fromSwipe:true});
+      }
+    } finally {
+      cleanupPanels(g);
+      settlingGesture = null;
+      settling = false;
+    }
+  }
+
+  function abortForExplicitTabSwitch() {
+    const g = gesture || settlingGesture;
+    gesture = null;
+    if (settleTimer) { clearTimeout(settleTimer); settleTimer = null; }
+    if (g) cleanupPanels(g);
+    settlingGesture = null;
+    settling = false;
+  }
+  mobileSwipeAbortForTabSwitch = abortForExplicitTabSwitch;
+
+  function settle(g, commit) {
+    if (!g) return;
+    if (!g.prepared) { gesture = null; return; }
+    // Click suppression is armed once from touchend using the final horizontal
+    // displacement. Keeping it there also covers wrong-direction drags and
+    // avoids two independent guards for the same synthetic-click property.
+    gesture = null;
+    settling = true;
+    settlingGesture = g;
+    const duration = reducedMotion() ? 0 : MOBILE_TAB_SWIPE.settleMs;
+    g.currentPanel.style.transitionDuration = duration+'ms';
+    g.nextPanel.style.transitionDuration = duration+'ms';
+    g.currentPanel.classList.add('swipe-animating');
+    g.nextPanel.classList.add('swipe-animating');
+    const targetCurrent = commit ? g.direction * g.panelWidth : 0;
+    const targetNext = commit ? 0 : -g.direction * g.panelWidth;
+    raf(() => {
+      if (settlingGesture !== g) return;
+      g.currentPanel.style.transform = `translate3d(${targetCurrent}px,0,0)`;
+      g.nextPanel.style.transform = `translate3d(${targetNext}px,0,0)`;
+      if (duration === 0) finishSettle(g, commit);
+      else settleTimer = setTimeout(() => finishSettle(g, commit), duration + 40);
+    });
+  }
+
+  function cancelGesture(animate=true) {
+    const g = gesture;
+    gesture = null;
+    if (!g) return;
+    if (g.prepared && animate) settle(g, false);
+    else cleanupPanels(g);
+  }
+
+  function begin(e) {
+    if (settling || !e.touches || e.touches.length !== 1 || mobileSwipeBlockedTarget(e.target)) { gesture = null; return; }
+    const p = e.touches[0];
+    const width = viewportWidth();
+    const tab = activeTabName();
+    if (!tab || width <= 0 || width > MOBILE_TAB_SWIPE.maxWidth ||
+        p.clientX <= MOBILE_TAB_SWIPE.edge || p.clientX >= width - MOBILE_TAB_SWIPE.edge) {
+      gesture = null;
+      return;
+    }
+    gesture = {
+      x:p.clientX, y:p.clientY, lastX:p.clientX, lastY:p.clientY,
+      startTime:Number.isFinite(e.timeStamp) ? e.timeStamp : NaN,
+      touchId:p.identifier, tab, nextTab:otherTab(tab), direction:mobileSwipeDirection(tab),
+      viewportWidth:width, tabGeneration:tabSwitchGeneration,
+      locked:false, cancelled:false, prepared:false, offsetX:0
+    };
+  }
+
+  function move(e) {
+    if (!gesture) return;
+    if (!e.touches || e.touches.length !== 1) { cancelGesture(true); return; }
+    const g = gesture;
+    if (tabSwitchGeneration !== g.tabGeneration || activeTabName() !== g.tab || viewportWidth() !== g.viewportWidth) {
+      cancelGesture(true); return;
+    }
+    const p = e.touches[0];
+    if (p.identifier !== g.touchId) { cancelGesture(true); return; }
+    g.lastX = p.clientX; g.lastY = p.clientY;
+    const state = evaluateMobileSwipeMotion(g.x,g.y,p.clientX,p.clientY,g.tab,g.viewportWidth,g.locked,g.cancelled);
+    if (state.state === 'cancelled') { g.cancelled = true; cancelGesture(true); return; }
+    if (state.state !== 'locked') {
+      // Movimento horizontal inequívoco para o lado sem aba vizinha não troca
+      // painel, mas também não deve virar click sintético no controle de origem.
+      // Cancelamos somente essa sequência horizontal; vertical continua nativo.
+      const dx = p.clientX - g.x, dy = p.clientY - g.y;
+      if (Math.abs(dx) >= MOBILE_TAB_SWIPE.lockX &&
+          Math.abs(dx) >= Math.abs(dy) * MOBILE_TAB_SWIPE.dominance && e.cancelable) {
+        e.preventDefault();
+      }
+      return;
+    }
+    if (!g.locked) {
+      // Se o navegador já tornou o evento não-cancelável, ele assumiu a
+      // sequência (normalmente scroll). Nesse caso não iniciamos um arrasto
+      // visual tardio que poderia disputar a rolagem nativa.
+      if (!e.cancelable) { cancelGesture(false); return; }
+      g.locked = true;
+      if (!preparePanels(g)) { cancelGesture(false); return; }
+    }
+    // Só depois da intenção horizontal estar inequívoca. Até aqui o scroll
+    // vertical permaneceu 100% sob controle nativo do navegador.
+    if (e.cancelable) e.preventDefault();
+    renderOffset(g, state.offsetX);
+  }
+
+  function end(e) {
+    if (!gesture) return;
+    const g = gesture;
+    if (tabSwitchGeneration !== g.tabGeneration || activeTabName() !== g.tab || viewportWidth() !== g.viewportWidth) {
+      cancelGesture(true); return;
+    }
+    if (!e.changedTouches || e.changedTouches.length !== 1) { cancelGesture(true); return; }
+    const p = e.changedTouches[0];
+    if (p.identifier !== g.touchId) { cancelGesture(true); return; }
+    g.lastX = p.clientX; g.lastY = p.clientY;
+    // Sem janela temporal: o próprio gesto horizontal cancela somente o click
+    // sintético desta sequência. Um tap seguinte fica disponível imediatamente.
+    const endDx = p.clientX - g.x, endDy = p.clientY - g.y;
+    if (Math.abs(endDx) >= MOBILE_TAB_SWIPE.clickSuppressX &&
+        Math.abs(endDx) > Math.abs(endDy) && e.cancelable) {
+      e.preventDefault();
+    }
+
+    // Sempre usamos a coordenada final real. O último touchmove pode ter sido
+    // entregue antes de o dedo completar (ou desfazer) alguns pixels do gesto.
+    const state = evaluateMobileSwipeMotion(g.x,g.y,p.clientX,p.clientY,g.tab,g.viewportWidth,g.locked,g.cancelled);
+    if (state.state !== 'locked') { cancelGesture(g.prepared); return; }
+    if (!g.locked) {
+      if (!preparePanels(g)) { cancelGesture(false); return; }
+      g.locked = true;
+    }
+    renderOffset(g, state.offsetX);
+    const elapsedMs = Number.isFinite(e.timeStamp) && Number.isFinite(g.startTime)
+      ? Math.max(1, e.timeStamp - g.startTime) : Infinity;
+    const commit = shouldCommitMobileSwipe(g.offsetX, g.panelWidth, elapsedMs);
+    settle(g, commit);
+  }
+
+  function cancel() { cancelGesture(true); }
+  function onResize() {
+    if (gesture && viewportWidth() !== gesture.viewportWidth) cancelGesture(true);
+  }
+
+  panels.forEach(panel => {
+    panel.addEventListener('touchstart', begin, {passive:true});
+    panel.addEventListener('touchmove', move, {passive:false});
+    panel.addEventListener('touchend', end, {passive:false});
+    panel.addEventListener('touchcancel', cancel, {passive:true});
+  });
+  window.addEventListener('resize', onResize, {passive:true});
+  if (window.visualViewport && typeof window.visualViewport.addEventListener === 'function') {
+    window.visualViewport.addEventListener('resize', onResize, {passive:true});
   }
 }
 
-// ════════════════════════════════════════
-//  CRYPTO
-// ════════════════════════════════════════
-// ════════════════════════════════════════
-//  CIFRA — AES-256-GCM via Web Crypto
-//  Substitui o XOR fraco por criptografia autenticada de verdade. A chave é
-//  derivada da senha com PBKDF2 (SHA-256, 150k iterações). O resultado é
-//  auto-contido: [ 0x01 versão | salt(16) | iv(12) | ciphertext+tag ]. O byte
-//  de versão permite evoluir o formato e distinguir de payloads antigos.
-//  GCM autentica: se a senha estiver errada ou os dados forem adulterados, a
-//  descriptografia LANÇA — o que usamos para detectar "senha incorreta".
-// ════════════════════════════════════════

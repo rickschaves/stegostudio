@@ -139,6 +139,7 @@ let encMaxcapManual=false;
 // será convertido. O gate do botão usa o estado persistente `encFormatOk`;
 // mudanças na senha não podem reabilitar Encode se a imagem falhou.
 function onEncCarrierLoaded(id, w, h, src, hadAlpha, fmt, file) {
+  encOutputGeneration++; // uma saída robusta pendente pertence à portadora anterior
   encID=id; encW=w; encH=h; encOpaque=opaquePixels(id.data).length; encFormatOk=true;
   document.getElementById('enc-prev').src=src;
   document.getElementById('enc-pw').style.display='block';
@@ -388,34 +389,115 @@ function selectEmbedMode(bodyBits, opaqueCount, headerBits, maxcap) {
   return bodyBits <= avail ? { mode: MODE_B, adaptive: false, stc: true } : null;
 }
 
-function updateCap() {
-  if (!encID) return;
-  const box = document.getElementById('enc-maxcap');
-  const note = document.getElementById('enc-mode-note');
-  // Capacidade usada = mensagem real + mensagem-isca (quando ligada), pois as
-  // as duas dividem o mesmo pool de pixels opacos usado pelo formato em camadas.
-  const realChars = document.getElementById('enc-msg').value.length;
-  const decoyOn = document.getElementById('enc-decoy-toggle')?.checked;
-  const decoyChars = decoyOn ? (document.getElementById('enc-decoy-msg')?.value.length || 0) : 0;
+// O Encoder remove whitespace apenas nas bordas antes de codificar. Toda
+// superfície que mostra/mede a mensagem deve usar esta mesma representação para
+// que capacidade, gate e estatísticas nunca contem textos diferentes.
+function getEncNormalizedMessage(id) {
+  return (document.getElementById(id)?.value || '').trim();
+}
+
+let encMessageEditorTargetId='enc-msg';
+function getEncMessageEditorTarget(){
+  return document.getElementById(encMessageEditorTargetId) || document.getElementById('enc-msg');
+}
+
+// Uma única fonte para o medidor principal e para o editor expandido. O modal
+// pode existir antes de a cover ser escolhida; nesse caso ele mostra apenas a
+// contagem atual. Quando há cover, mostra o uso contra a capacidade do modo
+// efetivo. Com segunda mensagem ligada, o total compartilhado também fica claro.
+function getEncCapacitySnapshot(){
+  const realChars = getEncNormalizedMessage('enc-msg').length;
+  const decoyOn = !!document.getElementById('enc-decoy-toggle')?.checked;
+  const decoyChars = decoyOn ? getEncNormalizedMessage('enc-decoy-msg').length : 0;
   const used = realChars + decoyChars;
-  // Capacidade (chars) conta SÓ pixels OPACOS (os transparentes não guardam dados).
-  const stealthMax = Math.floor(encOpaque/8)-11; // header(10)+w-byte(1) do STC
-  const rgbMax = Math.floor((encOpaque*3)/8)-10;
-  // A mensagem excede o furtivo? (estimativa por chars, conservadora — não conta
-  // a compressão). Se sim, FORÇA o modo capacidade e trava o botão ligado.
+  if(!encID) return {hasImage:false, realChars, decoyChars, decoyOn, used, max:null, forced:false, effective:false};
+
+  const protectedV3 = (document.getElementById('enc-key')?.value || '').length > 0;
+  const f21PlainMax = F21_BODY_MAX - F21_GCM_TAG_BYTES;
+  const stealthMax = protectedV3
+    ? Math.min(f21PlainMax, Math.max(0, Math.floor(Math.max(0,encOpaque-F21_PREFIX_CARRIER_PIXELS)/8)-F21_GCM_TAG_BYTES))
+    : Math.floor(encOpaque/8)-11;
+  const rgbMax = protectedV3
+    ? Math.min(f21PlainMax, Math.max(0, Math.floor(Math.max(0,encOpaque-F21_PREFIX_CARRIER_PIXELS)*3/8)-F21_GCM_TAG_BYTES))
+    : Math.floor((encOpaque*3)/8)-10;
   const forced = used > stealthMax;
   const effective = encMaxcapManual || forced;
-  if (box) { box.checked = effective; box.disabled = forced; }
-  // Aviso sob o campo de mensagem SÓ quando a ferramenta ligou sozinha.
-  if (note) note.style.display = (forced && !encMaxcapManual) ? 'block' : 'none';
-  const max = effective ? rgbMax : stealthMax;
-  const pct = Math.min(used/max*100,100);
+  const max = Math.max(0, effective ? rgbMax : stealthMax);
+  return {hasImage:true, realChars, decoyChars, decoyOn, used, max, forced, effective, stealthMax, rgbMax};
+}
+
+function updateEncMessageModalCount() {
+  const count=document.getElementById('enc-message-modal-count');
+  if(!count) return;
+  const current=getEncNormalizedMessage(encMessageEditorTargetId).length;
+  const cap=getEncCapacitySnapshot();
+  if(!cap.hasImage){
+    count.textContent=t('encMessageCountOnly').replace('{n}',current.toLocaleString());
+    return;
+  }
+  if(cap.decoyOn){
+    count.textContent=t('encMessageCapacityShared')
+      .replace('{used}',cap.used.toLocaleString())
+      .replace('{max}',cap.max.toLocaleString())
+      .replace('{current}',current.toLocaleString());
+  } else {
+    count.textContent=t('encMessageCapacity')
+      .replace('{used}',cap.used.toLocaleString())
+      .replace('{max}',cap.max.toLocaleString());
+  }
+}
+function syncEncMessageModalFromTarget() {
+  const overlay=document.getElementById('enc-message-overlay');
+  const modal=document.getElementById('enc-message-modal-text');
+  const target=getEncMessageEditorTarget();
+  if(!modal||!target) return;
+  if(overlay?.classList.contains('visible') && modal.value!==target.value) modal.value=target.value;
+  updateEncMessageModalCount();
+}
+function syncEncMessageTargetFromModal() {
+  const modal=document.getElementById('enc-message-modal-text');
+  const target=getEncMessageEditorTarget();
+  if(!modal||!target||target.value===modal.value) { updateEncMessageModalCount(); return; }
+  target.value=modal.value;
+  target.dispatchEvent(new Event('input',{bubbles:true}));
+  updateEncMessageModalCount();
+}
+function openEncMessageEditor(targetId='enc-msg') {
+  if(targetId!=='enc-msg' && targetId!=='enc-decoy-msg') targetId='enc-msg';
+  encMessageEditorTargetId=targetId;
+  const overlay=document.getElementById('enc-message-overlay');
+  const modal=document.getElementById('enc-message-modal-text');
+  const target=getEncMessageEditorTarget();
+  if(!overlay||!modal||!target) return;
+  modal.value=target.value;
+  modal.placeholder=target.placeholder||'';
+  updateEncMessageModalCount();
+  overlay.classList.add('visible');
+  requestAnimationFrame(()=>{
+    modal.focus();
+    const end=modal.value.length;
+    try{ modal.setSelectionRange(end,end); }catch(_){}
+  });
+}
+function closeEncMessageEditor() {
+  document.getElementById('enc-message-overlay')?.classList.remove('visible');
+}
+
+function updateCap() {
+  const cap=getEncCapacitySnapshot();
+  // Mesmo sem cover, o editor grande continua contando o que foi digitado.
+  if (!cap.hasImage) { updateEncMessageModalCount(); return; }
+  const box = document.getElementById('enc-maxcap');
+  const note = document.getElementById('enc-mode-note');
+  if (box) { box.checked = cap.effective; box.disabled = cap.forced; }
+  if (note) note.style.display = (cap.forced && !encMaxcapManual) ? 'block' : 'none';
+  const max=cap.max, used=cap.used;
+  const pct = max > 0 ? Math.min(used/max*100,100) : (used > 0 ? 100 : 0);
   document.getElementById('cap-used').textContent=used.toLocaleString()+' '+t('chars');
   document.getElementById('cap-total').textContent=max.toLocaleString()+' '+t('capAvailable');
   const f=document.getElementById('cap-fill');
   f.style.width=pct+'%';
   f.style.background=pct>90?'#ff6464':pct>70?'#ffb300':'var(--enc)';
-  // Aviso de DETECTABILIDADE: contra o teto do modo efetivo.
   const fw=document.getElementById('enc-fill-warn');
   if (used>0 && pct>50) {
     fw.textContent=t('encFillHigh'); fw.style.color='#ff6464'; fw.style.display='block';
@@ -424,8 +506,10 @@ function updateCap() {
   } else {
     fw.style.display='none';
   }
+  updateEncMessageModalCount();
 }
 document.getElementById('enc-msg').addEventListener('input', updateCap);
+document.getElementById('enc-msg').addEventListener('input', syncEncMessageModalFromTarget);
 // "Modo de Alta Capacidade" só afeta a auto-seleção (teto é sempre RGB), mas
 // atualizamos o medidor por consistência.
 document.getElementById('enc-maxcap').addEventListener('change', function(){
@@ -442,13 +526,13 @@ function checkEncReady() {
   // Gate persistente: imagem decodificada com sucesso (encFormatOk) + mensagem.
   // O gate depende do estado persistente da imagem; digitar/apagar a senha
   // não re-habilita o botão num estado inválido.
-  const hasImg=encID&&encFormatOk, hasMsg=document.getElementById('enc-msg').value.trim().length>0;
+  const hasImg=encID&&encFormatOk, hasMsg=getEncNormalizedMessage('enc-msg').length>0;
   const key=document.getElementById('enc-key').value;
   // Negação plausível: se a 2ª mensagem está LIGADA e preenchida, ela EXIGE senha
   // própria (a isca é sempre cifrada). Sem a senha, o botão fica desabilitado e um
   // alerta explica. Também bloqueia se a senha da isca for igual à da real.
   const decoyOn=document.getElementById('enc-decoy-toggle')?.checked;
-  const decoyMsg=(document.getElementById('enc-decoy-msg')?.value.trim()||'');
+  const decoyMsg=getEncNormalizedMessage('enc-decoy-msg');
   const decoyKey=(document.getElementById('enc-decoy-key')?.value||'');
   const decoyNeedsMsg = decoyOn && decoyMsg.length===0;
   const decoyNeedsKey = decoyOn && decoyMsg.length>0 && decoyKey.length===0;
@@ -472,16 +556,18 @@ function checkDecReady(ok=true) {
   document.getElementById('btn-analyze').disabled=!(decID&&ok);
 }
 document.getElementById('enc-msg').addEventListener('input',()=>checkEncReady());
-document.getElementById('enc-key').addEventListener('input',()=>checkEncReady());
+document.getElementById('enc-key').addEventListener('input',()=>{ updateCap(); checkEncReady(); });
 
 // ════════════════════════════════════════
 //  ENCODE
 // ════════════════════════════════════════
 let encOutURL=null, encOutID=null, rbOutURL=null;
+let encOutputGeneration=0; // invalida resultados assíncronos da segunda saída robusta
 
 // Centraliza a limpeza de toda a área de saída do Encoder para que encode e
 // troca de portadora restaurem exatamente o mesmo conjunto de elementos.
 function resetEncOutputs() {
+  encOutputGeneration++;
   const hide = id => { const e = document.getElementById(id); if (e) e.classList.remove('visible'); };
   ['enc-dl','enc-rb','enc-tips','rb-body','rb-unavailable','enc-stealth'].forEach(hide);
   const vazio = id => { const e = document.getElementById(id); if (e) e.textContent = ''; };
@@ -515,6 +601,12 @@ document.getElementById('btn-encode').addEventListener('click',async ()=>{
   // Limpa a saída ANTES de qualquer trabalho: sem isto as imagens do encode
   // anterior ficam na tela até as novas nascerem, e parecem ser o resultado novo.
   resetEncOutputs();
+  const encOutputRun = encOutputGeneration;
+  // Snapshot por referência do cover limpo usado neste clique. `encID` pode ser
+  // trocado enquanto a derivação do JPEG robusto aguarda; esta referência mantém
+  // a segunda saída presa à mesma portadora que gerou o PNG principal.
+  const robustCoverData = encID?.data;
+  const robustCoverW = encW, robustCoverH = encH;
   {
     const _dl=document.getElementById('enc-dl');
     const _ph=document.getElementById('enc-placeholder');
@@ -525,14 +617,12 @@ document.getElementById('btn-encode').addEventListener('click',async ()=>{
   }
   // 2 frames para o spinner PINTAR antes do bloco pesado (embedLSB) começar.
   await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
-  const msg=document.getElementById('enc-msg').value.trim();
+  const msg=getEncNormalizedMessage('enc-msg');
   const key=document.getElementById('enc-key').value;
   const cipher=key.length>0;
   const maxcap=document.getElementById('enc-maxcap').checked;
-  // Com senha, mascara o header para reduzir a exposição passiva do formato.
-  const stealth=cipher;
   try {
-    // Comprime o corpo (deflate-raw) ANTES de cifrar; usa só se realmente encolher.
+    // Comprime o corpo (deflate-raw) ANTES da cifragem; usa só se realmente encolher.
     let bodyBytes = new TextEncoder().encode(msg);
     let compressed = false;
     try {
@@ -541,43 +631,76 @@ document.getElementById('btn-encode').addEventListener('click',async ()=>{
       encMark('deflate:out');
       if (comp.length < bodyBytes.length) { bodyBytes = comp; compressed = true; }
     } catch(_) { /* sem CompressionStream → segue sem comprimir */ }
-    encMark('crypto:in');
-    const data = cipher ? await aesEncryptBytes(bodyBytes, key) : bodyBytes;
-    encMark('crypto:out');
+
+    // v3: o corpo físico é ciphertext+tag, então seu tamanho é conhecido antes do
+    // Argon2. Isso permite escolher modo/capacidade sem executar a KDF duas vezes.
+    const bodyStoredBytes = cipher ? (bodyBytes.length + F21_GCM_TAG_BYTES) : bodyBytes.length;
+    // O wire v3 limita ciphertext+tag a 5 MB. Falhar aqui mantém a UI e o
+    // contrato lógico alinhados e evita executar Argon para um packet impossível.
+    if (cipher && bodyStoredBytes > F21_BODY_MAX) throw new Error(t('msgTooLong'));
+    const prefixBits = cipher ? F21_PREFIX_CARRIER_PIXELS : HEADER_BYTES*8;
+    const bodyBits = bodyStoredBytes * 8;
     // AUTO-SELEÇÃO: o modo MAIS FURTIVO que couber (ou RGB se priorizar capacidade).
-    const sel = selectEmbedMode(data.length*8, encOpaque, HEADER_BYTES*8, maxcap);
+    const sel = selectEmbedMode(bodyBits, encOpaque, prefixBits, maxcap);
     if (!sel) {
-      // Não coube no furtivo, mas caberia no RGB? Oriente a ligar a capacidade,
-      // em vez de só dizer "muito longa".
-      if (!maxcap && data.length*8 <= (encOpaque-HEADER_BYTES*8)*3) throw new Error(t('msgTooLongStealth'));
+      if (!maxcap && bodyBits <= Math.max(0, encOpaque-prefixBits)*3) throw new Error(t('msgTooLongStealth'));
       throw new Error(t('msgTooLong'));
     }
     const mode = sel.mode, adaptive = sel.adaptive, useStc = sel.stc;
     // STC: escolhe a maior largura w (=1/α) que cabe → máxima furtividade.
     let stcW = 0;
     if (useStc) {
-      stcW = pickStcW(data.length*8, encOpaque - (HEADER_BYTES+1)*8);
+      const availForStc = encOpaque - (cipher ? F21_PREFIX_CARRIER_PIXELS : (HEADER_BYTES+1)*8);
+      stcW = pickStcW(bodyBits, availForStc);
       if (stcW < 1) throw new Error(t('msgTooLong'));
     }
-    const payload = buildPayload(data, compressed ? (mode | FLAG_COMPRESSED) : mode);
+
     // Embedding e ESCRITA sem canvas: clona o cover limpo, embute, e remonta o
     // PNG na mão. Evita o farbling do toDataURL/getImageData (vide Brave Shields).
     const work = new ImageData(new Uint8ClampedArray(encID.data), encW, encH);
+    let payload = null, f21Packet = null, realUsedPx = 0, mainSlotsUsed = 0, encodedPayloadBytes = 0;
+    const decoyRequested = !!document.getElementById('enc-decoy-toggle')?.checked;
+    encMark('crypto:in');
+    if (cipher) {
+      const modeFlags = f21ModeFlagsForEmbed(mode, compressed, adaptive, stcW);
+      f21Packet = await f21CreatePacket(bodyBytes, key, {modeFlags, stcW});
+      encodedPayloadBytes = F21_PREFIX_BYTES + f21Packet.body.length;
+    } else {
+      payload = buildPayload(bodyBytes, compressed ? (mode | FLAG_COMPRESSED) : mode);
+      encodedPayloadBytes = payload.length;
+    }
+    encMark('crypto:out');
+
     encMark('embed:in');
-    embedLSB(work, payload, mode, key, adaptive, stealth, stcW);
+    if (cipher) {
+      await embedLSBV3(work, f21Packet, mode, adaptive, stcW);
+      realUsedPx = decoyRequested
+        ? f21TailReservationBoundary(f21Packet.modeFlags, stcW, f21Packet.body.length*8)
+        : f21UsedOpaquePixels(f21Packet.modeFlags, stcW, f21Packet.body.length*8);
+      mainSlotsUsed = useStc
+        ? F21_PREFIX_CARRIER_PIXELS + f21Packet.body.length*8*stcW
+        // Bootstrap usa somente B mesmo no modo RGB; contar ×3 inflaria o
+        // percentual de impacto visual sem corresponder a slots tocados.
+        : F21_PREFIX_CARRIER_PIXELS + f21Packet.body.length*8;
+    } else {
+      embedLSB(work, payload, mode, '', adaptive, false, stcW);
+      realUsedPx = useStc
+        ? ((HEADER_BYTES+1)*8 + (payload.length-HEADER_BYTES)*8*stcW)
+        : (mode===MODE_RGB ? HEADER_BYTES*8 + Math.ceil((payload.length-HEADER_BYTES)*8/3) : payload.length*8);
+      mainSlotsUsed = useStc
+        ? ((HEADER_BYTES+1)*8 + (payload.length-HEADER_BYTES)*8*stcW)
+        : payload.length*8;
+    }
     encMark('embed:out');
     // ── NEGAÇÃO PLAUSÍVEL: se ativa, embute a mensagem alternativa no fim do pool. ──
-    const decoyOn = document.getElementById('enc-decoy-toggle')?.checked;
-    const decoyMsg = document.getElementById('enc-decoy-msg')?.value.trim() || '';
+    const decoyOn = decoyRequested;
+    const decoyMsg = getEncNormalizedMessage('enc-decoy-msg');
     const decoyKey = document.getElementById('enc-decoy-key')?.value || '';
     let decoyBitsUsed = 0, decoyChars = 0; // para as estatísticas refletirem as DUAS mensagens
     if (decoyOn && decoyMsg.length > 0) {
       if (!decoyKey.length) throw new Error(t('decoyKeyRequired'));
       if (decoyKey === key) throw new Error(t('decoySameKeyWarn'));
-      // Reserva o trecho já usado pelo payload principal para evitar colisão entre camadas.
-      const realUsedPx = useStc
-        ? ((HEADER_BYTES+1)*8 + (payload.length-HEADER_BYTES)*8*stcW)
-        : payload.length*8;
+      // Reserva os pixels opacos efetivamente ocupados pela camada principal.
       decoyBitsUsed = await embedDecoyTail(work, decoyMsg, decoyKey, realUsedPx);
       decoyChars = decoyMsg.length;
     }
@@ -598,7 +721,7 @@ document.getElementById('btn-encode').addEventListener('click',async ()=>{
     requestAnimationFrame(() => {
       document.getElementById('enc-dl').scrollIntoView({behavior:'smooth', block:'center'});
     });
-    const bitsUsed = (useStc ? ((HEADER_BYTES+1)*8 + (payload.length-HEADER_BYTES)*8*stcW) : payload.length*8) + decoyBitsUsed;
+    const bitsUsed = mainSlotsUsed + decoyBitsUsed;
     const totalBits=mode===MODE_RGB?encOpaque*3:encOpaque;
     // Rótulo do modo escolhido pela auto-seleção (STC / RGB / Padrão).
     const modeLabel = useStc ? t('encModeStc') : (adaptive ? t('encModeAdaptive') : (mode===MODE_RGB ? t('encModeRGB') : t('encModeB')));
@@ -625,7 +748,7 @@ document.getElementById('btn-encode').addEventListener('click',async ()=>{
       <div class="stat-cols">${realCol}${decoyCol}</div>
       <div class="stat-impact"><span class="stat-key">${t('encStatVisualImpact')}</span><span class="stat-val sv-enc">${(bitsUsed/totalBits*100).toFixed(4)}%</span></div>`;
     _stopWork(); // para a ampulheta ANTES de escrever o sucesso (senão o timer sobrescreve)
-    setStatus('enc-status', t('encSuccess').replace('{bytes}',payload.length)+(cipher?t('encSuffixCipher'):t('encSuffixPlain')), 'ok');
+    setStatus('enc-status', t('encSuccess').replace('{bytes}',encodedPayloadBytes)+(cipher?t('encSuffixCipher'):t('encSuffixPlain')), 'ok');
     // Autoavaliação de furtividade: mede a saída com o mesmo arsenal estatístico.
     // Deferido para a imagem/infos aparecerem na hora; nunca quebra o encode.
     (function(){
@@ -673,14 +796,24 @@ document.getElementById('btn-encode').addEventListener('click',async ()=>{
       const body=document.getElementById('rb-body');
       const nope=document.getElementById('rb-unavailable');
       const fmt=n=> n>=1024 ? (n/1024).toFixed(1)+' KB' : n+' bytes';
-      setTimeout(function(){
+      setTimeout(async function(){
         try{
-          const r=robustEmbed(encID.data, encW, encH, payload, key);
+          if(encOutputRun !== encOutputGeneration) return;
+          // F21 só muda o PNG/lossless protegido. O JPEG robusto continua no
+          // wire anterior, portanto precisa do seu próprio payload clássico.
+          // Com senha isto executa a derivação legada do conteúdo uma segunda
+          // vez, deliberadamente, em vez de reutilizar o packet F21 e mudar o
+          // formato robusto por acidente.
+          const robustPayload = cipher
+            ? await buildRobustPayload(bodyBytes, key, {mode, compressed, adaptive, stcW})
+            : payload;
+          if(encOutputRun !== encOutputGeneration) return;
+          const r=robustEmbed(robustCoverData, robustCoverW, robustCoverH, robustPayload, key);
           if(rbOutURL && rbOutURL.startsWith('blob:')) URL.revokeObjectURL(rbOutURL);
           rbOutURL=URL.createObjectURL(new Blob([r.jpeg],{type:'image/jpeg'}));
           document.getElementById('rb-out-prev').src=rbOutURL;
           const dim = r.redimensionada
-            ? r.width+'×'+r.height+' <span class="sv-dim">('+t('rbStatResized').replace('{orig}',encW+'×'+encH)+')</span>'
+            ? r.width+'×'+r.height+' <span class="sv-dim">('+t('rbStatResized').replace('{orig}',robustCoverW+'×'+robustCoverH)+')</span>'
               +'<div class="stat-note">'+t('rbStatWhyResize')+'</div>'
             : r.width+'×'+r.height+' <span class="sv-dim">('+t('rbStatUnchanged')+')</span>';
           document.getElementById('rb-stats').innerHTML=
@@ -703,6 +836,7 @@ document.getElementById('btn-encode').addEventListener('click',async ()=>{
             +'<div class="stealth-caveat">'+t('rbExplain')+'</div>';
           body.classList.add('visible'); nope.classList.remove('visible');
         }catch(e){
+          if(encOutputRun !== encOutputGeneration) return;
           body.classList.remove('visible');
           nope.innerHTML = (e && e.message==='robustCapacity')
             ? t('rbUnavailTooBig').replace('{need}',fmt(e.necessario)).replace('{cap}',fmt(e.capacidade))

@@ -38,9 +38,31 @@ digital art, or AI-generated.
 **Decoder** — reads back what the Encoder wrote, and also attempts extraction
 for OpenStego, Steghide and Outguess. Coverage varies by tool, format and cipher;
 [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md) states the boundaries.
+When a compatible decoder recovers an original file, STEGO·STUDIO keeps the
+recovered bytes locally so **Save file** can write the exact payload instead of
+round-tripping it through UTF-8 text. Binary bytes are not injected into the
+public JSON report; text payloads continue to populate `decodedMsg`.
 
-Messages are encrypted with AES-256-GCM using a key derived with Argon2id. The
-password never leaves the page, because nothing leaves the page.
+Messages are encrypted with AES-256-GCM using a key derived with Argon2id. New
+password-protected lossless writes also use a fresh per-image structural salt and
+domain-separated derived keys for header protection/authentication and body order.
+The password never leaves the page, because nothing leaves the page. A stronger
+structural derivation does not make a weak password strong.
+
+### Exported JSON report
+
+The Analyzer exports `_schema: forensic-report-v2`. On confirmed extraction paths,
+`decodedMsg` carries the **full recovered content** and is bounded by carrier
+capacity rather than by a small display limit. Before v2.43.5 those confirmed
+routes truncated `decodedMsg` at 5,000 characters. Heuristic deep-scan previews
+remain intentionally bounded because they are investigative candidates, not
+confirmed recovered messages.
+
+`threat.score` uses **0–99 for heuristic suspicion**. Heuristic evidence can reach
+99 without proving that content was recovered. The value **100 is reserved for
+direct validated recovery** and is paired with the **CONFIRMED** state. Consumers
+should use the explicit recovery/confirmation state rather than inventing a lower
+numeric threshold as a proxy for confirmation.
 
 ---
 
@@ -122,10 +144,10 @@ build anything to use the tool. To build it yourself:
 ```sh
 node unpack_assets.js   # recreates src/fonts/ from ASSETS_BASE64.md
 node build.js           # assembles dist/stego_studio_v<VERSION>.html
-node test.js            # 22 invariants
+node test.js            # full offline regression harness
 ```
 
-No bundler and no dependencies. `build.js` concatenates 16 JavaScript modules,
+No bundler and no dependencies. `build.js` concatenates the JavaScript source modules,
 the stylesheet and an inlined Argon2id WebAssembly bundle into a single file,
 then **refuses to emit** anything that would reach the network at runtime.
 
@@ -133,15 +155,17 @@ Binary assets (fonts, icons) are stored as base64 with SHA-256 checksums in
 `ASSETS_BASE64.md`; `unpack_assets.js` restores them and verifies every hash
 before writing.
 
+The repository also ships a zero-dependency GitHub Actions workflow (`.github/workflows/regression.yml`) that rebuilds the single-file artifact and runs the full Node 22 regression harness on pushes and pull requests. The harness is intentionally broad, but it is not a proof of security and does not replace real-browser/device testing.
+
 ---
 
 ## Repository layout
 
 ```
-src/            16 modules + styles.css + hash-wasm.js
+src/            JavaScript modules + styles.css + hash-wasm.js
 template.html   page markup; the build injects CSS and JS into it
 build.js        the build
-test.js         22 invariants (syntax, i18n parity, offline guarantee, XSS, report schema, ...)
+test.js         regression harness (build, security gates, round-trips, malformed corpus, fixtures, ...)
 HTML_PRODUCAO/  the published single-file build
 docs/           compatibility notes and social-platform measurements
 ```

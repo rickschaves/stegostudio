@@ -119,6 +119,47 @@ function pngRGBAToRawNone(width, height, rgba) {
   for (let y = 0; y < height; y++) { raw[o++] = 0; raw.set(rgba.subarray(y * stride, y * stride + stride), o); o += stride; }
   return raw;
 }
+
+// Escolha adaptativa dos cinco filtros PNG por scanline. Os filtros NÃO mudam
+// nenhum pixel: só transformam reversivelmente o raster antes do DEFLATE. O
+// critério soma o módulo dos bytes filtrados interpretados como signed 8-bit,
+// heurística clássica que favorece linhas mais compressíveis sem segunda
+// serialização nem qualquer negociação com o payload esteganográfico.
+function pngFilterCost(v){ v&=255; return v<128?v:256-v; }
+function pngRGBAToRawAdaptive(width, height, rgba) {
+  const bpp=4, stride=width*bpp, raw=new Uint8Array(height*(stride+1));
+  let o=0;
+  for(let y=0;y<height;y++){
+    const row=y*stride, prev=(y-1)*stride;
+    const scores=[0,0,0,0,0];
+    for(let x=0;x<stride;x++){
+      const v=rgba[row+x];
+      const a=x>=bpp?rgba[row+x-bpp]:0;
+      const b=y>0?rgba[prev+x]:0;
+      const c=(y>0&&x>=bpp)?rgba[prev+x-bpp]:0;
+      scores[0]+=pngFilterCost(v);
+      scores[1]+=pngFilterCost(v-a);
+      scores[2]+=pngFilterCost(v-b);
+      scores[3]+=pngFilterCost(v-((a+b)>>1));
+      scores[4]+=pngFilterCost(v-pngPaeth(a,b,c));
+    }
+    let ft=0; for(let f=1;f<5;f++) if(scores[f]<scores[ft]) ft=f;
+    raw[o++]=ft;
+    for(let x=0;x<stride;x++){
+      const v=rgba[row+x];
+      const a=x>=bpp?rgba[row+x-bpp]:0;
+      const b=y>0?rgba[prev+x]:0;
+      const c=(y>0&&x>=bpp)?rgba[prev+x-bpp]:0;
+      let fv=v;
+      if(ft===1) fv=v-a;
+      else if(ft===2) fv=v-b;
+      else if(ft===3) fv=v-((a+b)>>1);
+      else if(ft===4) fv=v-pngPaeth(a,b,c);
+      raw[o++]=fv&255;
+    }
+  }
+  return raw;
+}
 async function pngInflate(u8) {
   const ds = new DecompressionStream('deflate'); // formato zlib (= IDAT)
   const w = ds.writable.getWriter(); w.write(u8); w.close();
@@ -148,7 +189,7 @@ async function pngDecodeRGBA(u8) {
   return { width: meta.width, height: meta.height, data: pngRasterToRGBA(meta, inflated) };
 }
 async function pngEncodeRGBA(width, height, rgba) {
-  const raw = pngRGBAToRawNone(width, height, rgba);
+  const raw = pngRGBAToRawAdaptive(width, height, rgba);
   return pngBuild(width, height, await pngDeflate(raw));
 }
 

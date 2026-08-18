@@ -29,3 +29,7 @@ and encoder options. The values are fixtures, not credentials.
 carrier: the native AES-GCM payload and the alternative-layer LSB tail. Keeping the
 compact vectors preserves historical ciphertext/tags without carrying the original
 large PNG in the public repository.
+
+## `third-party/`
+
+Corpus binário externo imutável para interoperabilidade. O primeiro fixture é o JPEG público do primeiro desafio Cicada 3301, usado para prender a extração OutGuess real. Veja `third-party/README.md` para proveniência, hash e limites declarados.

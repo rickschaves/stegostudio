@@ -20,6 +20,12 @@
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
+/* Texto acessível que não ocupa espaço visual. */
+.sr-only {
+  position:absolute!important; width:1px!important; height:1px!important; padding:0!important; margin:-1px!important;
+  overflow:hidden!important; clip:rect(0,0,0,0)!important; white-space:nowrap!important; border:0!important;
+}
+
 body {
   background: var(--bg);
   color: var(--text);
@@ -254,7 +260,7 @@ input[type=file] { display:none; }
 textarea {
   width:100%; background:var(--surface); border:1px solid var(--border2);
   border-radius:3px; color:var(--text); font-family:var(--mono);
-  font-size:0.78rem; padding:10px 12px; resize:vertical;
+  font-size:0.78rem; padding:10px 12px; resize:none;
   min-height:90px; outline:none; transition:border-color 0.2s; line-height:1.6;
 }
 textarea.enc-t:focus { border-color:rgba(0,255,179,0.4); }
@@ -558,6 +564,56 @@ textarea.dec-t:focus { border-color:rgba(255,107,53,0.4); }
   box-shadow: 0 0 22px rgba(255,107,53,0.2), 0 0 8px rgba(0,255,179,0.1);
 }
 
+/* Editor de mensagem do Encoder: campo compacto + acesso a um editor grande. */
+.enc-message-wrap { position:relative; }
+.enc-message-field {
+  padding-right:46px; overflow:auto; overscroll-behavior:contain;
+  scrollbar-width:thin; scrollbar-color:var(--enc) rgba(0,0,0,0.3);
+}
+.enc-message-expand {
+  position:absolute; top:7px; right:16px;
+  width:24px; height:24px; padding:0;
+  display:flex; align-items:center; justify-content:center;
+  border:0; border-radius:3px;
+  background:transparent; color:var(--dim); cursor:pointer;
+  font-family:var(--mono); font-size:0.88rem; line-height:1;
+  opacity:.82; z-index:2;
+  transition:color .18s,background .18s,opacity .18s,text-shadow .18s;
+}
+.enc-message-expand:hover,.enc-message-expand:focus-visible {
+  color:var(--enc); background:rgba(255,179,0,0.08); opacity:1;
+  text-shadow:0 0 7px rgba(255,179,0,.45); outline:none;
+}
+.enc-message-modal {
+  background:var(--surface); border:1px solid var(--border2); border-radius:6px;
+  width:min(92vw,900px); max-height:88vh; display:flex; flex-direction:column;
+  box-shadow:0 20px 60px rgba(0,0,0,0.65);
+}
+.enc-message-close {
+  appearance:none; border:0; background:transparent; padding:4px; font-family:inherit;
+}
+.enc-message-modal-body {
+  padding:16px 20px 20px; display:flex; flex-direction:column; gap:10px; min-height:0;
+}
+.enc-message-modal-meta {
+  display:flex; justify-content:space-between; gap:16px; align-items:flex-start;
+  color:var(--dim); font-size:0.62rem; line-height:1.55;
+}
+#enc-message-modal-count { color:var(--enc); white-space:normal; }
+.enc-message-modal-text {
+  width:100%; min-height:52vh; max-height:68vh; resize:none; box-sizing:border-box;
+  border:1px solid var(--border2); border-radius:4px; padding:14px 16px;
+  background:var(--surface2); color:var(--text); font:0.82rem/1.7 var(--sans);
+  white-space:pre-wrap; overflow:auto; overscroll-behavior:contain;
+}
+.enc-message-modal-text:focus { border-color:var(--enc); outline:none; box-shadow:0 0 0 1px rgba(255,179,0,.18); }
+@media (max-width:760px) {
+  .enc-message-modal { width:95vw; max-height:92vh; }
+  .enc-message-modal-body { padding:12px 14px 16px; }
+  .enc-message-modal-meta { flex-direction:column; gap:4px; }
+  .enc-message-modal-text { min-height:58vh; max-height:70vh; }
+}
+
 .decoded-box.visible { display:block; }
 
 .decoded-inner {
@@ -583,7 +639,41 @@ textarea.dec-t:focus { border-color:rgba(255,107,53,0.4); }
   50% { opacity:0.2; }
 }
 
-.decoded-text { font-size:0.88rem; color:#fff; font-family:var(--sans); line-height:1.7; word-break:break-word; }
+.decoded-password-note {
+  margin:0 0 10px; padding:8px 10px;
+  border:1px solid rgba(255,179,0,0.34); border-radius:3px;
+  background:rgba(255,179,0,0.07); color:#ffcc66;
+  font-family:var(--mono); font-size:0.62rem; line-height:1.55;
+}
+
+.decoded-text {
+  font-size:0.88rem; color:#fff; font-family:var(--sans); line-height:1.7;
+  word-break:break-word; white-space:pre-wrap;
+  max-height:300px; overflow:auto; overscroll-behavior:contain;
+  padding-right:4px;
+}
+/* Scrollbars internas reutilizam a linguagem visual do terminal. */
+.decoded-text::-webkit-scrollbar, .enc-message-field::-webkit-scrollbar, .enc-message-modal-text::-webkit-scrollbar { width:6px; height:6px; }
+.decoded-text::-webkit-scrollbar-track, .enc-message-field::-webkit-scrollbar-track, .enc-message-modal-text::-webkit-scrollbar-track { background:rgba(0,0,0,0.3); }
+.decoded-text::-webkit-scrollbar-thumb { background:var(--dec); border-radius:4px; }
+.enc-message-field::-webkit-scrollbar-thumb, .enc-message-modal-text::-webkit-scrollbar-thumb { background:var(--enc); border-radius:4px; }
+.decoded-text { scrollbar-width:thin; scrollbar-color:var(--dec) rgba(0,0,0,0.3); }
+.enc-message-modal-text { scrollbar-width:thin; scrollbar-color:var(--enc) rgba(0,0,0,0.3); }
+.decoded-actions {
+  display:flex; flex-wrap:wrap; gap:7px; align-items:center;
+  margin-top:10px; padding-top:9px; border-top:1px solid var(--border);
+}
+.decoded-action {
+  appearance:none; border:1px solid var(--border); border-radius:3px;
+  background:transparent; color:var(--neutral); font-family:var(--mono);
+  font-size:0.58rem; letter-spacing:1px; text-transform:uppercase;
+  padding:6px 9px; cursor:pointer;
+}
+.decoded-action:hover, .decoded-action:focus-visible {
+  border-color:var(--dec); color:#fff; outline:none;
+}
+#decoded-expand { display:none; }
+
 
 /* Fallback para browsers sem @property */
 @supports not (background: conic-gradient(from 0deg, red, blue)) {
@@ -913,7 +1003,13 @@ textarea.dec-t:focus { border-color:rgba(255,107,53,0.4); }
   transition:color 0.2s; user-select:none;
 }
 .help-close:hover { color:var(--dec); }
-.help-content { padding:12px 24px 24px; overflow-y:auto; }
+.help-content {
+  padding:12px 24px 24px; overflow-y:auto;
+  scrollbar-width:thin; scrollbar-color:var(--scan) rgba(0,0,0,0.3);
+}
+.help-content::-webkit-scrollbar { width:6px; height:6px; }
+.help-content::-webkit-scrollbar-track { background:rgba(0,0,0,0.3); }
+.help-content::-webkit-scrollbar-thumb { background:var(--scan); border-radius:4px; }
 .help-section { border-bottom:1px solid var(--border); }
 .help-section summary {
   padding:12px 0; cursor:pointer; user-select:none;
@@ -1060,7 +1156,7 @@ textarea.dec-t:focus { border-color:rgba(255,107,53,0.4); }
 }
 .adv-item-str {
   font-size:0.82rem; color:#fff0f2; line-height:1.5; font-weight:500;
-  font-family:'JetBrains Mono',monospace; word-break:break-word;
+  font-family:'JetBrains Mono',monospace; word-break:break-word; white-space:pre-wrap;
   background:rgba(255,64,96,0.12); padding:7px 10px; border-radius:3px;
   border:1px solid rgba(255,64,96,0.25);
 }
@@ -1126,6 +1222,12 @@ textarea.dec-t:focus { border-color:rgba(255,107,53,0.4); }
 .module-body .finding-warn { color:#ffb300; }
 .module-body .finding-crit { color:#ff6464; }
 .module-body .finding-ok   { color:var(--enc); }
+.module-subhead {
+  margin:2px 0 8px; padding-bottom:5px; border-bottom:1px solid var(--border);
+  font-family:var(--mono); font-size:0.58rem; letter-spacing:1.8px;
+  text-transform:uppercase; color:var(--dec);
+}
+.module-subhead-gap { margin-top:14px; }
 .module-body .interp {
   margin-top:8px; padding:8px 10px;
   background:rgba(167,139,250,0.06);
@@ -1206,6 +1308,21 @@ textarea.dec-t:focus { border-color:rgba(255,107,53,0.4); }
     overflow-y:auto;
     height:calc(100vh - 130px);
     flex:none;
+    /* Vertical scroll/pinch stay native; horizontal travel belongs to the tab swipe. */
+    touch-action:pan-y pinch-zoom;
+  }
+
+  /* Swipe interativo: o painel vizinho é temporariamente projetado no mesmo
+     viewport e acompanha o dedo. A posição fixa vale somente durante o gesto. */
+  .panel.swipe-current { position:relative; z-index:19; background:var(--bg); }
+  .panel.swipe-preview {
+    display:flex; flex-direction:column; overflow-y:auto; flex:none;
+    position:fixed;
+    background:var(--bg); will-change:transform; contain:paint;
+  }
+  .panel.swipe-animating {
+    transition-property:transform;
+    transition-timing-function:cubic-bezier(.22,.61,.36,1);
   }
 
   .decoded-text { font-size:0.82rem; }
@@ -1397,3 +1514,5 @@ textarea.dec-t:focus { border-color:rgba(255,107,53,0.4); }
   font-family:'JetBrains Mono',monospace; font-size:0.68rem;
   padding:1px 5px; border-radius:3px; background:rgba(255,255,255,0.07); color:var(--fg);
 }
+
+@media (max-width:700px) and (prefers-reduced-motion:reduce){.panel.swipe-animating{transition:none;}}

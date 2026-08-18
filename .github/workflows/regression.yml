@@ -1,0 +1,26 @@
+name: STEGO STUDIO regression
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify embedded assets
+        run: node unpack_assets.js --check
+      - name: Rebuild deterministic single-file artifact
+        run: node build.js --check
+      - name: Run regression harness
+        run: node test.js

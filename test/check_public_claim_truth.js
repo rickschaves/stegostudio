@@ -33,6 +33,8 @@ const banned=[
   /indicador mais definitivo/i,
   /Low probability of hidden content/i,
   /Baixa probabilidade de conteúdo oculto/i,
+  /Below the detection threshold — statistically indistinguishable from noise/i,
+  /Abaixo do limite de detecção — estatisticamente indistinguível de ruído/i,
 ];
 for(const r of banned) assert(!r.test(text),`stale corrected public wording found: ${r}`);
 
@@ -91,6 +93,12 @@ for(const [en,pt,label] of pairs){
   assert(i18n.includes(pt),`${label} lost in PT`);
 }
 
+// v2.43.0: the Encoder's own self-check reports only what this tool measured.
+assert(i18n.includes('Below this tool’s detection threshold — no strong signal was found in the checks used here.'),
+  'Encoder self-check lost scoped non-overclaim wording in EN');
+assert(i18n.includes('Abaixo do limite de detecção desta ferramenta — nenhum sinal forte foi encontrado nas verificações usadas aqui.'),
+  'Encoder self-check lost scoped non-overclaim wording in PT');
+
 
 // v2.42.29: the lowest AI bucket must not revert to probability/likelihood vocabulary.
 assert(i18n.includes('aiBadgeUnlikely: "VERY LOW SUSPICION"'), 'very-low AI badge lost in EN');
@@ -107,5 +115,17 @@ assert(i18n.includes('um sinal de compatibilidade com imagem sintética ou gerad
   'entropy/noise interpretation lost the compatibility-only framing in PT');
 assert(!/interpEntNoise:[^\n]*(?:probably synthetic|provavelmente sintética|facilitates controlled steganography|facilita esteganografia controlada)/i.test(i18n),
   'entropy/noise interpretation regressed to origin or causal overclaim');
+
+// v2.42.30: short signal labels must not turn heuristics into origin verdicts.
+assert(i18n.includes('aiLblVectorArt: "Vector/icon art pattern (flat design)"'),
+  'vector-art label lost compatibility-pattern framing in EN');
+assert(i18n.includes('aiLblVectorArt: "Padrão de arte vetorial/ícone (flat design)"'),
+  'vector-art label lost compatibility-pattern framing in PT');
+assert(i18n.includes('aiLblDigitalRender: "Digital-graphic pattern (AI score capped)"'),
+  'digital-render label lost non-verdict framing in EN');
+assert(i18n.includes('aiLblDigitalRender: "Padrão de gráfico digital (score de IA limitado)"'),
+  'digital-render label lost non-verdict framing in PT');
+assert(!/aiLbl(?:VectorArt|DigitalRender):[^\n]*(?:Likely|Provável|not an AI image|não imagem de IA)/i.test(i18n),
+  'AI signal label regressed to likelihood or negative-origin verdict');
 
 process.stdout.write('public claim regression gate OK');

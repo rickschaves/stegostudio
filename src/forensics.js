@@ -872,6 +872,9 @@ function computeOrigin(r, file, fmt) {
   const isJPEG = fmt.ext === 'JPEG';
   const isPNG  = fmt.ext === 'PNG';
   const exif = r.exif || {};
+  // Falha de leitura é estado desconhecido, não ausência. Qualquer evidência
+  // baseada em EXIF só participa quando o parser realmente conseguiu ler a camada.
+  const exifReadable = exif.available !== false;
   const grad = r.gradients || {};
   const chroma = r.chroma || {};
   const entropy = r.entropy || {};
@@ -895,18 +898,18 @@ function computeOrigin(r, file, fmt) {
   // ── FOTOGRAFIA ──
   // Evidências de câmera física: EXIF de câmera, ruído de sensor, gradientes suaves naturais
   let photo = 0; const photoSig = [];
-  if (exif.hasCamera) { photo += 60; photoSig.push({labelKey:'sigPhysicalEXIF', weight:60}); }
-  if (exif.hasGPS)    { photo += 10; photoSig.push({labelKey:'sigGPS', weight:10}); }
+  if (exifReadable && exif.hasCamera) { photo += 60; photoSig.push({labelKey:'sigPhysicalEXIF', weight:60}); }
+  if (exifReadable && exif.hasGPS)    { photo += 10; photoSig.push({labelKey:'sigGPS', weight:10}); }
   if (avgNoise >= 2 && avgNoise < 15) { photo += 20; photoSig.push({labelKey:'sigSensorNoise', weight:20}); }
   if (uniqueColors > 50000) { photo += 15; photoSig.push({labelKey:'sigHighChroma', weight:15}); }
-  if (isJPEG && exif.found) { photo += 10; photoSig.push({labelKey:'sigJPEGMeta', weight:10}); }
+  if (exifReadable && isJPEG && exif.found) { photo += 10; photoSig.push({labelKey:'sigJPEGMeta', weight:10}); }
   if (sharpRatio > 20 && sharpRatio < 75) { photo += 5; photoSig.push({labelKey:'sigNaturalGradients', weight:5}); }
   photo = Math.min(photo, 100);
 
   // ── SCREENSHOT ──
   // Interface digital: bordas perfeitas, paleta limitada de UI, sem ruído, entropia alta e variada
   let screen = 0; const screenSig = [];
-  if (isPNG && !exif.hasCamera) { screen += 15; screenSig.push({labelKey:'sigPNGNoCamera', weight:15}); }
+  if (exifReadable && isPNG && !exif.hasCamera) { screen += 15; screenSig.push({labelKey:'sigPNGNoCamera', weight:15}); }
   if (sharpRatio > 80) { screen += 30; screenSig.push({labelKey:'sigSharpEdges', weight:30}); }
   if (noiseAbsent) { screen += 20; screenSig.push({labelKey:'sigNoSensorNoise', weight:20}); }
   if (uniqueColors < 5000 && uniqueColors > 100) { screen += 15; screenSig.push({labelKey:'sigUIPalette', weight:15}); }
@@ -915,7 +918,7 @@ function computeOrigin(r, file, fmt) {
   const w = r.metadata?.width||0;
   const commonScreenW = [1080,1170,1179,1284,1290,1440,1920,2560,750,828];
   if (commonScreenW.includes(w)) { screen += 20; screenSig.push({labelKey:'sigScreenWidth', labelVars:{w}, weight:20}); }
-  if (!exif.found && isPNG) { screen += 10; screenSig.push({labelKey:'sigPNGNoMeta', weight:10}); }
+  if (exifReadable && !exif.found && isPNG) { screen += 10; screenSig.push({labelKey:'sigPNGNoMeta', weight:10}); }
   screen = Math.min(screen, 100);
 
   // ── ARTE DIGITAL / RENDER 3D ──
@@ -927,7 +930,7 @@ function computeOrigin(r, file, fmt) {
   if (sharpRatio > 60 && sharpRatio <= 80) { art += 20; artSig.push({labelKey:'sigRegularSharpEdges', weight:20}); }
   if (uniqueColors < 30000 && uniqueColors > 500) { art += 20; artSig.push({labelKey:'sigControlledPalette', weight:20}); }
   if (chroma.uniformChroma && !chroma.oversaturated) { art += 15; artSig.push({labelKey:'sigControlledChroma', weight:15}); }
-  if (isPNG && !exif.hasCamera) { art += 10; artSig.push({labelKey:'sigPNGNoCamera', weight:10}); }
+  if (exifReadable && isPNG && !exif.hasCamera) { art += 10; artSig.push({labelKey:'sigPNGNoCamera', weight:10}); }
   if (grad.suspicious && sharpRatio > 50) { art += 10; artSig.push({labelKey:'sigArtificialGradients', weight:10}); }
   // Quando o veto de render digital disparou, o peso pertence AQUI, não em
   // "sintética/IA": a evidência é de imagem produzida em software, não de IA.
@@ -939,7 +942,7 @@ function computeOrigin(r, file, fmt) {
   // módulo "Detecção de Imagem Sintética" — aqui mostramos um resumo sem pesos redundantes.
   let synth = ai.score || 0; const synthSig = [];
   if (r.c2pa?.manifestDetected) synthSig.push({labelKey:'sigC2PAConfirmed', weight:null});
-  if (exif.aiSoftware) synthSig.push({labelKey:'sigAISoftwareEXIF', weight:null});
+  if (exifReadable && exif.aiSoftware) synthSig.push({labelKey:'sigAISoftwareEXIF', weight:null});
   if (ai.score >= 45 && !r.c2pa?.manifestDetected && !exif.aiSoftware) synthSig.push({labelKey:'sigSyntheticPixels', weight:null});
   // Quando o veto de gráfico digital limitou o score, a categoria ficava com
   // pontuação e NENHUM sinal explicando — um número sem justificativa visível.
@@ -963,9 +966,6 @@ function computeOrigin(r, file, fmt) {
   };
 }
 
-// ════════════════════════════════════════
-//  THREAT SCORE (mensagem oculta)
-// ════════════════════════════════════════
 // ════════════════════════════════════════
 //  CONSOLIDAÇÃO DO VEREDITO
 //  Combines structural LSB evidence with extraction quality before deciding
@@ -1005,6 +1005,14 @@ function consolidateVerdict(r, decodedMsg, decodeStatus, fromDeepScan) {
   return out;
 }
 
+function resolveThirdPartyEvidence(r) {
+  const studio=r?.studio||{};
+  if(!studio.thirdParty) return {level:'none', tool:null};
+  if(studio.foreignEncrypted) return {level:'identified', tool:studio.thirdParty};
+  if(studio.foreignTruncated) return {level:'partial', tool:studio.thirdParty};
+  return {level:'recovered', tool:studio.thirdParty};
+}
+
 function computeThreat(r) {
   let score=0; const flags=[];
   const isLossless=r.format?.cat==='lossless'||!r.format;
@@ -1012,6 +1020,9 @@ function computeThreat(r) {
   // ── SINAIS FORTES DE ESTEGANOGRAFIA (evidência direta) ──
   // Esses pesam alto porque apontam mensagem oculta de forma específica.
   let hasStrongStego = false;
+  const thirdPartyLevel = !r.studio?.thirdParty ? 'none'
+    : r.studio?.foreignEncrypted ? 'identified'
+    : r.studio?.foreignTruncated ? 'partial' : 'recovered';
 
   // ── CONTEXTO C2PA ──
   // Um manifesto C2PA detectado fornece contexto de proveniência, mas esta build não
@@ -1031,6 +1042,7 @@ function computeThreat(r) {
     r.studio?.nativeExtracted || r.studio?.nativeHeaderMatched ||
     r.studio?.robust === true || r.studio?.robust === 'locked' ||
     r.studio?.robust === 'content-error' ||
+    ['recovered','partial'].includes(thirdPartyLevel) ||
     (r.stegomalware||[]).some(m=>m.sev==='crit') ||
     r.lsb?.lsbrStrong || (parseFloat(r.lsb?.rsRate)||0) >= 25 ||
     _realHiddenText
@@ -1077,6 +1089,17 @@ function computeThreat(r) {
     // Assinatura estatística SEM extração: indício, e dos fracos — só dispara
     // com a capacidade quase cheia. Peso menor que o de um payload avariado.
     score+=15; flags.push(t('flagRobustSignature'));
+  }
+
+  // ── EXTRAÇÃO DIRETA DE MÉTODO EXTERNO ──
+  // OpenStego/Steghide só publicam `thirdParty` quando a rota correspondente
+  // reconheceu o formato; OutGuess não tem magic, então sua rota exige conteúdo
+  // altamente plausível antes de publicar. Uma recuperação completa é prova
+  // direta de mensagem oculta, assim como a recuperação nativa/robusta.
+  if(thirdPartyLevel==='recovered'){
+    score+=40; flags.push(t('flagThirdPartyRecovered')); hasStrongStego=true;
+  } else if(thirdPartyLevel==='partial'){
+    score+=40; flags.push(t('flagThirdPartyPartial')); hasStrongStego=true;
   }
 
   // ── STEGOMALWARE: a mensagem decodificada parece script/executável ──
@@ -1153,7 +1176,15 @@ function computeThreat(r) {
   // Explica ao analista por que sinais moles não pontuaram (transparência da Opção B).
   if(c2paSuppressed){ flags.push(t('flagC2PAExplained')); }
 
-  return {score:Math.min(score,100),flags};
+  // 100 é um estado terminal reservado a prova direta confirmada. Uma soma
+  // puramente heurística pode ser muito forte, mas continua sendo suspeita, não
+  // confirmação; por isso satura em 99. Recuperação nativa, robusta ou por um
+  // método externo suportado fecha em 100 sem recalibrar os pesos acima.
+  const directThreatConfirmed = r.studio?.nativeExtracted === true ||
+    r.studio?.robust === true || thirdPartyLevel==='recovered';
+  score = directThreatConfirmed ? 100 : Math.min(score,99);
+
+  return {score,flags};
 }
 
 // ════════════════════════════════════════
@@ -1198,7 +1229,7 @@ function interpretModule(key, r) {
 
   if(key==='strings') {
     if(r.strings.appendedData) return t('interpStrAppended').replace('{bytes}', r.strings.appendedBytes);
-    if(r.strings.interesting.length>0) return t('interpStrInteresting').replace('{count}', r.strings.interesting.length).replace('{types}', r.strings.interesting.slice(0,2).map(s=>s.type).join(', '));
+    if(r.strings.interesting.length>0) return t('interpStrInteresting').replace('{count}', r.strings.interesting.length).replace('{types}', r.strings.interesting.slice(0,2).map(s=>escapeHTML(s.type)).join(', '));
     return t('interpStrNormal').replace('{count}', r.strings.count);
   }
 
@@ -1232,7 +1263,7 @@ function interpretModule(key, r) {
     if(proto.level === 'passive')     return t('interpStudioHeader').replace('{bytes}', r.studio.payloadBytes);
     if(proto.level === 'generic') {
       const hdr = r.studio.headerName || r.lsb?.headerName;
-      if (hdr) return t('interpStudioDeepHeader').replace('{hdr}', hdr);
+      if (hdr) return t('interpStudioDeepHeader').replace('{hdr}', escapeHTML(hdr));
       return t('interpStudioDeepNoHeader');
     }
     if(proto.level === 'cipher')      return t('interpStudioCipher');
@@ -1436,9 +1467,6 @@ async function parseEXIF(file) {
   });
 }
 
-// ════════════════════════════════════════
-//  DCT BLOCK UNIFORMITY (8×8 grid variance)
-// ════════════════════════════════════════
 // ════════════════════════════════════════
 //  Esteganálise em JPEG (coeficientes DCT quantizados)
 //  Usa jpeg_dct.js para ler os coeficientes reais e produz uma análise

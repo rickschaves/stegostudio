@@ -9,6 +9,20 @@ function resolveNativeEvidence({ decodedMsg, nativeHeaderMatched=false, nativePa
   return { level:'none' };
 }
 
+// O texto público de sucesso é independente do método. Método/proteção vivem
+// nas linhas próprias do módulo; este helper decide apenas se houve recuperação
+// completa, parcial ou se o status específico da rota deve ser preservado.
+function resolveRecoveredStatusKind(decodedMsg, studio, nativePayloadRecovered=false, nativeLayerRecovered=false, recoveredFile=false) {
+  if (!decodedMsg && !recoveredFile) return 'none';
+  const tp = !studio?.thirdParty ? 'none'
+    : studio?.foreignEncrypted ? 'identified'
+    : studio?.foreignTruncated ? 'partial' : 'recovered';
+  if (recoveredFile && tp==='recovered' && !decodedMsg) return 'file';
+  if (nativePayloadRecovered || nativeLayerRecovered || studio?.robust===true || tp==='recovered') return 'recovered';
+  if (tp==='partial') return 'partial';
+  return 'none';
+}
+
 // Normaliza uma extração nativa bem-sucedida para UM estado público.
 // `nativeHeaderMatched` é útil apenas enquanto temos "header localizado, conteúdo
 // não recuperado". Depois que uma mensagem nativa sobrevive à consolidação, a
@@ -20,6 +34,64 @@ function markNativeExtracted(report) {
   report.studio = studio;
   return studio;
 }
+
+// Abre o payload interno transportado pelo JPEG robusto. O envelope externo
+// (robust.js) autentica sua própria estrutura/CRC e corrige o transporte via RS,
+// mas isso NÃO basta para declarar que o conteúdo interno é uma mensagem válida.
+// `robust:true` só pode nascer depois desta função devolver state:'ok'.
+async function openRobustInnerPayload(p, key) {
+  if (!(p instanceof Uint8Array) || p.length < 10) return {state:'contentError', plain:null};
+  for (let i=0;i<MAGIC.length;i++) {
+    if (p[i] !== MAGIC[i]) return {state:'contentError', plain:null};
+  }
+
+  const modeByte = p[5];
+  const len = (p[6] | (p[7]<<8) | (p[8]<<16) | (p[9]<<24)) >>> 0;
+  // O wire clássico não admite corpo vazio, truncamento nem trailing bytes:
+  // buildPayload() produz exatamente 10 + len bytes.
+  if (len <= 0 || 10 + len !== p.length) return {state:'contentError', plain:null};
+
+  const comp = !!(modeByte & FLAG_COMPRESSED);
+  const body = p.slice(10);
+  const aesBody = isAesPayload(body);
+  let plain = null;
+  let state = 'ok';
+
+  if (aesBody) {
+    if (key.length > 0) {
+      try { plain = await aesDecryptBytes(body, key); }
+      catch (_) { state = 'locked'; }
+    } else {
+      state = 'needsKey';
+    }
+  } else {
+    plain = body;
+  }
+
+  if (plain && comp) {
+    try { plain = await inflateBytes(plain); }
+    catch (_) { plain = null; state = 'contentError'; }
+  }
+
+  // Conteúdo vazio não é conteúdo recuperado. A tag GCM prova que quem cifrou
+  // tinha a chave, não que existe mensagem; o gate de legibilidade abaixo já
+  // rejeita o vazio no ramo não-AES, então esta checagem uniformiza os dois.
+  if (plain && plain.length === 0) {
+    plain = null;
+    state = 'contentError';
+  }
+
+  // Premissa atual do produto: payload robusto não-AES é texto vindo do textarea.
+  // O gate é aplicado ao plaintext FINAL (após eventual inflate). Se um dia o
+  // Encoder aceitar arquivo/binário sem senha, esta regra deve ser revisitada.
+  if (plain && !aesBody && isReadableText(plain) <= 0.7) {
+    plain = null;
+    state = 'contentError';
+  }
+
+  return {state, plain, passwordUsed:state==='ok' && aesBody && key.length>0};
+}
+
 
 
 // ════════════════════════════════════════
@@ -220,6 +292,8 @@ document.getElementById('btn-analyze').addEventListener('click', async ()=>{
 
     // Decode attempt
     let decodedMsg=null, decodeStatus=t('decStatusNoStudio');
+    let recoveredFile=null; // bytes crus recuperados por motor externo; estado LOCAL, fora do report público
+    let passwordIgnored=false; // senha fornecida, mas a recuperação vencedora usou o caminho sem senha
     let decodedFromDeepScan=false; // true quando a msg veio da investigação profunda (pode ser ruído)
     // As duas rotas nativas usam flags LOCAIS simétricas. `nativeHeaderMatched`
     // fica no relatório como evidência estrutural, mas nunca é usado para provar
@@ -256,7 +330,15 @@ document.getElementById('btn-analyze').addEventListener('click', async ()=>{
           // 'damaged' é o caso honesto: o cabeçalho sobreviveu ao caminho e o
           // corpo não — dizer isso é melhor do que dizer "nada encontrado".
           try{
-            const rb = robustExtract(bytes, key);
+            let rb = robustExtract(bytes, key);
+            let robustUsedEmptyPassword=false;
+            // Se o usuário informou uma senha para um JPEG robusto criado sem senha,
+            // a senha não deve impedir a recuperação. Só fazemos fallback para o
+            // plano vazio quando a tentativa informada não reconheceu envelope algum.
+            if(key.length>0 && rb.status==='none'){
+              const rbNoKey=robustExtract(bytes, '');
+              if(rbNoKey.status!=='none'){ rb=rbNoKey; robustUsedEmptyPassword=true; }
+            }
             if(rb.status === 'ok'){
               // O envelope robusto já foi confirmado (magic + CRC + RS). Daqui em
               // diante uma falha do conteúdo NÃO pode apagar essa evidência nem
@@ -264,34 +346,16 @@ document.getElementById('btn-analyze').addEventListener('click', async ()=>{
               // para arquivos hostis/malformados em que a senha do plano externo e
               // a senha AES interna não sejam a mesma, mesmo que nosso Encoder use
               // uma única senha para as duas camadas.
-              const p = rb.payload, modeByte = p[5];
-              const len = p[6] | (p[7]<<8) | (p[8]<<16) | (p[9]<<24);
-              const comp = !!(modeByte & FLAG_COMPRESSED);
-              const body = p.slice(10, 10 + len);
-              const aesBody = isAesPayload(body);
-              let plain = null, contentState = 'ok';
-              if(aesBody){
-                if(key.length > 0){
-                  try{ plain = await aesDecryptBytes(body, key); }
-                  catch(_){ contentState = 'locked'; }
-                } else {
-                  contentState = 'needsKey';
-                }
-              } else {
-                plain = body;
-              }
-              if(plain && comp){
-                try{ plain = await inflateBytes(plain); }
-                catch(_){ plain = null; contentState = 'contentError'; }
-              }
-              if(plain){
-                decodedMsg = new TextDecoder().decode(plain).slice(0,5000);
+              const opened = await openRobustInnerPayload(rb.payload, key);
+              if(opened.state === 'ok' && opened.plain){
+                decodedMsg = new TextDecoder().decode(opened.plain);
                 decodeStatus = t('rbDecFound');
+                if(robustUsedEmptyPassword && !opened.passwordUsed) passwordIgnored=true;
                 report.studio = {...report.studio, robust:true, robustCorrected:rb.errosCorrigidos};
-              } else if(contentState === 'locked'){
+              } else if(opened.state === 'locked'){
                 decodeStatus = t('rbDecLocked');
                 report.studio = {...report.studio, robust:'locked', robustCorrected:rb.errosCorrigidos};
-              } else if(contentState === 'needsKey'){
+              } else if(opened.state === 'needsKey'){
                 decodeStatus = t('rbDecNeedsKey');
                 report.studio = {...report.studio, robust:'locked', robustCorrected:rb.errosCorrigidos};
                 flashKey('missing');
@@ -304,19 +368,27 @@ document.getElementById('btn-analyze').addEventListener('click', async ()=>{
               report.studio = {...report.studio, robust:'damaged'};
             }
           }catch(_){ /* não é payload robusto — segue para os motores de terceiros */ }
-          const shRes = decodedMsg ? null : await shDecodeJpeg(bytes, key, dec);
-          if(shRes && shRes.text!==null){
-            decodedMsg=shRes.text.slice(0,5000);
+          const shRes = (decodedMsg||recoveredFile) ? null : await shDecodeJpeg(bytes, key, dec);
+          if(shRes && shRes.data instanceof Uint8Array && shRes.data.length>0){
+            decodedMsg=typeof shRes.text==='string' && shRes.text.length>0 ? shRes.text : null;
+            recoveredFile=(shRes.fileName || shRes.binary)
+              ? {bytes:shRes.data, fileName:shRes.downloadName||shRes.fileName||'steghide_payload.bin', mime:shRes.mime||'application/octet-stream', source:'Steghide'}
+              : null;
+            if(key.length>0 && shRes.usedEmptyPassword) passwordIgnored=true;
             decodeStatus=t('decStatusSteghide');
             report.studio={...report.studio, thirdParty:'Steghide', foreignFile:shRes.fileName||null};
           }
           // ── MOTOR DE TERCEIRO: OutGuess (mesmo domínio DCT) ──
           // Só tenta se o Steghide não achou nada. Sem magic próprio, o motor
           // só reporta extrações que pareçam conteúdo real (sem falso positivo).
-          if(!decodedMsg){
+          if(!decodedMsg && !recoveredFile){
             const ogRes=ogDecodeJpeg(bytes, key, dec);
-            if(ogRes && ogRes.text!==null){
-              decodedMsg=ogRes.text.slice(0,5000);
+            if(ogRes && ogRes.data instanceof Uint8Array && ogRes.data.length>0){
+              decodedMsg=typeof ogRes.text==='string' && ogRes.text.length>0 ? ogRes.text : null;
+              recoveredFile=ogRes.binary
+                ? {bytes:ogRes.data, fileName:ogRes.downloadName||'outguess_payload.bin', mime:ogRes.mime||'application/octet-stream', source:'OutGuess'}
+                : null;
+              if(key.length>0 && ogRes.usedDefaultKey) passwordIgnored=true;
               decodeStatus=ogRes.truncated?t('decStatusOutGuessPartial'):t('decStatusOutGuess');
               report.studio={...report.studio, thirdParty:'OutGuess', foreignTruncated:!!ogRes.truncated};
             }
@@ -325,7 +397,7 @@ document.getElementById('btn-analyze').addEventListener('click', async ()=>{
         // Em JPEG, o status padrão ("LSB indisponível") apenas REPETE a nota do
         // módulo logo acima. Troca por algo que informa de fato: quais motores
         // foram tentados e qual foi o resultado.
-        if(!decodedMsg){
+        if(!decodedMsg && !recoveredFile){
           if(!report.studio?.robust) decodeStatus=t('decStatusJpegNoneFound');
           // Identificação confirmada sem extração. O magic do Steghide vive em
           // posições derivadas da senha: se ele bate, confirma a ferramenta mesmo
@@ -347,7 +419,13 @@ document.getElementById('btn-analyze').addEventListener('click', async ()=>{
         }
       }
     } else {
-      const studioPayload=extractLSBStudio(runID,key);
+      let studioPayload=extractLSBStudio(runID,key);
+      if(!studioPayload && key.length>0){
+        try{ studioPayload=await extractLSBStudioV3(runID,key); }catch(e){
+          if(e?.message==='argon2-unavailable') throw e;
+          studioPayload=null;
+        }
+      }
       if(studioPayload && studioPayload.needsPassword){
         // Corpo embaralhado por senha, mas nenhuma senha foi informada.
         decodeStatus=t('decStatusShuffledNeedsKey');decodedMsg=null;flashKey('missing');
@@ -364,13 +442,30 @@ document.getElementById('btn-analyze').addEventListener('click', async ()=>{
         // distinção que o modo robusto já faz entre `true` e `'damaged'`.
         nativeHeaderMatched=true;
         const comp = !!studioPayload.compressed;
-        const isAes = isAesPayload(studioPayload);
+        const studioUsedPasswordForFraming = !!studioPayload.passwordUsedForFraming;
+        const isF21 = studioPayload.v3 === true;
+        const isAes = !isF21 && isAesPayload(studioPayload);
         // Descomprime se o flag FLAG_COMPRESSED estiver setado; null se falhar.
         const inflateIfNeeded = async (bytes) => {
           if(!comp) return bytes;
           try{ return await inflateBytes(bytes); }catch(_){ return null; }
         };
-        if(key.length>0){
+        if(isF21){
+          // A autenticação do header já provou a senha antes de qualquer leitura
+          // variável. O corpo GCM pode ainda falhar por adulteração/dano.
+          if(studioPayload.bodyAuthenticated && studioPayload.plainBytes){
+            let bytes=await inflateIfNeeded(studioPayload.plainBytes);
+            if(bytes!==null){
+              decodedMsg=new TextDecoder('utf-8',{fatal:false}).decode(bytes);
+              decodeStatus=t('decStatusDecryptedKey');
+              nativePayloadRecovered=true;
+            } else {
+              decodeStatus=t('decStatusProtectedDamaged');decodedMsg=null;
+            }
+          } else {
+            decodeStatus=t('decStatusProtectedDamaged');decodedMsg=null;
+          }
+        } else if(key.length>0){
           if(isAes){
             // Formato novo: AES-GCM (autenticado). Decifra → (descomprime) → texto.
             let bytes=null;
@@ -389,6 +484,7 @@ document.getElementById('btn-analyze').addEventListener('click', async ()=>{
             if(bytes!==null && isReadableText(bytes)>0.7){
               decodedMsg=new TextDecoder('utf-8',{fatal:false}).decode(bytes);
               decodeStatus=t('decStatusPlainKeyIgnored');
+              if(!studioUsedPasswordForFraming) passwordIgnored=true;
               nativePayloadRecovered=true;
             } else {
               decodeStatus=t('decStatusCipherWrongKey');decodedMsg=null;pendingKeyFlash=true;
@@ -401,7 +497,7 @@ document.getElementById('btn-analyze').addEventListener('click', async ()=>{
               decodedMsg=attempt;decodeStatus=t('decStatusDecryptedKey');nativePayloadRecovered=true;
             } else {
               const plain=new TextDecoder('utf-8',{fatal:false}).decode(studioPayload);
-              if(isReadableText(studioPayload)>0.7){decodedMsg=plain;decodeStatus=t('decStatusPlainKeyIgnored');nativePayloadRecovered=true;}
+              if(isReadableText(studioPayload)>0.7){decodedMsg=plain;decodeStatus=t('decStatusPlainKeyIgnored');if(!studioUsedPasswordForFraming) passwordIgnored=true;nativePayloadRecovered=true;}
               else{decodeStatus=t('decStatusCipherWrongKey');decodedMsg=null;pendingKeyFlash=true;}
             }
           }
@@ -509,8 +605,12 @@ document.getElementById('btn-analyze').addEventListener('click', async ()=>{
       let osRes=null;
       try{ osRes=await osDecodeMessage(runID,key); }catch(_){ osRes=null; }
       if(osRes){
-        if(osRes.text!==null){
-          decodedMsg=osRes.text.slice(0,5000);
+        if(osRes.data instanceof Uint8Array && osRes.data.length>0){
+          decodedMsg=typeof osRes.text==='string' && osRes.text.length>0 ? osRes.text : null;
+          recoveredFile=(osRes.fileName || osRes.binary)
+            ? {bytes:osRes.data, fileName:osRes.downloadName||osRes.fileName||'openstego_payload.bin', mime:osRes.mime||'application/octet-stream', source:'OpenStego'}
+            : null;
+          if(key.length>0 && osRes.usedEmptyPassword) passwordIgnored=true;
           decodeStatus=t('decStatusOpenStego');
           decodedFromDeepScan=false; // extração real (magic OpenStego bateu), não é ruído
           report.studio={...report.studio, thirdParty:'OpenStego', foreignFile:osRes.fileName||null};
@@ -522,6 +622,15 @@ document.getElementById('btn-analyze').addEventListener('click', async ()=>{
         }
       }
     }
+
+    // Decode Status descreve o RESULTADO; método/proteção vivem nas linhas
+    // próprias do módulo. Normaliza apenas recuperações diretas confiáveis;
+    // deep scan e estados de erro preservam suas mensagens específicas.
+    const recoveredStatusKind=resolveRecoveredStatusKind(decodedMsg, report.studio, nativePayloadRecovered, nativeLayerRecovered, !!recoveredFile);
+    const normalizedDecodeStatus = recoveredStatusKind==='file' ? t('decStatusFileRecovered')
+      : (recoveredStatusKind==='recovered' ? t('decStatusRecovered')
+      : (recoveredStatusKind==='partial' ? t('decStatusRecoveredPartial') : null));
+    if(normalizedDecodeStatus) decodeStatus=normalizedDecodeStatus;
 
     // ── CONSOLIDAÇÃO INICIAL (sem neural ainda) ──
     // Roda mesmo sem backend: se o decode produziu ruído de deep scan, suprime
@@ -563,8 +672,8 @@ document.getElementById('btn-analyze').addEventListener('click', async ()=>{
     report.stegomalware = decodedMsg ? detectStegomalware(decodedMsg) : [];
     lastReport=createPublicLastReport(report, decodedMsg, decodeStatus);
     // Guarda os argumentos do render para poder refazê-lo ao trocar de idioma
-    lastRenderArgs = {report, decodedMsg, decodeStatus, gen: run};
-    renderResults(report,decodedMsg,decodeStatus);
+    lastRenderArgs = {report, decodedMsg, decodeStatus, passwordIgnored, recoveredFile, gen: run};
+    renderResults(report,decodedMsg,decodeStatus,{passwordIgnored,recoveredFile});
     // Rola até o topo dos resultados para o usuário ver os scores imediatamente,
     // sem precisar rolar manualmente. Funciona tanto no scroll da coluna direita
     // (desktop) quanto no scroll do painel inteiro (mobile).
@@ -618,7 +727,7 @@ document.getElementById('btn-analyze').addEventListener('click', async ()=>{
 // ════════════════════════════════════════
 document.getElementById('btn-export-json').addEventListener('click',()=>{
   if(!lastReport) return;
-  const payload={_tool:'STEGO·STUDIO v2.42.29',_schema:'forensic-report-v2',
+  const payload={_tool:'STEGO·STUDIO v2.43.12',_schema:'forensic-report-v2',
     _hint:t('exportHintJSON'),
     ...lastReport};
   const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
@@ -687,12 +796,19 @@ function toggleEncOverlay(){
 
   on('.tab.enc', 'click', () => switchTab('enc'));
   on('.tab.dec', 'click', () => switchTab('dec'));
+  bindMobileTabSwipe();
   on('#settings-gear', 'click', (e) => toggleSettingsMenu(e));
   on('#settings-help', 'click', () => { showHelpModal(); closeSettingsMenu(); });
   on('#settings-changelog', 'click', () => { showChangelogModal(); closeSettingsMenu(); });
   on('#settings-about', 'click', () => { showAboutModal(); closeSettingsMenu(); });
   on('#lang-en', 'click', () => setLang('en'));
   on('#lang-pt', 'click', () => setLang('pt'));
+  on('#decoded-copy', 'click', () => { copyDecodedMessage(); });
+  on('#decoded-save', 'click', () => saveDecodedMessage());
+  on('#enc-message-expand', 'click', () => openEncMessageEditor('enc-msg'));
+  on('#enc-decoy-message-expand', 'click', () => openEncMessageEditor('enc-decoy-msg'));
+  on('#enc-message-close', 'click', () => closeEncMessageEditor());
+  on('#enc-message-modal-text', 'input', () => syncEncMessageTargetFromModal());
 
   // Overlays: fechar só ao clicar no fundo (event.target === o próprio overlay)
   on('#help-overlay', 'click', (e) => { if (e.target === e.currentTarget) hideHelpModal(); });
@@ -701,6 +817,8 @@ function toggleEncOverlay(){
   on('#changelog-close-btn', 'click', () => hideChangelogModal());
   on('#about-overlay', 'click', (e) => { if (e.target === e.currentTarget) hideAboutModal(); });
   on('#about-close-btn', 'click', () => hideAboutModal());
+  on('#enc-message-overlay', 'click', (e) => { if (e.target === e.currentTarget) closeEncMessageEditor(); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && document.getElementById('enc-message-overlay')?.classList.contains('visible')) closeEncMessageEditor(); });
 
   // Accordion dos módulos forenses é gerado dinamicamente -> delegação no document.
   document.addEventListener('click', (e) => {

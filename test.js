@@ -94,12 +94,13 @@ check('paridade i18n (EN == PT)', () => {
 check(`versão consistente (v${VERSION}) nos identificadores públicos`, () => {
   const header = new RegExp(`v${VERSION.replace(/\./g, '\\.')} // ENCODER`).test(html);
   const json = html.includes(`_tool:'STEGO·STUDIO v${VERSION}'`);
-  const changelog = new RegExp(`ver:'v${VERSION.replace(/\./g, '\\.')}'`).test(html);
+  const banner = html.includes(`STEGO·STUDIO v${VERSION} — steganography and image forensics`);
   assert(header, 'header logo não bate com VERSION');
   assert(json, 'export JSON (_tool) não bate com VERSION');
-  assert(changelog, 'primeira entrada do changelog não bate com VERSION');
-  return 'header + export + changelog';
+  assert(banner, 'banner gerado não bate com VERSION');
+  return 'header + export + banner';
 });
+
 
 // ---------------------------------------------------------------------------
 // CHECK 4b — injeção literal: nenhum caractere consumido pelo String.replace
@@ -179,6 +180,9 @@ check('eventos: alvos no DOM + funções definidas', () => {
     'id="changelog-close-btn"', 'id="about-overlay"', 'id="about-close-btn"', 'class="module-header"',
     'id="enc-key"', 'id="enc-decoy-key"', 'id="dec-key"',
     'id="btn-encode"', 'id="btn-analyze"',
+    'id="decoded-copy"', 'id="decoded-save"',
+    'id="enc-message-expand"', 'id="enc-decoy-message-expand"', 'id="enc-message-overlay"', 'id="enc-message-close"',
+    'id="enc-message-modal-text"', 'id="enc-message-modal-count"',
     // contrato de DOM da segunda saída do Encoder
     'id="enc-rb"', 'id="rb-body"', 'id="rb-unavailable"', 'id="rb-out-prev"',
     'id="btn-dl-rb"', 'id="rb-stats"', 'id="rb-report"', 'id="enc-tips"', 'id="enc-decoy-pngonly"',
@@ -212,7 +216,9 @@ check('eventos: alvos no DOM + funções definidas', () => {
 
   const fns = ['switchTab', 'toggleSettingsMenu', 'showHelpModal',
     'closeSettingsMenu', 'showChangelogModal', 'showAboutModal', 'setLang', 'hideHelpModal',
-    'hideChangelogModal', 'hideAboutModal', 'toggleAccordionItem'];
+    'hideChangelogModal', 'hideAboutModal', 'toggleAccordionItem',
+    'copyDecodedMessage', 'saveDecodedMessage', 'openEncMessageEditor', 'closeEncMessageEditor',
+    'syncEncMessageModalFromTarget', 'syncEncMessageTargetFromModal'];
   const missF = fns.filter(f => !new RegExp(`function ${f}\\b`).test(html));
   assert(missF.length === 0, `função(ões) não definida(s): ${missF.join(', ')}`);
   // Enter nos campos de senha aciona a ação primária somente
@@ -513,6 +519,28 @@ check('threat: extração confirmada pesa, imagem C2PA limpa não satura', () =>
   const resolveProtocolState = new Function('t', mP[0] + '\nreturn resolveProtocolState;')(tStub);
   const computeThreat = new Function('t','resolveProtocolState', m[0] + '\nreturn computeThreat;')(tStub, resolveProtocolState);
 
+  // O rótulo visual CONFIRMED precisa convergir nas mesmas duas rotas diretas.
+  // Executamos a expressão real do renderer em vez de duplicar a condição no teste.
+  const tc = html.match(/const threatConfirmed\s*=\s*([^;]+);/);
+  assert(tc, 'condição threatConfirmed não encontrada no renderer');
+  const tpFn = html.match(/function resolveThirdPartyEvidence\(r\) \{[\s\S]*?\n\}/);
+  assert(tpFn, 'resolveThirdPartyEvidence não encontrado');
+  const resolveThirdPartyEvidence = new Function(tpFn[0]+'\nreturn resolveThirdPartyEvidence;')();
+  const threatConfirmedExpr = new Function('r','resolveThirdPartyEvidence', `return !!(${tc[1]});`);
+  const threatConfirmed = r => threatConfirmedExpr(r, resolveThirdPartyEvidence);
+  assert(threatConfirmed({studio:{nativeExtracted:true}}) === true,
+    'renderer não marca CONFIRMADO para extração nativa');
+  assert(threatConfirmed({studio:{robust:true}}) === true,
+    'renderer não marca CONFIRMADO para extração robusta');
+  assert(threatConfirmed({studio:{thirdParty:'OutGuess'}}) === true,
+    'renderer não marca CONFIRMADO para extração externa completa');
+  assert(threatConfirmed({studio:{thirdParty:'OpenStego',foreignEncrypted:true}}) === false,
+    'renderer marca CONFIRMADO para terceiro apenas identificado/cifrado');
+  assert(threatConfirmed({studio:{thirdParty:'OutGuess',foreignTruncated:true}}) === false,
+    'renderer marca CONFIRMADO para extração externa parcial');
+  assert(threatConfirmed({studio:{robust:'locked'}}) === false,
+    'renderer marca CONFIRMADO para robusto sem conteúdo recuperado');
+
   const base = () => ({
     format:{cat:'lossless'},
     lsb:{available:true,suspicious:true,cipherSuspicion:false,foundText:null,
@@ -526,10 +554,28 @@ check('threat: extração confirmada pesa, imagem C2PA limpa não satura', () =>
   const errada = computeThreat(base());
   const bCerta = base(); bCerta.studio = {available:true,nativeExtracted:true};
   const certa = computeThreat(bCerta);
-  assert(certa.score > errada.score,
-    `extração nativa confirmada não aumentou o threat (${errada.score} → ${certa.score})`);
+  assert(certa.score === 100,
+    `extração nativa autenticada não fechou Threat em 100 (${certa.score})`);
   assert(certa.flags.includes('flagStudioExtracted'),
     'extração nativa confirmada não gerou flag própria');
+
+  // O JPEG robusto confirmado é outra rota nativa de recuperação direta. Ele
+  // deve convergir para a mesma certeza terminal sem alterar os scores passivos.
+  const bRobusto = base(); bRobusto.format = {cat:'lossy'};
+  bRobusto.lsb = {available:false};
+  bRobusto.studio = {available:false,robust:true,robustCorrected:0};
+  const robusto = computeThreat(bRobusto);
+  assert(robusto.score === 100,
+    `extração robusta confirmada não fechou Threat em 100 (${robusto.score})`);
+  assert(robusto.flags.includes('flagRobustPayload'),
+    'extração robusta confirmada não gerou flag própria');
+
+  // Estados robustos sem conteúdo recuperado continuam abaixo da prova direta.
+  const bLocked = base(); bLocked.format = {cat:'lossy'}; bLocked.lsb = {available:false};
+  bLocked.studio = {available:false,robust:'locked'};
+  const locked = computeThreat(bLocked);
+  assert(locked.score < robusto.score,
+    `robusto locked pesou igual ou mais que recuperação confirmada (${locked.score} vs ${robusto.score})`);
 
   // Header localizado sem conteúdo recuperado é evidência estrutural, mas não
   // equivale a uma extração confirmada.
@@ -900,8 +946,8 @@ check('camadas + robusto: formato, portadora e regras de evidência', () => {
   const headerValidStatus = headerBranch.match(exactValidStatus) || [];
   assert(decoyValidStatus.length === 1,
     `rota alternativa tem ${decoyValidStatus.length} statements exatos de status válido; esperado 1`);
-  assert(headerValidStatus.length === 2,
-    `rota principal tem ${headerValidStatus.length} statements exatos de status válido; esperado 2 (AES + XOR legado)`);
+  assert(headerValidStatus.length === 3,
+    `rota principal tem ${headerValidStatus.length} statements exatos de status válido; esperado 3 (F21 + AES legado + XOR legado)`);
 
   // O erro provisório da rota genérica não pode piscar antes da camada alternativa.
   const genericStart = html.indexOf('// Com chave: tenta decifrar os bytes brutos');
@@ -975,8 +1021,8 @@ check('camadas + robusto: formato, portadora e regras de evidência', () => {
   const statusWrites = (analyzeBlock.match(/decodeStatus\s*(?:=|\+=|-=|\*=|\/=)/g) || []).length;
   assert(studioWrites === 11,
     `handler tem ${studioWrites} escritas em report.studio; esperado 11 — revisar autoria/evidência`);
-  assert(statusWrites === 31,
-    `handler tem ${statusWrites} escritas em decodeStatus; esperado 31 — revisar simetria de status`);
+  assert(statusWrites === 35,
+    `handler tem ${statusWrites} escritas em decodeStatus; esperado 35 — revisar simetria de status`);
   // Catraca também para propriedades irmãs de `report.studio`, porque qualquer
   // campo top-level novo pode alcançar o relatório exportado antes da projeção.
   const topWrites = [...analyzeBlock.matchAll(/report\.([A-Za-z_$][\w$]*)\s*(?:=|\+=|-=|\*=|\/=)/g)]
@@ -1179,6 +1225,376 @@ check('valores públicos não vazam resíduos editoriais conhecidos', () => {
 });
 
 // ---------------------------------------------------------------------------
+// CHECK 28 — structural scan of direct/simple-alias HTML routes for public data
+// ---------------------------------------------------------------------------
+check('rotas HTML diretas/aliases simples de dados públicos passam por sinks revisados', () => {
+  const out = execSync(`node "${path.join(__dirname, 'test', 'check_public_html_sink_scan.js')}"`,
+    { encoding:'utf8', stdio:['ignore','pipe','pipe'] }).trim();
+  assert(out.includes('public HTML structural sink scan OK'), 'scanner estrutural de sinks públicos falhou');
+  return out.replace(/^public HTML structural sink scan OK\s*[—-]?\s*/, '');
+});
+
+// ---------------------------------------------------------------------------
+// CHECK 29 — mobile swipe: broad start area + short flick/drag + native vertical scrolling
+// ---------------------------------------------------------------------------
+check('swipe móvel: área ampla/flick curto/arrasto breve/bordas e scroll nativo', () => {
+  const out = execSync(`node "${path.join(__dirname, 'test', 'check_mobile_swipe.js')}"`,
+    { encoding:'utf8', stdio:['ignore','pipe','pipe'] }).trim();
+  assert(out.includes('mobile swipe OK'), 'contrato do swipe móvel falhou');
+  return out.replace(/^mobile swipe OK\s*[—-]?\s*/, '');
+});
+
+// ---------------------------------------------------------------------------
+// CHECK 30 — public Version History is a curated, ordered subset of real builds
+// ---------------------------------------------------------------------------
+check('histórico público mantém apenas entradas reais, únicas e em ordem', () => {
+  const out = execSync(`node "${path.join(__dirname, 'test', 'check_public_version_history.js')}"`,
+    { encoding:'utf8', stdio:['ignore','pipe','pipe'] }).trim();
+  assert(out.includes('public version history OK'), 'contrato do histórico público falhou');
+  return out.replace(/^public version history OK\s*[—-]?\s*/, '');
+});
+
+// ---------------------------------------------------------------------------
+// CHECK 31 — public changelog contains product/usage changes only
+// ---------------------------------------------------------------------------
+check('changelog público contém apenas mudanças de produto/uso', () => {
+  const out = execSync(`node "${path.join(__dirname, 'test', 'check_public_changelog_hygiene.js')}"`,
+    { encoding:'utf8', stdio:['ignore','pipe','pipe'] }).trim();
+  assert(out.includes('public changelog hygiene OK'), 'higiene do changelog público falhou');
+  return out.replace(/^public changelog hygiene OK\s*[—-]?\s*/, '');
+});
+
+// ---------------------------------------------------------------------------
+// CHECK 32 — F21 golden vectors against an independent Python reference
+// ---------------------------------------------------------------------------
+check('F21: golden vectors independentes fecham derivação/header/cifra/ordem', () => {
+  const out = execSync(`node "${path.join(__dirname, 'test', 'check_f21_vectors.js')}"`,
+    { encoding:'utf8', stdio:['ignore','pipe','pipe'] }).trim();
+  assert(out.includes('F21 vectors OK'), 'golden vectors F21 falharam');
+  return out.replace(/^F21 vectors OK\s*[—-]?\s*/, '');
+});
+
+// ---------------------------------------------------------------------------
+// CHECK 33 — F21 integrated round-trip through the production PNG codec
+// ---------------------------------------------------------------------------
+check('F21: round-trip B/RGB/HILL/STC/compressão/F1 pelo PNG real', () => {
+  const out = execSync(`node "${path.join(__dirname, 'test', 'check_f21_roundtrip.js')}"`,
+    { encoding:'utf8', stdio:['ignore','pipe','pipe'] }).trim();
+  assert(out.includes('F21 roundtrip OK'), 'round-trip integrado F21 falhou');
+  return out.replace(/^F21 roundtrip OK\s*[—-]?\s*/, '');
+});
+
+// ---------------------------------------------------------------------------
+// CHECK 34 — F21 hostile-input/security ordering contracts
+// ---------------------------------------------------------------------------
+check('F21: auth-before-LEN/1 Argon por operação/HILL/F1 resistem a vetores hostis', () => {
+  const out = execSync(`node "${path.join(__dirname, 'test', 'check_f21_security.js')}"`,
+    { encoding:'utf8', stdio:['ignore','pipe','pipe'] }).trim();
+  assert(out.includes('F21 security OK'), 'vetores hostis/contratos F21 falharam');
+  return out.replace(/^F21 security OK\s*[—-]?\s*/, '');
+});
+
+// ---------------------------------------------------------------------------
+// CHECK 35 — F21 integration / passive Analyzer semantics
+// ---------------------------------------------------------------------------
+check('F21: integração mantém legacy-first e ausência passiva de header neutra', () => {
+  const out = execSync(`node "${path.join(__dirname, 'test', 'check_f21_integration_contract.js')}"`,
+    { encoding:'utf8', stdio:['ignore','pipe','pipe'] }).trim();
+  assert(out.includes('F21 integration OK'), 'contrato de integração/Analyzer F21 falhou');
+  return out.replace(/^F21 integration OK\s*[—-]?\s*/, '');
+});
+
+// ---------------------------------------------------------------------------
+// CHECK 36 — immutable F21 PNG fixtures
+// ---------------------------------------------------------------------------
+check('F21: fixtures PNG v3 permanecem byte-estáveis e decodificáveis', () => {
+  const out = execSync(`node "${path.join(__dirname, 'test', 'check_f21_fixtures.js')}"`,
+    { encoding:'utf8', stdio:['ignore','pipe','pipe'] }).trim();
+  assert(out.includes('F21 fixtures OK'), 'fixtures PNG F21 falharam');
+  return out.replace(/^F21 fixtures OK\s*[—-]?\s*/, '');
+});
+
+// ---------------------------------------------------------------------------
+// CHECK 37 — F21 directed bootstrap signature regression corpus
+// ---------------------------------------------------------------------------
+check('F21: bootstrap não regride para ilha aleatória dirigida de 448 LSBs', () => {
+  const out = execSync(`node "${path.join(__dirname, 'test', 'check_f21_prefix_detectability.js')}"`,
+    { encoding:'utf8', stdio:['ignore','pipe','pipe'] }).trim();
+  assert(out.includes('F21 prefix sanity OK'), 'sanidade dirigida do bootstrap F21 falhou');
+  return out.replace(/^F21 prefix sanity OK\s*[—-]?\s*/, '');
+});
+
+// ---------------------------------------------------------------------------
+// CHECK 38 — F21 resource + physical-boundary contracts
+// ---------------------------------------------------------------------------
+check('F21: memória da ordem/capacidade/F1 falham fechado nos limites', () => {
+  const out = execSync(`node "${path.join(__dirname, 'test', 'check_f21_resource_contract.js')}"`,
+    { encoding:'utf8', stdio:['ignore','pipe','pipe'] }).trim();
+  assert(out.includes('F21 resource/boundary OK'), 'contrato de recursos/fronteira F21 falhou');
+  return out.replace(/^F21 resource\/boundary OK\s*[—-]?\s*/, '');
+});
+
+// ---------------------------------------------------------------------------
+// CHECK 39 — F21 protected PNG / legacy robust JPEG integration bridge
+// ---------------------------------------------------------------------------
+check('F21: PNG protegido e JPEG robusto mantêm wires independentes', () => {
+  const out = execSync(`node "${path.join(__dirname, 'test', 'check_f21_robust_bridge.js')}"`,
+    { encoding:'utf8', stdio:['ignore','pipe','pipe'] }).trim();
+  assert(out.includes('F21 robust bridge OK'), 'ponte F21 → JPEG robusto falhou');
+  return out.replace(/^F21 robust bridge OK\s*[—-]?\s*/, '');
+});
+
+// ---------------------------------------------------------------------------
+// CHECK 40 — robust JPEG inner-content evidence contract
+// ---------------------------------------------------------------------------
+check('JPEG robusto: robust:true exige conteúdo interno final válido', () => {
+  const out = execSync(`node "${path.join(__dirname, 'test', 'check_robust_content_gate.js')}"`,
+    { encoding:'utf8', stdio:['ignore','pipe','pipe'] }).trim();
+  assert(out.includes('robust content gate OK'), 'contrato de evidência interna do robusto falhou');
+  return out.replace(/^robust content gate OK\s*[—-]?\s*/, '');
+});
+
+// ---------------------------------------------------------------------------
+// CHECK 41 — F17 current passwordless legacy PNG behavior matrix
+// ---------------------------------------------------------------------------
+check('F17: matriz PNG passwordless B/RGB/HILL/STC/compressão', () => {
+  const out = execSync(`node "${path.join(__dirname, 'test', 'check_f17_legacy_png_matrix.js')}"`,
+    { encoding:'utf8', stdio:['ignore','pipe','pipe'] }).trim();
+  assert(out.includes('F17 legacy PNG matrix OK'), 'matriz comportamental PNG legado/passwordless falhou');
+  return out.replace(/^F17 legacy PNG matrix OK\s*[—-]?\s*/, '');
+});
+
+// ---------------------------------------------------------------------------
+// CHECK 42 — F17 crypto wrong-key/tamper behavior
+// ---------------------------------------------------------------------------
+check('F17: cripto falha fechado em senha errada e adulteração', () => {
+  const out = execSync(`node "${path.join(__dirname, 'test', 'check_f17_crypto_tamper.js')}"`,
+    { encoding:'utf8', stdio:['ignore','pipe','pipe'] }).trim();
+  assert(out.includes('F17 crypto/tamper OK'), 'matriz comportamental de cripto/adulteração falhou');
+  return out.replace(/^F17 crypto\/tamper OK\s*[—-]?\s*/, '');
+});
+
+// ---------------------------------------------------------------------------
+// CHECK 43 — F17 robust JPEG true end-to-end round-trip
+// ---------------------------------------------------------------------------
+check('F17: JPEG robusto faz round-trip real plain/compressed/AES', () => {
+  const out = execSync(`node "${path.join(__dirname, 'test', 'check_f17_robust_roundtrip.js')}"`,
+    { encoding:'utf8', stdio:['ignore','pipe','pipe'] }).trim();
+  assert(out.includes('F17 robust JPEG roundtrip OK'), 'round-trip comportamental do JPEG robusto falhou');
+  return out.replace(/^F17 robust JPEG roundtrip OK\s*[—-]?\s*/, '');
+});
+
+// ---------------------------------------------------------------------------
+// CHECK 44 — F17 malformed/adversarial corpus
+// ---------------------------------------------------------------------------
+check('F17: corpus malformado falha fechado e respeita limites', () => {
+  const out = execSync(`node "${path.join(__dirname, 'test', 'check_f17_malformed_corpus.js')}"`,
+    { encoding:'utf8', stdio:['ignore','pipe','pipe'] }).trim();
+  assert(out.includes('F17 malformed corpus OK'), 'corpus malformado/adversarial F17 falhou');
+  return out.replace(/^F17 malformed corpus OK\s*[—-]?\s*/, '');
+});
+
+// ---------------------------------------------------------------------------
+// CHECK 45 — F17 immutable real third-party fixture
+// ---------------------------------------------------------------------------
+check('F17: fixture real de terceiro (OutGuess/Cicada) permanece decodificável', () => {
+  const out = execSync(`node "${path.join(__dirname, 'test', 'check_f17_third_party_fixture.js')}"`,
+    { encoding:'utf8', stdio:['ignore','pipe','pipe'] }).trim();
+  assert(out.includes('F17 third-party fixture OK'), 'fixture real de terceiro F17 falhou');
+  return out.replace(/^F17 third-party fixture OK\s*[—-]?\s*/, '');
+});
+
+// ---------------------------------------------------------------------------
+// CHECK 46 — F17 Analyzer semantic regressions
+// ---------------------------------------------------------------------------
+check('F17: Analyzer preserva prova terminal, monotonicidade e supressão de ruído', () => {
+  const out = execSync(`node "${path.join(__dirname, 'test', 'check_f17_analyzer_regressions.js')}"`,
+    { encoding:'utf8', stdio:['ignore','pipe','pipe'] }).trim();
+  assert(out.includes('F17 Analyzer regressions OK'), 'regressões comportamentais do Analyzer falharam');
+  return out.replace(/^F17 Analyzer regressions OK\s*[—-]?\s*/, '');
+});
+
+// ---------------------------------------------------------------------------
+// CHECK 47 — F17 CI contract
+// ---------------------------------------------------------------------------
+check('F17: CI reconstrói e roda regressão completa em Node 22', () => {
+  const out = execSync(`node "${path.join(__dirname, 'test', 'check_f17_ci_contract.js')}"`,
+    { encoding:'utf8', stdio:['ignore','pipe','pipe'] }).trim();
+  assert(out.includes('F17 CI contract OK'), 'contrato de CI da F17 falhou');
+  return out.replace(/^F17 CI contract OK\s*[—-]?\s*/, '');
+});
+
+// ---------------------------------------------------------------------------
+// CHECK 48 — long decoded-message preservation + bounded UI
+// ---------------------------------------------------------------------------
+check('v2.43.5: mensagens recuperadas longas ficam completas e a UI não cresce sem limite', () => {
+  const out = execSync(`node "${path.join(__dirname, 'test', 'check_long_message_ui.js')}"`,
+    { encoding:'utf8', stdio:['ignore','pipe','pipe'] }).trim();
+  assert(out.includes('long message UI OK'), 'contrato de mensagem longa falhou');
+  return out.replace(/^long message UI OK\s*[—-]?\s*/, '');
+});
+
+// ---------------------------------------------------------------------------
+// CHECK 49 — encoder character-count consistency
+// ---------------------------------------------------------------------------
+check('v2.43.5: medidor/gate/estatística contam o mesmo texto realmente codificado', () => {
+  const out = execSync(`node "${path.join(__dirname, 'test', 'check_encoder_count_consistency.js')}"`,
+    { encoding:'utf8', stdio:['ignore','pipe','pipe'] }).trim();
+  assert(out.includes('encoder count consistency OK'), 'contrato de contagem do Encoder falhou');
+  return out.replace(/^encoder count consistency OK\s*[—-]?\s*/, '');
+});
+
+// ---------------------------------------------------------------------------
+// CHECK 50 — JPEG-specific evidence surface
+// ---------------------------------------------------------------------------
+check('v2.43.5: JPEG/DCT mostra estrutura + estado robusto + prova direta sem truthy falso', () => {
+  const out = execSync(`node "${path.join(__dirname, 'test', 'check_jpeg_evidence_ui.js')}"`,
+    { encoding:'utf8', stdio:['ignore','pipe','pipe'] }).trim();
+  assert(out.includes('JPEG evidence UI OK'), 'contrato visual/semântico do módulo JPEG falhou');
+  return out.replace(/^JPEG evidence UI OK\s*[—-]?\s*/, '');
+});
+
+// ---------------------------------------------------------------------------
+// CHECK 51 — EXIF/XMP badge semantics
+// ---------------------------------------------------------------------------
+check('v2.43.5: EXIF distingue leitura falha, câmera parcial e metadados sem ID', () => {
+  const out = execSync(`node "${path.join(__dirname, 'test', 'check_exif_badge_semantics.js')}"`,
+    { encoding:'utf8', stdio:['ignore','pipe','pipe'] }).trim();
+  assert(out.includes('EXIF badge semantics OK'), 'contrato semântico do badge EXIF/XMP falhou');
+  return out.replace(/^EXIF badge semantics OK\s*[—-]?\s*/, '');
+});
+
+// ---------------------------------------------------------------------------
+// CHECK 52 — textual fidelity across real PNG round-trip + safe display sink
+// ---------------------------------------------------------------------------
+check('v2.43.6: texto literal, formatação, código e emoji fazem round-trip exato', () => {
+  const out = execSync(`node "${path.join(__dirname, 'test', 'check_text_fidelity.js')}"`,
+    { encoding:'utf8', stdio:['ignore','pipe','pipe'] }).trim();
+  assert(out.includes('text fidelity OK'), 'contrato de fidelidade textual falhou');
+  return out.replace(/^text fidelity OK\s*[—-]?\s*/, '');
+});
+
+// ---------------------------------------------------------------------------
+// CHECK 53 — only the format-applicable steganalysis family is rendered
+// ---------------------------------------------------------------------------
+check('v2.43.6: Analyzer mostra apenas a família LSB ou JPEG/DCT aplicável', () => {
+  const out = execSync(`node "${path.join(__dirname, 'test', 'check_format_specific_stego_ui.js')}"`,
+    { encoding:'utf8', stdio:['ignore','pipe','pipe'] }).trim();
+  assert(out.includes('format-specific stego UI OK'), 'contrato de módulos por formato falhou');
+  return out.replace(/^format-specific stego UI OK\s*[—-]?\s*/, '');
+});
+
+// ---------------------------------------------------------------------------
+// CHECK 54 — expanded Encoder message editor shares exact text state
+// ---------------------------------------------------------------------------
+check('v2.43.6: editor expandido do Encoder sincroniza sem reinterpretar texto', () => {
+  const out = execSync(`node "${path.join(__dirname, 'test', 'check_encoder_message_editor.js')}"`,
+    { encoding:'utf8', stdio:['ignore','pipe','pipe'] }).trim();
+  assert(out.includes('encoder message editor OK'), 'contrato do editor expandido falhou');
+  return out.replace(/^encoder message editor OK\s*[—-]?\s*/, '');
+});
+
+// ---------------------------------------------------------------------------
+// CHECK 55 — EXIF parser failure must be unknown to origin scoring
+// ---------------------------------------------------------------------------
+check('v2.43.6: falha de leitura EXIF não pontua como ausência no classificador', () => {
+  const out = execSync(`node "${path.join(__dirname, 'test', 'check_exif_origin_unknown.js')}"`,
+    { encoding:'utf8', stdio:['ignore','pipe','pipe'] }).trim();
+  assert(out.includes('EXIF origin unknown OK'), 'estado EXIF desconhecido ainda contamina origem');
+  return out.replace(/^EXIF origin unknown OK\s*[—-]?\s*/, '');
+});
+
+// ---------------------------------------------------------------------------
+// CHECK 56 — third-party direct recovery is terminal evidence
+// ---------------------------------------------------------------------------
+check('v2.43.7: extração direta completa de terceiro fecha Threat em 100', () => {
+  const out = execSync(`node "${path.join(__dirname, 'test', 'check_third_party_threat.js')}"`, {encoding:'utf8'}).trim();
+  assert(out.includes('third-party Threat OK'), 'semântica de prova direta externa falhou');
+  return out.replace(/^third-party Threat OK\s*[—-]?\s*/, '');
+});
+
+// ---------------------------------------------------------------------------
+// CHECK 57 — Decode Status is outcome, not method
+// ---------------------------------------------------------------------------
+check('v2.43.7: Decode Status converge sucessos sem esconder método/proteção', () => {
+  const out = execSync(`node "${path.join(__dirname, 'test', 'check_decode_status_consistency.js')}"`, {encoding:'utf8'}).trim();
+  assert(out.includes('Decode Status semantics OK'), 'semântica comum de Decode Status falhou');
+  return out.replace(/^Decode Status semantics OK\s*[—-]?\s*/, '');
+});
+
+// ---------------------------------------------------------------------------
+// CHECK 58 — PNG adaptive filtering preserves exact pixels and reduces size
+// ---------------------------------------------------------------------------
+check('v2.43.7: filtros PNG adaptativos reduzem tamanho sem alterar pixels', () => {
+  const out = execSync(`node "${path.join(__dirname, 'test', 'check_png_adaptive_filters.js')}"`, {encoding:'utf8'}).trim();
+  assert(out.includes('PNG adaptive filters OK'), 'filtros PNG adaptativos falharam');
+  return out.replace(/^PNG adaptive filters OK\s*[—-]?\s*/, '');
+});
+
+// ---------------------------------------------------------------------------
+// CHECK 59 — supplied password fallback must be explicit
+// ---------------------------------------------------------------------------
+check('v2.43.8: senha fornecida mas não usada fica explícita sem falsear sucesso', () => {
+  const out = execSync(`node "${path.join(__dirname, 'test', 'check_password_ignored_notice.js')}"`, {encoding:'utf8'}).trim();
+  assert(out.includes('password ignored notice OK'), 'contrato de senha ignorada falhou');
+  return out.replace(/^password ignored notice OK\s*[—-]?\s*/, '');
+});
+
+// ---------------------------------------------------------------------------
+// CHECK 60 — shared settings/help modal scrollbar skin
+// ---------------------------------------------------------------------------
+check('v2.43.8: modais informativos reutilizam scrollbar estilizada', () => {
+  const out = execSync(`node "${path.join(__dirname, 'test', 'check_modal_scrollbars.js')}"`, {encoding:'utf8'}).trim();
+  assert(out.includes('modal scrollbars OK'), 'scrollbars compartilhadas dos modais falharam');
+  return out.replace(/^modal scrollbars OK\s*[—-]?\s*/, '');
+});
+
+// ---------------------------------------------------------------------------
+// CHECK 61 — third-party recovered files preserve raw bytes
+// ---------------------------------------------------------------------------
+check('v2.43.9: payload binário de terceiro preserva bytes e salva arquivo original', () => {
+  const out = execSync(`node "${path.join(__dirname, 'test', 'check_third_party_binary_fidelity.js')}"`, {encoding:'utf8'}).trim();
+  assert(out.includes('third-party binary fidelity OK'), 'fidelidade binária de payload externo falhou');
+  return out.replace(/^third-party binary fidelity OK\s*[—-]?\s*/, '');
+});
+
+// ---------------------------------------------------------------------------
+// CHECK 62 — Threat 100 is reserved for direct confirmed recovery
+// ---------------------------------------------------------------------------
+check('v2.43.10: Threat 100 fica reservado à confirmação direta', () => {
+  const out = execSync(`node "${path.join(__dirname, 'test', 'check_threat_terminal_reservation.js')}"`, {encoding:'utf8'}).trim();
+  assert(out.includes('Threat terminal reservation OK'), 'catraca terminal 100/99 falhou');
+  return out.replace(/^Threat terminal reservation OK\s*[—-]?\s*/, '');
+});
+
+// ---------------------------------------------------------------------------
+// CHECK 63 — stegomalware warning shows safe bounded context
+// ---------------------------------------------------------------------------
+check('v2.43.12: stegomalware escolhe preview por tipo sem interpretar o payload', () => {
+  const out = execSync(`node "${path.join(__dirname, 'test', 'check_stegomalware_context.js')}"`, {encoding:'utf8'}).trim();
+  assert(out.includes('stegomalware context OK'), 'contexto seguro do stegomalware falhou');
+  return out.replace(/^stegomalware context OK\s*[—-]?\s*/, '');
+});
+
+// ---------------------------------------------------------------------------
+// CHECK 64 — recovered download names preserve a useful final extension
+// ---------------------------------------------------------------------------
+check('v2.43.11: nomes recuperados longos preservam extensão final', () => {
+  const out = execSync(`node "${path.join(__dirname, 'test', 'check_recovered_filename.js')}"`, {encoding:'utf8'}).trim();
+  assert(out.includes('recovered filename OK'), 'sanitização/truncamento de filename recuperado falhou');
+  return out.replace(/^recovered filename OK\s*[—-]?\s*/, '');
+});
+
+// ---------------------------------------------------------------------------
+// CHECK 65 — production folder contains only the current byte-identical HTML
+// ---------------------------------------------------------------------------
+check('v2.43.11: HTML_PRODUCAO contém um único artefato corrente', () => {
+  const out = execSync(`node "${path.join(__dirname, 'test', 'check_production_artifact_set.js')}"`, {encoding:'utf8'}).trim();
+  assert(out.includes('production artifact set OK'), 'contrato de HTML_PRODUCAO falhou');
+  return out.replace(/^production artifact set OK\s*[—-]?\s*/, '');
+});
+
+// ---------------------------------------------------------------------------
 // Relatório
 // ---------------------------------------------------------------------------
 console.log('\n  STEGO·STUDIO — harness de teste\n');
@@ -1190,10 +1606,13 @@ for (const r of results) {
 console.log('');
 if (failed === 0) {
   console.log(`  ✓ TODOS OS ${results.length} INVARIANTES PASSARAM — build consistente para deploy.`);
-  console.log('    (build, XSS, catraca de innerHTML e cobertura comportamental PARCIAL; NÃO é suíte de segurança —');
-  console.log('     há fixtures/round-trip direcionados, mas ainda não há matriz completa de modos nem corpus malformado. Ver F17.)\n');
+  console.log('    (build, XSS, contratos estruturais e regressão comportamental automatizada; NÃO é prova de segurança completa —');
+  console.log('     cobre matrizes nativas/F21/F1/JPEG robusto, adulteração, corpus malformado, fixture externa e Analyzer;');
+  console.log('     DOM/canvas real, dispositivos e pipelines externos continuam fora do harness Node.)\n');
   process.exit(0);
 } else {
   console.log(`  ✗ ${failed} de ${results.length} FALHARAM — corrigir antes do deploy.\n`);
   process.exit(1);
 }
+
+

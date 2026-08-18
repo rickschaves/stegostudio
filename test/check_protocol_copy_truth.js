@@ -26,7 +26,8 @@ for(const k of credentialKeys){
   assert(!/\bkey\b/i.test(I.en[k]),'EN '+k+' regressed from password to key');
   assert(!/\bchave\b/i.test(I.pt[k]),'PT '+k+' regressed from senha to chave');
 }
-assert(I.pt.encAutoNote.includes('cabeçalho é criptografado'),'PT auto note uses cifra instead of criptografia');
+assert(I.pt.encAutoNote.includes('proteção do cabeçalho'),'PT auto note no longer describes automatic header protection');
+assert(!/\bcifra\b/i.test(I.pt.encAutoNote),'PT auto note regressed to ambiguous cifra terminology');
 assert(!/senha desta imagem/i.test(I.pt.decoyToggleHint),'PT second-layer copy assigns a password to the image instead of the hidden message');
 assert(!/image['’]s password/i.test(I.en.decoyToggleHint),'EN second-layer copy assigns a password to the image instead of the hidden message');
 assert(I.en.carrierPreflightUseAnyway==='Use anyway'&&I.en.carrierPreflightChooseAnother==='Choose another','EN preflight buttons not compact');

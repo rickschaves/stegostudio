@@ -49,17 +49,27 @@ than implying coverage that does not exist.
   genuine file into another one.
 - **EXIF is unauthenticated.** Camera fields are ordinary text that any program
   can write. They count as supporting evidence, never as proof of provenance.
-- **The header-concealment layer derives from a 32-bit seed.** The message
-  itself is AES-256-GCM with an Argon2id-derived key and is unaffected. The
-  layer that hides the header's *position and mask* is weaker than that, and is
-  scheduled to be replaced with a 256-bit, domain-separated derivation.
+- **Password-protected lossless writes use strong, domain-separated structural keys.**
+  New PNG/lossless payloads written with a password use a fresh 128-bit structural
+  salt, Argon2id, and separate HKDF-derived keys for header protection, header
+  authentication, body order (where applicable), and AES-256-GCM content
+  encryption. The protected header is authenticated before its mode or length is
+  trusted. Older lossless formats remain readable, and writes without a password
+  keep the compatible unprotected format.
 
-  When that lands, it will remove an artificial ceiling — nothing more. **A
-  256-bit derivation does not turn a weak password into 256 bits of security.**
-  Running any amount of key-stretching over `123456` still leaves you with the
-  guessability of `123456`; Argon2id makes each guess expensive, which buys time,
-  not entropy. Everything here is bounded by the password you choose. Choose one
-  worth the algorithm behind it.
+  This removes the old 32-bit structural ceiling from the **main lossless
+  password-protected path**. It does not turn a weak password into 256 bits of
+  security. Running any amount of key-stretching over `123456` still leaves you
+  with the guessability of `123456`; Argon2id makes each guess expensive, which
+  buys time, not entropy. Everything here remains bounded by the password you
+  choose.
+
+- **The robust JPEG path still has an independent 32-bit structural seed.** Its
+  content encryption is not being described as 32-bit; the remaining limitation
+  is the password-derived slot/dither plan used by that separate recompression-
+  resistant format. Migrating it safely requires a JPEG-specific design that
+  preserves ECC/QIM/recompression behaviour, so it is intentionally outside the
+  lossless-format change above.
 - **Third-party extraction is partial.** OpenStego encrypted payloads are
   identified but not decrypted; Steghide covers 2 of roughly 129 cipher/mode
   pairs and its BMP path is not integrated. Full matrix, with the validation

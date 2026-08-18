@@ -108,14 +108,7 @@ function adaptiveOrder(cost, candidatePx) {
   return idx;
 }
 
-// ════════════════════════════════════════
-//  EMBARALHAMENTO POR SENHA
-//  A senha semeia um PRNG determinístico (Mulberry32). Com ele, a ORDEM em que
-//  as posições do corpo recebem os bits é permutada (Fisher-Yates). Sem a senha,
-//  mesmo sabendo que é LSBM, não há como remontar a sequência: as posições
-//  estão certas, mas a correspondência bit↔posição está embaralhada. O decoder
-//  reconstrói a MESMA permutação a partir da senha. O cabeçalho fica fora do
-//  embaralhamento (posição fixa) para o decoder sempre conseguir lê-lo.
-// ════════════════════════════════════════
-
-// PRNG determinístico de 32 bits. Mesma semente → mesma sequência.
+// O mapa HILL não define a derivação estrutural da senha. No formato legado,
+// encoder.js/decoder.js ainda preservam a permutação Mulberry32/FNV necessária
+// para compatibilidade. Na F21 v3, a estrutura protegida vive em f21.js; o caminho
+// STC padrão recupera o corpo pela síndrome e não depende daquela ordem legada.

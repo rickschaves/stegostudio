@@ -1,0 +1,54 @@
+{
+  "format": "STEGO·STUDIO F21 v3 fixture set",
+  "password": "F21-fixture-password-2026",
+  "plainFile": "plain.txt",
+  "coverFile": "cover.png",
+  "coverSha256": "80395e6ba1bd70cbeefb86ff32d22788ec10e0053d0f57c255642d159120dad7",
+  "plainSha256": "45256a194220aa2bda717f496d8e64c4003589f96ca4191c4f26cbce0ae23180",
+  "cases": {
+    "b": {
+      "file": "encoded_b.png",
+      "mode": "B",
+      "adaptive": false,
+      "stcW": 0,
+      "modeFlags": 10,
+      "structuralSalt": "15324f6c89a6c3e0fd1a3754718eabc8",
+      "contentIv": "7996b3d0ed0a2744617e9bb8",
+      "sha256": "61daad86012a6cfe6874f2427db1a579bc103e36ef597ffbfcbcf9d4813a43cb",
+      "bytes": 56405
+    },
+    "rgb": {
+      "file": "encoded_rgb.png",
+      "mode": "RGB",
+      "adaptive": false,
+      "stcW": 0,
+      "modeFlags": 11,
+      "structuralSalt": "2a4764819ebbd8f5122f4c6986a3c0dd",
+      "contentIv": "8eabc8e5021f3c597693b0cd",
+      "sha256": "dbb22e92ec0c0f6a5f9d86869c01d86bb209c3a2b755e9267a26b08dc40acbff",
+      "bytes": 56404
+    },
+    "hill": {
+      "file": "encoded_hill.png",
+      "mode": "B",
+      "adaptive": true,
+      "stcW": 0,
+      "modeFlags": 78,
+      "structuralSalt": "3f5c7996b3d0ed0a2744617e9bb8d5f2",
+      "contentIv": "a3c0ddfa1734516e8ba8c5e2",
+      "sha256": "c56b8931162b1b57b857bee9b417879faa338d75a3e3e225c92af82cdf97233b",
+      "bytes": 56397
+    },
+    "stc": {
+      "file": "encoded_stc.png",
+      "mode": "B",
+      "adaptive": false,
+      "stcW": 4,
+      "modeFlags": 40,
+      "structuralSalt": "54718eabc8e5021f3c597693b0cdea07",
+      "contentIv": "b8d5f20f2c496683a0bddaf7",
+      "sha256": "3d4c789c7f7e3a30541a3db05474dec01166b8063f60850d8a69c2383b5540b4",
+      "bytes": 56402
+    }
+  }
+}
