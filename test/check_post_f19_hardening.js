@@ -8,14 +8,20 @@ const main=fs.readFileSync(path.join(ROOT,'src/main.js'),'utf8');
 const term=fs.readFileSync(path.join(ROOT,'src/terminal.js'),'utf8');
 const i18n=fs.readFileSync(path.join(ROOT,'src/i18n.js'),'utf8');
 const security=fs.readFileSync(path.join(ROOT,'SECURITY.md'),'utf8');
-const audit=fs.readFileSync(path.join(ROOT,'internal','RELEASE_SELF_AUDIT.md'),'utf8');
+const auditPath=path.join(ROOT,'internal','RELEASE_SELF_AUDIT.md');
+const audit=fs.existsSync(auditPath)?fs.readFileSync(auditPath,'utf8'):null;
+const gitignore=fs.readFileSync(path.join(ROOT,'.gitignore'),'utf8').replace(/\r\n/g,'\n');
 const attrs=fs.readFileSync(path.join(ROOT,'.gitattributes'),'utf8').replace(/\r\n/g,'\n').trim();
 function assert(c,m){if(!c)throw new Error(m);}
 
 assert(attrs==="* text=auto eol=lf\nHTML_PRODUCAO/** -text",'.gitattributes não preserva LF nas fontes + bytes em HTML_PRODUCAO');
 assert(security.includes("img-src 'self' data: blob:"),'SECURITY não documenta o allowance img-src self/data/blob');
 assert(security.includes('same origin could still carry data') || security.includes('same origin could still'), 'SECURITY não declara o canal residual same-origin');
-assert(audit.includes('O que esta versão passa a tornar fatal que antes era tolerado?'),'pergunta de fatalidade nova ausente da autoauditoria');
+if(audit!==null){
+  assert(audit.includes('O que esta versão passa a tornar fatal que antes era tolerado?'),'pergunta de fatalidade nova ausente da autoauditoria');
+}else{
+  assert(/^internal\/$/m.test(gitignore),'internal/ ausente sem estar explicitamente excluído do checkout público');
+}
 
 const m=main.match(/function resolveJpegPasswordFeedback\([^]*?\n\}/);
 assert(m,'helper resolveJpegPasswordFeedback não encontrado');
