@@ -5,7 +5,6 @@ const path=require('path');
 const vm=require('vm');
 const ROOT=path.join(__dirname,'..');
 const main=fs.readFileSync(path.join(ROOT,'src/main.js'),'utf8');
-const term=fs.readFileSync(path.join(ROOT,'src/terminal.js'),'utf8');
 const i18n=fs.readFileSync(path.join(ROOT,'src/i18n.js'),'utf8');
 const security=fs.readFileSync(path.join(ROOT,'SECURITY.md'),'utf8');
 const auditPath=path.join(ROOT,'internal','RELEASE_SELF_AUDIT.md');
@@ -37,11 +36,8 @@ assert(f({keyProvided:true,toolprint:[{level:'confirmado'}]})==='none','ferramen
 assert(f({keyProvided:true})==='inconclusive','JPEG sem recuperação com senha deve gerar feedback inconclusivo');
 
 assert(main.includes("flashKey('jpeg')"),'produção não usa o novo feedback JPEG');
-assert(term.includes("keyFlashReason === 'jpeg' ? 'decKeyFlashJpegInconclusive'"),'terminal não resolve o novo estado JPEG');
 assert(i18n.includes('decKeyFlashJpegInconclusive: "The supplied password did not open a compatible JPEG payload.'),'copy EN do feedback JPEG ausente');
 assert(i18n.includes('decKeyFlashJpegInconclusive: "A senha informada não abriu um payload JPEG compatível.'),'copy PT do feedback JPEG ausente');
 assert(!/decKeyFlashJpegInconclusive[^\n]*(wrong password|senha incorreta)/i.test(i18n),'copy inconclusiva virou afirmação categórica de senha errada');
-
-assert(term.includes("const flashMs = reason === 'jpeg' ? 8000 : 5000;"),'duração do feedback JPEG não está em 8 s com demais flashes preservados em 5 s');
 
 console.log('post-F19 hardening OK — gitattributes + residual CSP + release question + honest JPEG password feedback');

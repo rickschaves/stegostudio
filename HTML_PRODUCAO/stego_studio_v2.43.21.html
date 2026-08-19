@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; base-uri 'none'; connect-src 'none'; form-action 'none'; object-src 'none'; frame-src 'none'; child-src 'none'; worker-src 'none'; media-src 'none'; manifest-src 'none'; script-src 'sha256-xngXDtjVnkMEbvtsBvAf27TuslTyYx+1/uytIiU5tBA=' 'sha256-euZu3EgUjubksGpa9mJPwIWsmBtvgNL4ddayZeqYB8I=' 'sha256-1tgB9+xUmXeMxRUHakBn6hG/mBtEX/2Q636bTvcdpcM=' 'wasm-unsafe-eval'; script-src-attr 'none'; style-src 'unsafe-inline'; img-src 'self' data: blob:; font-src data:">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; base-uri 'none'; connect-src 'none'; form-action 'none'; object-src 'none'; frame-src 'none'; child-src 'none'; worker-src 'none'; media-src 'none'; manifest-src 'none'; script-src 'sha256-xngXDtjVnkMEbvtsBvAf27TuslTyYx+1/uytIiU5tBA=' 'sha256-euZu3EgUjubksGpa9mJPwIWsmBtvgNL4ddayZeqYB8I=' 'sha256-ABqpv/Df0z9lGCzbAhP9psP2NPRBldqaFGsIhbUEqfg=' 'wasm-unsafe-eval'; script-src-attr 'none'; style-src 'unsafe-inline'; img-src 'self' data: blob:; font-src data:">
 <title>STEGO·STUDIO — Steganography & Image Forensics Tool</title>
 
 <!-- Stego Studio favicons -->
@@ -735,7 +735,11 @@ textarea.dec-t:focus { border-color:rgba(255,107,53,0.4); }
 .decoded-text {
   font-size:0.88rem; color:#fff; font-family:var(--sans); line-height:1.7;
   word-break:break-word; white-space:pre-wrap;
-  max-height:300px; overflow:auto; overscroll-behavior:contain;
+  max-height:300px; overflow:auto;
+  /* O texto longo continua rolável, mas o gesto vertical pode encadear para o
+     painel quando este scroller chega à borda (ou nem tem overflow). */
+  overscroll-behavior-x:contain; overscroll-behavior-y:auto;
+  touch-action:pan-y pinch-zoom;
   padding-right:4px;
 }
 /* Scrollbars internas reutilizam a linguagem visual do terminal. */
@@ -1607,7 +1611,7 @@ textarea.dec-t:focus { border-color:rgba(255,107,53,0.4); }
 <body>
 
 <header>
-  <div class="logo">STEGO<span class="e">·</span>STUDIO <span style="font-size:0.85rem;letter-spacing:2px;color:var(--dim)">v2.43.20 // ENCODER · ANALYZER · DECODER</span></div>
+  <div class="logo">STEGO<span class="e">·</span>STUDIO <span style="font-size:0.85rem;letter-spacing:2px;color:var(--dim)">v2.43.21 // ENCODER · ANALYZER · DECODER</span></div>
   <div class="header-meta"><span data-i18n="tagline1">Esteganografia LSB com criptografia AES-256 opcional</span><br><span data-i18n="tagline2">Análise forense integrada · Exportação JSON</span></div>
 </header>
 
@@ -1897,6 +1901,7 @@ textarea.dec-t:focus { border-color:rgba(255,107,53,0.4); }
           <button type="button" class="key-clear-btn" id="dec-key-clear" aria-label="Limpar senha" style="display:none">✕</button>
         </div>
         <div class="hint-text" id="dec-key-hint" data-i18n="decKeyHint2">Necessária apenas se a mensagem foi criptografada. A análise forense roda independente da senha.</div>
+        <div class="sr-only" id="dec-key-live" role="status" aria-live="polite" aria-atomic="true"></div>
       </div>
 
       <button class="btn btn-dec" id="btn-analyze" data-i18n="analyzeBtn" disabled>ANALISAR IMAGEM</button>
@@ -2227,7 +2232,7 @@ textarea.dec-t:focus { border-color:rgba(255,107,53,0.4); }
 
 <script>
 /*
- * STEGO·STUDIO v2.43.20 — steganography and image forensics
+ * STEGO·STUDIO v2.43.21 — steganography and image forensics
  * Copyright (C) 2026 RASC
  * Concept and human direction by RASC. Developed with JOI, an AI.
  *
@@ -4076,6 +4081,10 @@ function hideHelpModal() {
 // CHANGELOG contém versões semver (v2.10+). CHANGELOG_LEGACY preserva versões pré-semver (≤ v2.9.1),
 // exibidas com sufixo "— Legacy". O divisor entre os dois é renderizado em renderChangelog.
 const CHANGELOG = [
+  { ver:'v2.43.21', date:'2026-08-19', title:{en:'Better mobile scrolling and accessible password feedback',pt:'Rolagem móvel melhor e feedback de senha acessível'}, items:[
+    {t:'fix', en:'<b>On mobile, vertical scrolling can now start inside the recovered-message box and continue into the surrounding results panel when appropriate.</b> Long recovered messages keep their bounded internal scroll, while short messages no longer behave like a dead area for page movement.', pt:'<b>No celular, a rolagem vertical agora pode começar dentro do quadro da mensagem recuperada e continuar no painel de resultados ao redor quando apropriado.</b> Mensagens longas continuam com rolagem interna limitada, enquanto mensagens curtas deixam de se comportar como uma área morta para mover a página.'},
+    {t:'fix', en:'<b>Password feedback is now announced through a dedicated screen-reader status region.</b> The temporary visual hint keeps its existing timing, while expiration or language refresh does not announce the default hint again.', pt:'<b>O feedback de senha agora é anunciado por uma região de status dedicada para leitores de tela.</b> O aviso visual temporário mantém a duração existente, enquanto a expiração ou atualização de idioma não anuncia novamente a dica padrão.'},
+  ]},
   { ver:'v2.43.20', date:'2026-08-19', title:{en:'More readable JPEG password feedback',pt:'Feedback de senha JPEG mais legível'}, items:[
     {t:'fix', en:'<b>The inconclusive JPEG password notice now remains visible for eight seconds.</b> The longer window improves readability without changing the diagnosis: a failed password attempt can still mean either an incorrect password or no compatible protected JPEG payload.', pt:'<b>O aviso inconclusivo de senha em JPEG agora permanece visível por oito segundos.</b> A janela maior melhora a leitura sem mudar o diagnóstico: uma tentativa sem recuperação ainda pode significar senha incorreta ou ausência de payload JPEG protegido compatível.'},
   ]},
@@ -9499,13 +9508,15 @@ function clearKeyFlash() {
   if (k) k.placeholder = t('keyPlaceholder');
   keyFlashReason = null;
 }
+function keyFlashMessageKey(reason=keyFlashReason) {
+  return reason === 'wrong' ? 'decKeyFlashWrong'
+    : (reason === 'jpeg' ? 'decKeyFlashJpegInconclusive' : 'decKeyFlashMissing');
+}
 function refreshKeyFlashText() {
   if (!keyFlashReason) return;
   const hint = document.getElementById('dec-key-hint');
   if (!hint) return;
-  const key = keyFlashReason === 'wrong' ? 'decKeyFlashWrong'
-    : (keyFlashReason === 'jpeg' ? 'decKeyFlashJpegInconclusive' : 'decKeyFlashMissing');
-  hint.textContent = t(key);
+  hint.textContent = t(keyFlashMessageKey());
 }
 function flashKey(reason='missing') {
   clearKeyFlash();
@@ -9513,11 +9524,14 @@ function flashKey(reason='missing') {
   const k = document.getElementById('dec-key');
   const field = k?.closest('.key-field');
   const icon = field?.querySelector('.key-icon');
-  const hint = document.getElementById('dec-key-hint');
+  const live = document.getElementById('dec-key-live');
   if (!k || !field) return;
   field.classList.add('key-flash');
   if (icon) icon.textContent = '⚠';
   refreshKeyFlashText();
+  // Região viva dedicada: anuncia somente o evento do flash. clearKeyFlash() não
+  // escreve aqui, evitando anunciar o texto padrão ao expirar ou trocar idioma.
+  if (live) live.textContent = t(keyFlashMessageKey(reason));
   if (!k.value) k.placeholder = '⚠ ' + t('keyPlaceholder');
   const flashMs = reason === 'jpeg' ? 8000 : 5000;
   keyFlashTimer = setTimeout(clearKeyFlash, flashMs);
@@ -14120,7 +14134,7 @@ document.getElementById('btn-analyze').addEventListener('click', async ()=>{
 // ════════════════════════════════════════
 document.getElementById('btn-export-json').addEventListener('click',()=>{
   if(!lastReport) return;
-  const payload={_tool:'STEGO·STUDIO v2.43.20',_schema:'forensic-report-v2',
+  const payload={_tool:'STEGO·STUDIO v2.43.21',_schema:'forensic-report-v2',
     _hint:t('exportHintJSON'),
     ...lastReport};
   const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});

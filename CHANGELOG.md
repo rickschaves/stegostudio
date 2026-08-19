@@ -1,3 +1,8 @@
+## v2.43.21 — 2026-08-19
+
+- **Mobile recovered-message scrolling no longer traps vertical gestures.** A drag that starts inside the recovered-message box can chain into the surrounding results panel when the inner box cannot continue scrolling, while long messages keep their bounded internal scroll.
+- **Temporary password feedback is announced to screen readers.** A dedicated polite status region announces the flash itself without re-announcing the default hint when the flash expires or the interface language refreshes.
+
 ## v2.43.20 — 2026-08-19
 **More readable JPEG password feedback**
 

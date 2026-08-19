@@ -228,13 +228,15 @@ function clearKeyFlash() {
   if (k) k.placeholder = t('keyPlaceholder');
   keyFlashReason = null;
 }
+function keyFlashMessageKey(reason=keyFlashReason) {
+  return reason === 'wrong' ? 'decKeyFlashWrong'
+    : (reason === 'jpeg' ? 'decKeyFlashJpegInconclusive' : 'decKeyFlashMissing');
+}
 function refreshKeyFlashText() {
   if (!keyFlashReason) return;
   const hint = document.getElementById('dec-key-hint');
   if (!hint) return;
-  const key = keyFlashReason === 'wrong' ? 'decKeyFlashWrong'
-    : (keyFlashReason === 'jpeg' ? 'decKeyFlashJpegInconclusive' : 'decKeyFlashMissing');
-  hint.textContent = t(key);
+  hint.textContent = t(keyFlashMessageKey());
 }
 function flashKey(reason='missing') {
   clearKeyFlash();
@@ -242,11 +244,14 @@ function flashKey(reason='missing') {
   const k = document.getElementById('dec-key');
   const field = k?.closest('.key-field');
   const icon = field?.querySelector('.key-icon');
-  const hint = document.getElementById('dec-key-hint');
+  const live = document.getElementById('dec-key-live');
   if (!k || !field) return;
   field.classList.add('key-flash');
   if (icon) icon.textContent = '⚠';
   refreshKeyFlashText();
+  // Região viva dedicada: anuncia somente o evento do flash. clearKeyFlash() não
+  // escreve aqui, evitando anunciar o texto padrão ao expirar ou trocar idioma.
+  if (live) live.textContent = t(keyFlashMessageKey(reason));
   if (!k.value) k.placeholder = '⚠ ' + t('keyPlaceholder');
   const flashMs = reason === 'jpeg' ? 8000 : 5000;
   keyFlashTimer = setTimeout(clearKeyFlash, flashMs);

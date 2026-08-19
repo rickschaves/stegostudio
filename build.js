@@ -18,7 +18,7 @@ const SRC = path.join(__dirname, 'src');
 const DIST = path.join(__dirname, 'dist');
 
 // Versão do artefato final. Convenção: pontos entre números (nunca underscore).
-const VERSION = '2.43.20';
+const VERSION = '2.43.21';
 
 // Module order is part of the build contract. Modules expose declarations that are
 // consumed later at runtime; review dependencies before changing this sequence.

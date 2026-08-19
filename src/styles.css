@@ -675,7 +675,11 @@ textarea.dec-t:focus { border-color:rgba(255,107,53,0.4); }
 .decoded-text {
   font-size:0.88rem; color:#fff; font-family:var(--sans); line-height:1.7;
   word-break:break-word; white-space:pre-wrap;
-  max-height:300px; overflow:auto; overscroll-behavior:contain;
+  max-height:300px; overflow:auto;
+  /* O texto longo continua rolável, mas o gesto vertical pode encadear para o
+     painel quando este scroller chega à borda (ou nem tem overflow). */
+  overscroll-behavior-x:contain; overscroll-behavior-y:auto;
+  touch-action:pan-y pinch-zoom;
   padding-right:4px;
 }
 /* Scrollbars internas reutilizam a linguagem visual do terminal. */

@@ -1668,6 +1668,15 @@ check('v2.43.20: aviso JPEG fica legível sem alongar os demais flashes', () => 
 });
 
 // ---------------------------------------------------------------------------
+// CHECK 74 — acessibilidade, scroll móvel e limites CSP/processo
+// ---------------------------------------------------------------------------
+check('v2.43.21: aviso é anunciado e mensagem recuperada devolve scroll vertical ao painel', () => {
+  const out = execSync(`node "${path.join(__dirname, 'test', 'check_v24321_post_audit.js')}"`, {encoding:'utf8'}).trim();
+  assert(out.includes('v2.43.21 post-audit OK'), 'fechamento pós-auditoria da .21 falhou');
+  return out.replace(/^v2\.43\.21 post-audit OK\s*[—-]?\s*/, '');
+});
+
+// ---------------------------------------------------------------------------
 // Relatório
 // ---------------------------------------------------------------------------
 console.log('\n  STEGO·STUDIO — harness de teste\n');

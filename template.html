@@ -58,7 +58,7 @@
 <body>
 
 <header>
-  <div class="logo">STEGO<span class="e">·</span>STUDIO <span style="font-size:0.85rem;letter-spacing:2px;color:var(--dim)">v2.43.20 // ENCODER · ANALYZER · DECODER</span></div>
+  <div class="logo">STEGO<span class="e">·</span>STUDIO <span style="font-size:0.85rem;letter-spacing:2px;color:var(--dim)">v2.43.21 // ENCODER · ANALYZER · DECODER</span></div>
   <div class="header-meta"><span data-i18n="tagline1">Esteganografia LSB com criptografia AES-256 opcional</span><br><span data-i18n="tagline2">Análise forense integrada · Exportação JSON</span></div>
 </header>
 
@@ -348,6 +348,7 @@
           <button type="button" class="key-clear-btn" id="dec-key-clear" aria-label="Limpar senha" style="display:none">✕</button>
         </div>
         <div class="hint-text" id="dec-key-hint" data-i18n="decKeyHint2">Necessária apenas se a mensagem foi criptografada. A análise forense roda independente da senha.</div>
+        <div class="sr-only" id="dec-key-live" role="status" aria-live="polite" aria-atomic="true"></div>
       </div>
 
       <button class="btn btn-dec" id="btn-analyze" data-i18n="analyzeBtn" disabled>ANALISAR IMAGEM</button>

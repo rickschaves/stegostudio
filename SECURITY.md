@@ -44,7 +44,13 @@ than implying coverage that does not exist.
   already executing**, an image request to the same origin could still carry data in
   its path or query string. `connect-src 'none'` does not close that separate image
   channel. This residual channel is documented rather than hidden; removing `'self'`
-  should wait for browser/device compatibility tests, not assumption.
+  should wait for browser/device compatibility tests, not assumption. Top-level
+  navigation is a separate residual channel as well: if hostile script were already
+  executing, assigning `location` to an external URL could carry data through the
+  navigation itself. `connect-src 'none'` does not govern top-level navigation, and
+  current target browsers do not provide a deployed CSP directive that closes that
+  path from a meta policy. The CSP therefore must not be cited as a complete
+  no-exfiltration sandbox.
 - **Carriers are not sanitized.** The Encoder overwrites the positions its new
   payload needs and leaves the rest of the image unchanged. Reusing an image
   that already contained hidden data can therefore preserve traces of the

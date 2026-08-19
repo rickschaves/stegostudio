@@ -765,7 +765,7 @@ document.getElementById('btn-analyze').addEventListener('click', async ()=>{
 // ════════════════════════════════════════
 document.getElementById('btn-export-json').addEventListener('click',()=>{
   if(!lastReport) return;
-  const payload={_tool:'STEGO·STUDIO v2.43.20',_schema:'forensic-report-v2',
+  const payload={_tool:'STEGO·STUDIO v2.43.21',_schema:'forensic-report-v2',
     _hint:t('exportHintJSON'),
     ...lastReport};
   const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
