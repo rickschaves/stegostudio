@@ -62,7 +62,10 @@ confirmed recovered messages.
 99 without proving that content was recovered. The value **100 is reserved for
 direct validated recovery** and is paired with the **CONFIRMED** state. Consumers
 should use the explicit recovery/confirmation state rather than inventing a lower
-numeric threshold as a proxy for confirmation.
+numeric threshold as a proxy for confirmation. Recognized legacy LSB framings that
+validate their declared structure expose `modules.studio.framedExtracted` (and the
+declared byte count in `framedPayloadBytes`) so the report carries the evidence that
+justifies this terminal state.
 
 ---
 
@@ -149,7 +152,11 @@ node test.js            # full offline regression harness
 
 No bundler and no dependencies. `build.js` concatenates the JavaScript source modules,
 the stylesheet and an inlined Argon2id WebAssembly bundle into a single file,
-then **refuses to emit** anything that would reach the network at runtime.
+then **refuses to emit** anything that would reach the network at runtime. The final
+HTML also carries a restrictive Content Security Policy: browser script networking is
+blocked with `connect-src 'none'`, executable inline scripts are pinned to build-time
+SHA-256 hashes, and the Argon2 WebAssembly bundle receives only the narrower
+`'wasm-unsafe-eval'` permission rather than general JavaScript `eval`.
 
 Binary assets (fonts, icons) are stored as base64 with SHA-256 checksums in
 `ASSETS_BASE64.md`; `unpack_assets.js` restores them and verifies every hash

@@ -225,6 +225,7 @@ function bumpAnalysisGeneration(){ analysisGeneration++; }
 async function loadDecoderFile(file) {
   if (isAnalysisBusy()) return;
   bumpAnalysisGeneration();
+  clearProcessingTime('dec-processing-time');
   decFile = file;
   // sniff de magic bytes → detecção robusta (pega .jfif, MIME errado, etc.)
   let magic=null; try{ magic=new Uint8Array(await file.slice(0,16).arrayBuffer()); }catch(_){}
@@ -266,8 +267,9 @@ function encMark(nome) {
   __encT.marcas.push({ nome, ms: +(agora - __encT.t0).toFixed(1) });
 }
 function encTimingsReset(){ __encT.marcas = []; __encT.t0 = 0; }
-// `coreTotal` termina quando o PNG fica pronto; `uiReadyTotal` inclui também a
-// avaliação de furtividade e a geração da saída JPEG mais resistente.
+// `coreTotal` termina quando o PNG fica pronto; `uiReadyTotal` acompanha o ponto
+// em que o botão principal é liberado. A saída JPEG robusta termina de forma
+// independente e o tempo TOTAL visível usa o fechamento das duas saídas.
 function encTimingsFlush(final) {
   const m = __encT.marcas;
   if (m.length < 2) return null;
@@ -283,6 +285,43 @@ function encTimingsFlush(final) {
     if (final) console.info('[encode] core ' + out.coreTotal + 'ms · ui-ready ' + out.uiReadyTotal + 'ms', fases);
   } catch(_) {}
   return out;
+}
+
+// ── TEMPO DE PROCESSAMENTO VISÍVEL ──────────────────────────────────────────
+// Informação local de UX/diagnóstico. Nunca entra no payload, no relatório JSON,
+// no localStorage nem em qualquer cálculo forense.
+function processingNow() {
+  return (typeof performance !== 'undefined' && typeof performance.now === 'function')
+    ? performance.now() : Date.now();
+}
+function formatProcessingTime(ms) {
+  const n = Number(ms);
+  if (!Number.isFinite(n) || n < 0) return '';
+  if (n < 1000) return Math.round(n) + ' ms';
+  const raw = (n / 1000).toFixed(2);
+  return (typeof LANG !== 'undefined' && LANG === 'pt' ? raw.replace('.', ',') : raw) + ' s';
+}
+function showProcessingTime(id, ms) {
+  const el = document.getElementById(id);
+  if (!el || !Number.isFinite(Number(ms)) || Number(ms) < 0) return;
+  el.dataset.ms = String(Number(ms));
+  const val = el.querySelector('.processing-time-value');
+  if (val) val.textContent = formatProcessingTime(Number(ms));
+  el.classList.add('visible');
+}
+function clearProcessingTime(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  delete el.dataset.ms;
+  const val = el.querySelector('.processing-time-value');
+  if (val) val.textContent = '';
+  el.classList.remove('visible');
+}
+function refreshProcessingTimes() {
+  document.querySelectorAll('.processing-time.visible[data-ms]').forEach(el => {
+    const val = el.querySelector('.processing-time-value');
+    if (val) val.textContent = formatProcessingTime(Number(el.dataset.ms));
+  });
 }
 
 function updateDecKeyClear() {
@@ -568,6 +607,7 @@ let encOutputGeneration=0; // invalida resultados assíncronos da segunda saída
 // troca de portadora restaurem exatamente o mesmo conjunto de elementos.
 function resetEncOutputs() {
   encOutputGeneration++;
+  clearProcessingTime('enc-processing-time');
   const hide = id => { const e = document.getElementById(id); if (e) e.classList.remove('visible'); };
   ['enc-dl','enc-rb','enc-tips','rb-body','rb-unavailable','enc-stealth'].forEach(hide);
   const vazio = id => { const e = document.getElementById(id); if (e) e.textContent = ''; };
@@ -587,7 +627,16 @@ function resetEncOutputs() {
 
 document.getElementById('btn-encode').addEventListener('click',async ()=>{
   const _btn=document.getElementById('btn-encode'), _btnHtml=_btn.innerHTML;
+  const processingStartedAt = processingNow();
   let _stopWork=()=>{};
+  let _selfDone=false, _robustDone=false;
+  const _finishVisibleTiming=()=>{
+    if (!_selfDone || !_robustDone) return;
+    if (encOutputRun !== encOutputGeneration) return;
+    showProcessingTime('enc-processing-time', processingNow() - processingStartedAt);
+  };
+  const _markSelfDone=()=>{ _selfDone=true; _finishVisibleTiming(); };
+  const _markRobustDone=()=>{ _robustDone=true; _finishVisibleTiming(); };
   const _restore=()=>{ encMark('ui-ready'); encTimingsFlush(true);
     _btn.disabled=false; _btn.classList.remove('working'); _btn.innerHTML=_btnHtml; _stopWork(); };
   _btn.disabled=true; _btn.classList.add('working');
@@ -783,8 +832,8 @@ document.getElementById('btn-encode').addEventListener('click',async ()=>{
           +'<div class="sr-floornote">'+t('encStealthFloor')+': ~'+FLOOR+'%</div>'
           +'<div class="stealth-verdict'+(st.verdict==='detect'?' sr-alarm':'')+'" style="color:'+vCol+'">'+vMark+' '+t(vKey)+'</div>'
           +'<div class="stealth-caveat">'+t('encStealthCaveat')+'</div>';
-        _restore();
-      }catch(_){ box.classList.remove('visible'); box.textContent=''; _restore(); } }, 30);
+        _restore(); _markSelfDone();
+      }catch(_){ box.classList.remove('visible'); box.textContent=''; _restore(); _markSelfDone(); } }, 30);
     })();
 
     // ── SEGUNDA SAÍDA: versão mais resistente (JPEG/DCT) ─────────────────
@@ -844,6 +893,7 @@ document.getElementById('btn-encode').addEventListener('click',async ()=>{
           nope.classList.add('visible');
         }
         wrap.classList.add('visible');
+        _markRobustDone();
       }, 60);
     })();
   } catch(e) { _stopWork(); setStatus('enc-status','✗ '+e.message,'err'); _restore(); }

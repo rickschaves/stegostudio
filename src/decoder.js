@@ -438,6 +438,70 @@ function neuralStegoHeuristic(data, width, height) {
   };
 }
 
+// Parser estrutural para dois framings LSB históricos observados em arquivos reais.
+// Diferente do deep scan, este caminho NÃO procura uma ilha "plausível": ele exige
+// magic conhecido + comprimento declarado que caiba no buffer + UTF-8 íntegro.
+// Só esse conjunto promove a recuperação genérica ao estado terminal confirmado.
+function parseLegacyFramedLSB(bytes) {
+  if (!(bytes instanceof Uint8Array) || bytes.length < 12) return null;
+
+  const u32be = off => {
+    if (off < 0 || off + 4 > bytes.length) return null;
+    return (((bytes[off] << 24) >>> 0) | (bytes[off+1] << 16) |
+            (bytes[off+2] << 8) | bytes[off+3]) >>> 0;
+  };
+  const asciiAt = (off, text) => {
+    if (off < 0 || off + text.length > bytes.length) return false;
+    for (let i=0;i<text.length;i++) {
+      const b=bytes[off+i], c=text.charCodeAt(i);
+      // O framing "Steg" foi observado com essa capitalização; aceitamos apenas
+      // ASCII case-insensitive para o magic, nunca prefixos arbitrários.
+      if ((b|32) !== (c|32)) return false;
+    }
+    return true;
+  };
+  const finish = (headerName, payloadOffset, payloadLength, framingVersion=null) => {
+    if (!Number.isInteger(payloadLength) || payloadLength <= 0) return null;
+    if (payloadOffset < 0 || payloadOffset + payloadLength > bytes.length) return null;
+    const payload = bytes.slice(payloadOffset, payloadOffset + payloadLength);
+    let text;
+    try { text = new TextDecoder('utf-8',{fatal:true}).decode(payload); }
+    catch (_) { return null; }
+    if (!text.length) return null;
+    // O framing histórico transporta texto. Controles de layout usuais são
+    // permitidos; controles binários dentro do corpo invalidam a promoção.
+    for (let i=0;i<text.length;i++) {
+      const cp=text.charCodeAt(i);
+      if (cp < 0x20 && cp !== 0x09 && cp !== 0x0A && cp !== 0x0D) return null;
+    }
+    return { text, headerName, payloadBytes:payloadLength, payloadOffset, framingVersion };
+  };
+
+  // JOI_LSB / JOI_LSB0..9: magic ASCII seguido por comprimento uint32 BE.
+  // Os relatórios de campo mostram, por exemplo, JOI_LSB2 00 00 00 27 + 39 bytes.
+  if (asciiAt(0,'JOI_LSB')) {
+    let headerLen=7;
+    if (bytes.length > 7 && bytes[7] >= 0x30 && bytes[7] <= 0x39) headerLen=8;
+    const headerName = new TextDecoder('ascii').decode(bytes.slice(0,headerLen));
+    const len = u32be(headerLen);
+    const parsed = finish(headerName, headerLen+4, len);
+    if (parsed) return parsed;
+  }
+
+  // Framing "Steg" observado: magic + versão uint32 BE (=1) + comprimento uint32 BE.
+  // Ex.: Steg 00 00 00 01 00 00 00 62 + 98 bytes de texto.
+  if (asciiAt(0,'Steg')) {
+    const version = u32be(4);
+    const len = u32be(8);
+    if (version === 1) {
+      const parsed = finish('Steg', 12, len, version);
+      if (parsed) return parsed;
+    }
+  }
+
+  return null;
+}
+
 // Generic LSB extract — testa múltiplos modos e retorna o melhor
 function extractLSBRaw(imageData, maxBytes) {
   const d = imageData.data;
@@ -496,20 +560,21 @@ function extractLSBRaw(imageData, maxBytes) {
   // INVESTIGADOR DE JANELA DESLIZANTE
   // Procura a maior sequência contígua de texto legível em cada modo,
   // ignorando header e lixo ao redor. Funciona com qualquer codificador.
-  let best = null;
+  let best = null, bestFramed = null;
   for (const c of candidates) {
     const island = findTextIsland(c.bytes);
     c.printableRatio = printable(c.bytes);  // mantém compat com resto do código
     c.island = island;
+    c.framed = parseLegacyFramedLSB(c.bytes);
+    if (c.framed && !bestFramed) bestFramed = c; // ordem de modos é determinística
     if (!best || island.score > best.island.score) best = c;
   }
 
-  // Anexa a melhor ilha de texto encontrada como propriedade extra
-  best.foundText = best.island.text;
-  best.foundTextLength = best.island.length;
-  // Identifica o header: bytes ASCII imediatamente antes da ilha de texto.
-  // Muitas ferramentas escrevem um magic (ex: "JOI_LSB2", "STEGO") antes da mensagem.
-  best.headerName = extractHeader(best.bytes, best.island.start);
+  // Framing validado vence heurística de ilha: magic+LEN+UTF-8 é evidência direta.
+  if (bestFramed) best = bestFramed;
+  best.foundText = best.framed ? best.framed.text : best.island.text;
+  best.foundTextLength = best.framed ? best.framed.payloadBytes : best.island.length;
+  best.headerName = best.framed ? best.framed.headerName : extractHeader(best.bytes, best.island.start);
   return best;
 }
 

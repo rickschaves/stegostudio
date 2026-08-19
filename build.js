@@ -12,12 +12,13 @@
 'use strict';
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 
 const SRC = path.join(__dirname, 'src');
 const DIST = path.join(__dirname, 'dist');
 
 // Versão do artefato final. Convenção: pontos entre números (nunca underscore).
-const VERSION = '2.43.12';
+const VERSION = '2.43.20';
 
 // Module order is part of the build contract. Modules expose declarations that are
 // consumed later at runtime; review dependencies before changing this sequence.
@@ -98,7 +99,7 @@ function build({ write = true } = {}) {
   const app = assembleApp();
 
   // Sanidade dos marcadores — falha ruidosa se o template mudou.
-  for (const marker of ['/*BUILD:STYLES*/', '/*BUILD:HASHWASM*/', '/*BUILD:APP*/']) {
+  for (const marker of ['/*BUILD:CSP*/', '/*BUILD:STYLES*/', '/*BUILD:HASHWASM*/', '/*BUILD:APP*/']) {
     if (html.indexOf(marker) === -1) throw new Error(`Marcador ausente no template: ${marker}`);
     if (html.indexOf(marker) !== html.lastIndexOf(marker)) throw new Error(`Marcador duplicado: ${marker}`);
   }
@@ -110,6 +111,37 @@ function build({ write = true } = {}) {
     .replace('/*BUILD:STYLES*/', () => css)
     .replace('/*BUILD:HASHWASM*/', () => hashwasm)
     .replace('/*BUILD:APP*/', () => app);
+
+  // F19 — CSP do próprio artefato. Como a distribuição precisa continuar sendo
+  // um único HTML que também abre por file://, a política é entregue por <meta>
+  // e os scripts inline são autorizados por SHA-256 calculado sobre o HTML final.
+  // O WASM do Argon2 requer somente wasm-unsafe-eval; JavaScript eval continua
+  // proibido. Estilos inline permanecem permitidos porque a UI usa style attrs e
+  // CSSOM dinamicamente; fontes/imagens locais usam data:/blob: conforme o caso.
+  const cspHash = text => `'sha256-${crypto.createHash('sha256').update(text, 'utf8').digest('base64')}'`;
+  const scriptBodies = [...html.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/g)].map(m => m[1]);
+  if (scriptBodies.length !== 3) {
+    throw new Error(`CSP: esperava 3 blocos <script> inline, encontrei ${scriptBodies.length}`);
+  }
+  const scriptHashes = scriptBodies.map(cspHash).join(' ');
+  const csp = [
+    `default-src 'none'`,
+    `base-uri 'none'`,
+    `connect-src 'none'`,
+    `form-action 'none'`,
+    `object-src 'none'`,
+    `frame-src 'none'`,
+    `child-src 'none'`,
+    `worker-src 'none'`,
+    `media-src 'none'`,
+    `manifest-src 'none'`,
+    `script-src ${scriptHashes} 'wasm-unsafe-eval'`,
+    `script-src-attr 'none'`,
+    `style-src 'unsafe-inline'`,
+    `img-src 'self' data: blob:`,
+    `font-src data:`,
+  ].join('; ');
+  html = html.replace('/*BUILD:CSP*/', () => csp);
 
   // Garantia offline: URLs de runtime são proibidas. Apenas identificadores de
   // namespace e URLs exatas de metadados públicos conhecidos podem existir no HTML.

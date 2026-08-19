@@ -152,12 +152,25 @@ function resolveStegoSurface(r) {
 //  Por isso todas as superfícies derivam a decisão desta mesma função, com
 //  precedência da evidência mais forte para a mais fraca.
 // ─────────────────────────────────────────────────────────────────────────────
+function resolveThreatLevelKey(r, score) {
+  const s = Number(score) || 0;
+  const confirmed = r.studio?.nativeExtracted === true ||
+    r.studio?.framedExtracted === true || r.studio?.robust === true ||
+    resolveThirdPartyEvidence(r).level === 'recovered';
+  if (confirmed) return 'levelConfirmed';
+  if (s > 60) return 'levelHigh';
+  if (s > 30) return 'levelMedium';
+  if (s > 0) return 'levelLow';
+  return 'levelClean';
+}
+
 function resolveProtocolState(r) {
   const st = r.studio;
   if (!st?.available)        return { level:'na',        name:'—',                       badge:t('badgeNA'),            cls:'mb-scan' };
   if (st.nativeExtracted)    return { level:'extracted', name:'STEGO·STUDIO',            badge:'STEGO·STUDIO',          cls:'mb-crit' };
   if (st.nativeHeaderMatched)return { level:'headerOnly',name:'STEGO·STUDIO',            badge:'STEGO·STUDIO',          cls:'mb-crit' };
   if (st.hasHeader)          return { level:'passive',   name:'STEGO·STUDIO',            badge:'STEGO·STUDIO',          cls:'mb-crit' };
+  if (st.framedExtracted)    return { level:'framed',    name:st.headerName||r.lsb?.headerName||t('protoNameGeneric'), badge:t('protoBadgeFramed'), cls:'mb-crit' };
 
   const printable = parseFloat(r.lsb?.printableRatio) || 0;
   const toolHeader = !!(st.headerName || r.lsb?.headerName);
@@ -342,8 +355,7 @@ function renderResults(r, decodedMsg, decodeStatus, renderMeta={}) {
   const tn=document.getElementById('threat-num');
   tn.textContent=tScore; tn.style.color=tColor; tn.style.textShadow=`0 0 16px ${tColor}`;
   const tl=document.getElementById('threat-level');
-  const threatConfirmed = r.studio?.nativeExtracted === true || r.studio?.robust === true || resolveThirdPartyEvidence(r).level==='recovered';
-  tl.textContent=threatConfirmed?t('levelConfirmed'):(tScore>60?t('levelHigh'):tScore>30?t('levelMedium'):tScore>0?t('levelLow'):t('levelClean'));
+  tl.textContent=t(resolveThreatLevelKey(r, tScore));
   tl.style.color=tColor;
   document.getElementById('threat-flags').innerHTML=
     tFlags.map(f=>`<span class="score-flag threat">${f}</span>`).join('');
@@ -419,7 +431,7 @@ function renderResults(r, decodedMsg, decodeStatus, renderMeta={}) {
       stBody=`<div style="padding:10px;background:rgba(167,139,250,0.05);border:1px solid rgba(167,139,250,0.15);border-radius:3px;font-size:0.68rem;color:var(--scan);line-height:1.8">ℹ ${escapeHTML(r.studio?.note||'')}</div>`;
       stBody+=row(t('rowDecodeStatus'), decodeStatus||'—');
     } else {
-      const protoForte = proto.level==='extracted'||proto.level==='headerOnly'||proto.level==='passive';
+      const protoForte = proto.level==='extracted'||proto.level==='headerOnly'||proto.level==='passive'||proto.level==='framed';
       stBody=row(t('rowProtocolDetected'), protoName, protoForte||r.studio.deepScan?'finding-crit':'');
       if(proto.level==='extracted'){
         const recoveredDetail = r.studio.hasHeader && r.studio.payloadBytes
@@ -428,6 +440,8 @@ function renderResults(r, decodedMsg, decodeStatus, renderMeta={}) {
         stBody+=row(t('rowPayload'), recoveredDetail, 'finding-crit');
       } else if(proto.level==='headerOnly'){
         stBody+=row(t('rowHeader'), t('headerFoundNoContent'), 'finding-crit');
+      } else if(proto.level==='framed'){
+        stBody+=row(t('rowPayload'), (r.studio.framedPayloadBytes||0)+' bytes', 'finding-crit');
       } else if(r.studio.hasHeader){
         stBody+=row(t('rowHeader'), t('modeChannelBHeader'), 'finding-crit');
         stBody+=row(t('rowPayload'), r.studio.payloadBytes+' bytes', 'finding-crit');

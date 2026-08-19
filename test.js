@@ -519,17 +519,18 @@ check('threat: extração confirmada pesa, imagem C2PA limpa não satura', () =>
   const resolveProtocolState = new Function('t', mP[0] + '\nreturn resolveProtocolState;')(tStub);
   const computeThreat = new Function('t','resolveProtocolState', m[0] + '\nreturn computeThreat;')(tStub, resolveProtocolState);
 
-  // O rótulo visual CONFIRMED precisa convergir nas mesmas duas rotas diretas.
-  // Executamos a expressão real do renderer em vez de duplicar a condição no teste.
-  const tc = html.match(/const threatConfirmed\s*=\s*([^;]+);/);
-  assert(tc, 'condição threatConfirmed não encontrada no renderer');
+  // O rótulo visual CONFIRMED precisa convergir com as mesmas credenciais terminais
+  // usadas pelo score. Executamos a função pura consumida pelo renderer.
   const tpFn = html.match(/function resolveThirdPartyEvidence\(r\) \{[\s\S]*?\n\}/);
-  assert(tpFn, 'resolveThirdPartyEvidence não encontrado');
+  const levelFn = html.match(/function resolveThreatLevelKey\(r, score\) \{[\s\S]*?\n\}/);
+  assert(tpFn && levelFn, 'helpers de evidência/nível de Threat não encontrados');
   const resolveThirdPartyEvidence = new Function(tpFn[0]+'\nreturn resolveThirdPartyEvidence;')();
-  const threatConfirmedExpr = new Function('r','resolveThirdPartyEvidence', `return !!(${tc[1]});`);
-  const threatConfirmed = r => threatConfirmedExpr(r, resolveThirdPartyEvidence);
+  const resolveThreatLevelKey = new Function('resolveThirdPartyEvidence', levelFn[0]+'\nreturn resolveThreatLevelKey;')(resolveThirdPartyEvidence);
+  const threatConfirmed = r => resolveThreatLevelKey(r,100) === 'levelConfirmed';
   assert(threatConfirmed({studio:{nativeExtracted:true}}) === true,
     'renderer não marca CONFIRMADO para extração nativa');
+  assert(threatConfirmed({studio:{framedExtracted:true}}) === true,
+    'renderer não marca CONFIRMADO para framing estruturado recuperado');
   assert(threatConfirmed({studio:{robust:true}}) === true,
     'renderer não marca CONFIRMADO para extração robusta');
   assert(threatConfirmed({studio:{thirdParty:'OutGuess'}}) === true,
@@ -1019,16 +1020,16 @@ check('camadas + robusto: formato, portadora e regras de evidência', () => {
   assert(analyzeStart >= 0 && analyzeEnd > analyzeStart, 'handler de análise não encontrado');
   const studioWrites = (analyzeBlock.match(/report\.studio\s*=/g) || []).length;
   const statusWrites = (analyzeBlock.match(/decodeStatus\s*(?:=|\+=|-=|\*=|\/=)/g) || []).length;
-  assert(studioWrites === 11,
-    `handler tem ${studioWrites} escritas em report.studio; esperado 11 — revisar autoria/evidência`);
-  assert(statusWrites === 35,
-    `handler tem ${statusWrites} escritas em decodeStatus; esperado 35 — revisar simetria de status`);
+  assert(studioWrites === 12,
+    `handler tem ${studioWrites} escritas em report.studio; esperado 12 — revisar autoria/evidência`);
+  assert(statusWrites === 36,
+    `handler tem ${statusWrites} escritas em decodeStatus; esperado 36 — revisar simetria de status`);
   // Catraca também para propriedades irmãs de `report.studio`, porque qualquer
   // campo top-level novo pode alcançar o relatório exportado antes da projeção.
   const topWrites = [...analyzeBlock.matchAll(/report\.([A-Za-z_$][\w$]*)\s*(?:=|\+=|-=|\*=|\/=)/g)]
     .map(m => m[1]);
   const topCounts = topWrites.reduce((acc,k) => (acc[k]=(acc[k]||0)+1, acc), {});
-  const expectedTopCounts = {studio:11, toolprint:1, stegomalware:1};
+  const expectedTopCounts = {studio:12, toolprint:1, stegomalware:1};
   assert(JSON.stringify(topCounts) === JSON.stringify(expectedTopCounts),
     `escritas top-level em report mudaram: ${JSON.stringify(topCounts)}; esperado ${JSON.stringify(expectedTopCounts)}`);
   assert(!/lastReport\.modules\.studio\s*(?:\.|\[)/.test(analyzeBlock),
@@ -1592,6 +1593,78 @@ check('v2.43.11: HTML_PRODUCAO contém um único artefato corrente', () => {
   const out = execSync(`node "${path.join(__dirname, 'test', 'check_production_artifact_set.js')}"`, {encoding:'utf8'}).trim();
   assert(out.includes('production artifact set OK'), 'contrato de HTML_PRODUCAO falhou');
   return out.replace(/^production artifact set OK\s*[—-]?\s*/, '');
+});
+
+// ---------------------------------------------------------------------------
+// CHECK 66 — processing time is visible, local-only and generation-safe
+// ---------------------------------------------------------------------------
+check('v2.43.13: tempo total aparece na UI sem persistir ou contaminar o relatório', () => {
+  const out = execSync(`node "${path.join(__dirname, 'test', 'check_processing_time_ui.js')}"`, {encoding:'utf8'}).trim();
+  assert(out.includes('processing time UI OK'), 'contrato de tempo de processamento falhou');
+  return out.replace(/^processing time UI OK\s*[—-]?\s*/, '');
+});
+
+// ---------------------------------------------------------------------------
+// CHECK 67 — legacy framed LSB recovery is structurally validated before 100
+// ---------------------------------------------------------------------------
+check('v2.43.14: framings JOI_LSB2 e Steg/v1 validam comprimento antes do Threat 100', () => {
+  const out = execSync(`node "${path.join(__dirname, 'test', 'check_legacy_framed_recovery.js')}"`, {encoding:'utf8'}).trim();
+  assert(out.includes('legacy framed recovery OK'), 'recuperação estruturada de framing legado falhou');
+  return out.replace(/^legacy framed recovery OK\s*[—-]?\s*/, '');
+});
+
+// ---------------------------------------------------------------------------
+// CHECK 68 — terminal Threat score and visible level cannot diverge
+// ---------------------------------------------------------------------------
+check('v2.43.15: Threat 100 direto e rótulo CONFIRMADO usam a mesma credencial', () => {
+  const out = execSync(`node "${path.join(__dirname, 'test', 'check_threat_level_consistency.js')}"`, {encoding:'utf8'}).trim();
+  assert(out.includes('Threat level consistency OK'), 'coerência score ↔ nível de Threat falhou');
+  return out.replace(/^Threat level consistency OK\s*[—-]?\s*/, '');
+});
+
+// ---------------------------------------------------------------------------
+// CHECK 69 — Encoder generated-output heading mirrors the Decoder result hierarchy
+// ---------------------------------------------------------------------------
+check('v2.43.16: IMAGEM GERADA usa a mesma hierarquia visual de RESULTADO sem // redundante', () => {
+  const out = execSync(`node "${path.join(__dirname, 'test', 'check_generated_heading_layout.js')}"`, {encoding:'utf8'}).trim();
+  assert(out.includes('generated heading layout OK'), 'hierarquia visual IMAGEM GERADA ↔ RESULTADO falhou');
+  return out.replace(/^generated heading layout OK\s*[—-]?\s*/, '');
+});
+
+// ---------------------------------------------------------------------------
+// CHECK 70 — ticker + quick guides + How It Works stay mutually truthful
+// ---------------------------------------------------------------------------
+check('v2.43.17: ticker, guias rápidos e Como funciona preservam os mesmos limites públicos', () => {
+  const out = execSync(`node "${path.join(__dirname, 'test', 'check_public_guidance_consistency.js')}"`, {encoding:'utf8'}).trim();
+  assert(out.includes('public guidance consistency OK'), 'coerência pública de ticker/guias/ajuda falhou');
+  return out.replace(/^public guidance consistency OK\s*[—-]?\s*/, '');
+});
+
+// ---------------------------------------------------------------------------
+// CHECK 71 — F19 CSP: network denial + hashed inline scripts + minimal local assets
+// ---------------------------------------------------------------------------
+check('v2.43.18: CSP restringe rede e autoriza apenas os recursos locais necessários', () => {
+  const out = execSync(`node "${path.join(__dirname, 'test', 'check_csp_contract.js')}"`, {encoding:'utf8'}).trim();
+  assert(out.includes('CSP contract OK'), 'contrato CSP falhou');
+  return out.replace(/^CSP contract OK\s*[—-]?\s*/, '');
+});
+
+// ---------------------------------------------------------------------------
+// CHECK 72 — post-F19 audit closure: EOL reproducibility + residual CSP + JPEG password UX
+// ---------------------------------------------------------------------------
+check('v2.43.19: fecha achados pós-F19 sem prometer diagnóstico impossível no JPEG', () => {
+  const out = execSync(`node "${path.join(__dirname, 'test', 'check_post_f19_hardening.js')}"`, {encoding:'utf8'}).trim();
+  assert(out.includes('post-F19 hardening OK'), 'fechamento pós-F19 falhou');
+  return out.replace(/^post-F19 hardening OK\s*[—-]?\s*/, '');
+});
+
+// ---------------------------------------------------------------------------
+// CHECK 73 — duração específica do feedback JPEG
+// ---------------------------------------------------------------------------
+check('v2.43.20: aviso JPEG fica legível sem alongar os demais flashes', () => {
+  const out = execSync(`node "${path.join(__dirname, 'test', 'check_jpeg_flash_duration.js')}"`, {encoding:'utf8'}).trim();
+  assert(out.includes('JPEG flash duration OK'), 'contrato de duração JPEG falhou');
+  return 'JPEG=8000 ms; wrong/missing=5000 ms';
 });
 
 // ---------------------------------------------------------------------------

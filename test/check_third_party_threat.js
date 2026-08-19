@@ -30,7 +30,8 @@ const partial=structuredClone(base);partial.studio={thirdParty:'OutGuess',foreig
 const p=api.computeThreat(partial);
 assert(api.resolveThirdPartyEvidence(partial).level==='partial','OutGuess truncado não ficou parcial');
 assert(p.score<100 && p.flags.includes('flagThirdPartyPartial'),'extração parcial virou 100 ou perdeu sinal forte');
-assert(rsrc.includes("resolveThirdPartyEvidence(r).level==='recovered'"),'renderer não usa a mesma regra para o rótulo CONFIRMADO');
+const threatLevelSrc=extract(rsrc,'resolveThreatLevelKey');
+assert(/resolveThirdPartyEvidence\(r\)\.level\s*===\s*['"]recovered['"]/.test(threatLevelSrc),'renderer não usa a mesma regra para o rótulo CONFIRMADO');
 assert(/shRes\s*&&\s*shRes\.data instanceof Uint8Array\s*&&\s*shRes\.data\.length>0/.test(main),'Steghide pode publicar thirdParty sem bytes recuperados não vazios');
 assert(/osRes\.data instanceof Uint8Array\s*&&\s*osRes\.data\.length>0/.test(main),'OpenStego pode publicar thirdParty sem bytes recuperados não vazios');
 assert(/ogRes\s*&&\s*ogRes\.data instanceof Uint8Array\s*&&\s*ogRes\.data\.length>0/.test(main),'OutGuess pode publicar thirdParty sem bytes recuperados não vazios');

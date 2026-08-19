@@ -22,6 +22,21 @@ No package install or bundler is required. A green test run means the change is
 consistent with the properties these checks cover; it is not a general proof of
 correctness or security.
 
+## Line endings and reproducible artifacts
+
+The repository uses `.gitattributes` to normalize text sources to LF while preserving
+`HTML_PRODUCAO/**` as byte-exact artifacts:
+
+```text
+* text=auto eol=lf
+HTML_PRODUCAO/** -text
+```
+
+After introducing or changing these rules on an existing checkout, maintainers should run
+`git add --renormalize .` once and inspect `git ls-files --eol` before committing. Source
+text is normalized for reproducible builds and readable diffs; the production HTML is not
+normalized because its published SHA-256 and byte count are part of the release contract.
+
 ## Before proposing a change
 
 - Keep the application fully client-side and offline at runtime.

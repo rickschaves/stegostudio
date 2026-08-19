@@ -9,6 +9,7 @@
   --dec: #ff6b35;
   --scan: #a78bfa;
   --neutral: #7b8db0;
+  --perf: #d99b45;
   --text: #d4daf0;
   /* Secondary text keeps at least WCAG 4.5:1 contrast against --surface2. */
   --dim: #7c85a3;
@@ -216,6 +217,31 @@ header {
   color: var(--dim);
   text-transform: uppercase;
   margin-bottom: 5px;
+}
+
+/* Tempo de processamento — informação secundária, destacada em âmbar sem
+   usar cor como único portador de significado. */
+.processing-head, .result-title-row {
+  display:flex; align-items:center; gap:12px; min-width:0;
+}
+.processing-head { margin-bottom:5px; }
+.result-main-title {
+  font-family:var(--display); font-size:1.1rem; letter-spacing:5px; color:var(--text);
+  text-transform:uppercase; white-space:nowrap;
+}
+.result-title-row { margin-bottom:4px; }
+.result-title-line { flex:1; height:1px; background:var(--border); min-width:18px; }
+.processing-time {
+  display:none; align-items:baseline; gap:6px; white-space:nowrap;
+  color:var(--perf); font-size:0.58rem; letter-spacing:1.2px;
+}
+.processing-time.visible { display:inline-flex; }
+.processing-time-label { opacity:.82; text-transform:uppercase; }
+.processing-time-value { color:#efb35f; font-weight:600; letter-spacing:.5px; text-transform:none; }
+@media (max-width:700px) {
+  .processing-head, .result-title-row { gap:8px; flex-wrap:wrap; }
+  .result-title-line { flex-basis:100%; }
+  .processing-time { font-size:.56rem; }
 }
 
 /* DROP ZONE */

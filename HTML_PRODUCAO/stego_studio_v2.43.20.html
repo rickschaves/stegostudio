@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; base-uri 'none'; connect-src 'none'; form-action 'none'; object-src 'none'; frame-src 'none'; child-src 'none'; worker-src 'none'; media-src 'none'; manifest-src 'none'; script-src 'sha256-xngXDtjVnkMEbvtsBvAf27TuslTyYx+1/uytIiU5tBA=' 'sha256-euZu3EgUjubksGpa9mJPwIWsmBtvgNL4ddayZeqYB8I=' 'sha256-1tgB9+xUmXeMxRUHakBn6hG/mBtEX/2Q636bTvcdpcM=' 'wasm-unsafe-eval'; script-src-attr 'none'; style-src 'unsafe-inline'; img-src 'self' data: blob:; font-src data:">
 <title>STEGO·STUDIO — Steganography & Image Forensics Tool</title>
 
 <!-- Stego Studio favicons -->
@@ -68,6 +69,7 @@
   --dec: #ff6b35;
   --scan: #a78bfa;
   --neutral: #7b8db0;
+  --perf: #d99b45;
   --text: #d4daf0;
   /* Secondary text keeps at least WCAG 4.5:1 contrast against --surface2. */
   --dim: #7c85a3;
@@ -275,6 +277,31 @@ header {
   color: var(--dim);
   text-transform: uppercase;
   margin-bottom: 5px;
+}
+
+/* Tempo de processamento — informação secundária, destacada em âmbar sem
+   usar cor como único portador de significado. */
+.processing-head, .result-title-row {
+  display:flex; align-items:center; gap:12px; min-width:0;
+}
+.processing-head { margin-bottom:5px; }
+.result-main-title {
+  font-family:var(--display); font-size:1.1rem; letter-spacing:5px; color:var(--text);
+  text-transform:uppercase; white-space:nowrap;
+}
+.result-title-row { margin-bottom:4px; }
+.result-title-line { flex:1; height:1px; background:var(--border); min-width:18px; }
+.processing-time {
+  display:none; align-items:baseline; gap:6px; white-space:nowrap;
+  color:var(--perf); font-size:0.58rem; letter-spacing:1.2px;
+}
+.processing-time.visible { display:inline-flex; }
+.processing-time-label { opacity:.82; text-transform:uppercase; }
+.processing-time-value { color:#efb35f; font-weight:600; letter-spacing:.5px; text-transform:none; }
+@media (max-width:700px) {
+  .processing-head, .result-title-row { gap:8px; flex-wrap:wrap; }
+  .result-title-line { flex-basis:100%; }
+  .processing-time { font-size:.56rem; }
 }
 
 /* DROP ZONE */
@@ -1580,7 +1607,7 @@ textarea.dec-t:focus { border-color:rgba(255,107,53,0.4); }
 <body>
 
 <header>
-  <div class="logo">STEGO<span class="e">·</span>STUDIO <span style="font-size:0.85rem;letter-spacing:2px;color:var(--dim)">v2.43.12 // ENCODER · ANALYZER · DECODER</span></div>
+  <div class="logo">STEGO<span class="e">·</span>STUDIO <span style="font-size:0.85rem;letter-spacing:2px;color:var(--dim)">v2.43.20 // ENCODER · ANALYZER · DECODER</span></div>
   <div class="header-meta"><span data-i18n="tagline1">Esteganografia LSB com criptografia AES-256 opcional</span><br><span data-i18n="tagline2">Análise forense integrada · Exportação JSON</span></div>
 </header>
 
@@ -1640,14 +1667,14 @@ textarea.dec-t:focus { border-color:rgba(255,107,53,0.4); }
       <details class="quick-guide enc-guide">
         <summary><span class="qg-icon">▸</span> <span data-i18n="encGuideSummary">Guia rápido — como ocultar uma mensagem</span></summary>
         <div class="qg-body">
-          <p data-i18n-html="encGuide1"><b>1.</b> Carregue uma imagem portadora. <b>PNG, BMP ou WEBP lossless</b> são ideais; outros formatos (JPEG, etc.) são aceitos e convertidos. Todo encode gera <b>duas imagens</b>: um PNG sem perda, que esconde melhor, e um JPG que sobrevive a ser publicado.</p>
-          <p data-i18n-html="encGuide4"><b>2.</b> O embedding é automático: a mensagem é escondida da <b>forma mais furtiva que couber</b>. Com senha, o cabeçalho protegido deixa de expor uma assinatura "STEGO" reconhecível. Ligue <b>Modo de Alta Capacidade</b> apenas para caber mensagens muito grandes — usa os três canais RGB, prioriza capacidade em vez de minimizar as alterações do embedding e pode deixar traços estatísticos mais fortes em payloads maiores.</p>
+          <p data-i18n-html="encGuide1"><b>1.</b> Carregue uma imagem portadora em um formato que o navegador consiga decodificar. <b>PNG, BMP ou WEBP lossless</b> são ideais; formatos lossy suportados, como JPEG, são aceitos e convertidos. Todo encode gera o <b>PNG lossless mais furtivo</b>; quando a mensagem real também cabe no caminho resistente, um segundo JPG é gerado.</p>
+          <p data-i18n-html="encGuide4"><b>2.</b> O embedding é automático: o PNG principal usa o <b>caminho orientado à furtividade que couber</b>. Com senha, o cabeçalho protegido dele deixa de expor uma assinatura "STEGO" reconhecível. Ligue <b>Modo de Alta Capacidade</b> apenas quando precisar do espaço extra — ele usa os três canais RGB, prioriza capacidade em vez de minimizar as alterações do embedding e pode deixar traços estatísticos mais fortes em payloads maiores.</p>
           <p data-i18n-html="encGuide2"><b>3.</b> Digite a mensagem secreta. O medidor de capacidade mostra quantos caracteres cabem na imagem escolhida.</p>
-          <p data-i18n-html="encGuide3"><b>4.</b> Opcionalmente, defina uma <b>senha</b>. Com senha, a mensagem é criptografada (AES-256-GCM) e tem a ordem dos bits embaralhada antes de ser embutida — nas <b>duas</b> imagens de saída. Sem senha, ela viaja em texto puro nas duas.</p>
+          <p data-i18n-html="encGuide3"><b>4.</b> Opcionalmente, defina uma <b>senha</b>. A senha criptografa a mensagem real nas duas saídas quando o JPG resistente é gerado. No PNG lossless protegido ela também ativa proteção estrutural e de cabeçalho mais fortes; o JPEG resistente mantém seu próprio formato compatível e tolerante à recompressão. Sem senha, o conteúdo recuperado fica em texto puro.</p>
           <p data-i18n-html="encGuideDecoy"><b>5.</b> Opcional: ative a <b>Segunda mensagem (negação plausível)</b> para esconder <b>duas</b> mensagens, cada uma com sua própria senha, e poder entregar uma guardando a outra. Ela é escrita nos pixels, então existe apenas no PNG mais furtivo.</p>
-          <p data-i18n-html="encGuide5"><b>6.</b> Clique em <b>Ocultar mensagem</b>. Você recebe <b>duas imagens</b>, as duas com a mesma mensagem: um <b>PNG</b> que esconde melhor mas morre se for recomprimido, e um <b>JPG</b> que sobrevive a ser publicado em rede social. Baixe a que combina com o jeito que você vai enviar.</p>
-          <p class="qg-tip" data-i18n-html="encGuideTip">ℹ As duas imagens são geradas do zero. Todos os metadados originais — EXIF de câmera, perfil de cor e assinaturas digitais como C2PA — são <b>removidos</b>. A foto permanece; os metadados do arquivo original, não.</p>
-          <p class="qg-tip" data-i18n-html="encGuideWa">⚠ Para enviar pelo WhatsApp ou redes sociais sem perder a mensagem, mande como <b>arquivo/documento</b>, nunca como foto — o reenvio como imagem recomprime e apaga os dados ocultos.</p>
+          <p data-i18n-html="encGuide5"><b>6.</b> Clique em <b>Ocultar mensagem</b>. O <b>PNG</b> é gerado como saída mais furtiva. Se a mensagem real couber no caminho resistente, um <b>JPG</b> também é gerado. A mensagem real é comum às duas saídas; a mensagem alternativa opcional existe apenas no PNG. Escolha a saída que combina com o jeito que você vai enviar.</p>
+          <p class="qg-tip" data-i18n-html="encGuideTip">ℹ Cada saída gerada é construída do zero. Os metadados originais — EXIF de câmera, perfil de cor e assinaturas digitais como C2PA — são <b>removidos</b>. A imagem visual permanece; tudo o que estava escrito ao redor dela, não.</p>
+          <p class="qg-tip" data-i18n-html="encGuideWa">⚠ Enviar importa tanto quanto esconder. O caminho seguro para o <b>PNG</b> é transferência como <b>arquivo/documento</b>: se um serviço o recodificar como foto, o payload nos LSBs dos pixels é destruído. O <b>JPG</b> foi feito para publicação e calibrado a partir de fluxos reais de WhatsApp, X, Facebook e Instagram, mas as plataformas podem mudar. Na ponta que recebe, <b>salve o arquivo retornado</b> — não copie a imagem exibida (Ctrl+C), porque isso pode reencodá-la e destruir a mensagem.</p>
         </div>
       </details>
       <div>
@@ -1774,7 +1801,15 @@ textarea.dec-t:focus { border-color:rgba(255,107,53,0.4); }
     </div>
 
     <div class="col">
-      <div class="field-label" data-i18n="fieldGenerated">// imagem gerada</div>
+      <div class="processing-head">
+        <span class="result-main-title" data-i18n="fieldGenerated">IMAGEM GERADA</span>
+        <div class="processing-time" id="enc-processing-time" aria-live="polite">
+          <span class="processing-time-label" data-i18n="processingTime">// tempo de processamento</span>
+          <span class="processing-time-sep" aria-hidden="true">·</span>
+          <span class="processing-time-value"></span>
+        </div>
+        <div class="result-title-line"></div>
+      </div>
       <div class="out-pair">
         <div class="download-wrap" id="enc-dl">
           <div class="rb-head">
@@ -1830,9 +1865,9 @@ textarea.dec-t:focus { border-color:rgba(255,107,53,0.4); }
       <details class="quick-guide dec-guide">
         <summary><span class="qg-icon">▸</span> <span data-i18n="decGuideSummary">Guia rápido — como interpretar a análise</span></summary>
         <div class="qg-body">
-          <p data-i18n-html="decGuide1"><b>1.</b> Carregue qualquer imagem — <b>qualquer formato</b>. A análise forense roda automaticamente e é independente de senha.</p>
-          <p data-i18n-html="decGuide2"><b>2.</b> O <b>Threat Score</b> indica suspeita de mensagem oculta. Antes da recuperação direta, a soma heurística tem teto em <b>99</b>; <b>100 / CONFIRMADO</b> fica reservado a conteúdo válido recuperado diretamente por um método suportado.</p>
-          <p data-i18n-html="decGuide3"><b>3.</b> Se a imagem contém uma mensagem criptografada, insira a <b>senha</b> e analise de novo para decodificá-la. A senha também é o que revela mensagens em <b>Modo furtivo</b> — o cabeçalho delas é criptografado, então sem a senha são indistinguíveis de ruído. Mensagens em texto puro são recuperadas automaticamente, sem senha. O Decoder também lê imagens do <b>OpenStego</b>, do <b>Steghide</b> e do <b>OutGuess</b> — inclusive Steghide em JPEG (domínio DCT) com AES — automaticamente sem senha, ou com a senha quando informada.</p>
+          <p data-i18n-html="decGuide1"><b>1.</b> Carregue uma imagem em formato que o navegador consiga decodificar e clique em <b>Analisar imagem</b>. O pipeline forense e as tentativas de recuperação rodam no mesmo passo; a análise forense em si independe de senha. O suporte a HEIC/HEIF depende do navegador; se ele não conseguir decodificar o arquivo, a ferramenta pede conversão para PNG ou JPEG.</p>
+          <p data-i18n-html="decGuide2"><b>2.</b> O <b>Threat Score</b> indica suspeita de mensagem oculta (esteganografia). Antes da recuperação direta, ele é heurístico: quanto maior, mais forte a evidência, com teto em <b>99</b>. O valor <b>100 / CONFIRMADO</b> fica reservado a conteúdo oculto válido recuperado diretamente por um método suportado.</p>
+          <p data-i18n-html="decGuide3"><b>3.</b> Se a imagem contém uma mensagem protegida, insira a <b>senha</b> e analise de novo. Payloads do STEGO·STUDIO protegidos por senha podem não expor um cabeçalho reconhecível numa análise passiva, então a senha é necessária para tentar reconhecê-los e recuperá-los. Texto puro em framings reconhecidos/suportados pode ser recuperado sem senha. O Decoder também tenta <b>OpenStego</b>, <b>Steghide</b> e <b>OutGuess</b> dentro dos limites de compatibilidade documentados em <b>Como funciona</b>; não é cobertura completa de todas as cifras, modos ou contêineres dessas ferramentas.</p>
           <p data-i18n-html="decGuide4"><b>4.</b> O <b>Índice de compatibilidade com origem</b> compara a imagem com padrões heurísticos associados a fotografia, screenshot, arte digital e imagens geradas por IA. Os scores são independentes — vários podem ser altos. O maior score indica maior compatibilidade, não uma probabilidade calibrada.</p>
           <p data-i18n-html="decGuide5"><b>5.</b> Abra os <b>indicadores</b> para ver os detalhes técnicos de cada sinal e entender por que cada score foi atribuído.</p>
           <p class="qg-tip" data-i18n-html="decGuideAdaptive">⚠ Alguns métodos deixam apenas traços estruturais fracos. <b>LSB Matching</b> e esteganografia adaptativa ao conteúdo, como HILL, podem manter o Threat Score modesto mesmo com dados ocultos presentes. Eles podem escapar da detecção aqui. Um score baixo não é evidência de que a imagem não contenha dados ocultos.</p>
@@ -1848,7 +1883,7 @@ textarea.dec-t:focus { border-color:rgba(255,107,53,0.4); }
           </div>
           <div id="dec-hint" style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px;text-align:center">
             <div class="drop-icon">▣</div>
-            <div class="drop-hint" data-i18n-html="dropHintDec2">Arraste, clique ou <span class="dh">cole (Ctrl+V)</span><br>qualquer imagem suspeita ou codificada<br><span class="dh">PNG · BMP · WEBP · JPEG · qualquer formato</span></div>
+            <div class="drop-hint" data-i18n-html="dropHintDec2">Arraste, clique ou <span class="dh">cole (Ctrl+V)</span><br>qualquer imagem suspeita ou codificada que o navegador consiga decodificar<br><span class="dh">PNG · BMP · WEBP · JPEG · AVIF · outros formatos suportados</span></div>
           </div>
         </div>
         <input type="file" id="dec-file" accept="image/*">
@@ -1883,9 +1918,14 @@ textarea.dec-t:focus { border-color:rgba(255,107,53,0.4); }
       <div class="results-area" id="results-area">
 
         <!-- Título global -->
-        <div style="display:flex;align-items:center;gap:12px;margin-bottom:4px">
-          <span style="font-family:var(--display);font-size:1.1rem;letter-spacing:5px;color:var(--text)" data-i18n="resultTitle">RESULTADO</span>
-          <div style="flex:1;height:1px;background:var(--border)"></div>
+        <div class="result-title-row">
+          <span class="result-main-title" data-i18n="resultTitle">RESULTADO</span>
+          <div class="processing-time" id="dec-processing-time" aria-live="polite">
+            <span class="processing-time-label" data-i18n="processingTime">// tempo de processamento</span>
+            <span class="processing-time-sep" aria-hidden="true">·</span>
+            <span class="processing-time-value"></span>
+          </div>
+          <div class="result-title-line"></div>
         </div>
 
         <!-- Aviso de calibração -->
@@ -2022,53 +2062,53 @@ textarea.dec-t:focus { border-color:rgba(255,107,53,0.4); }
       <details class="help-section" open>
         <summary data-i18n="helpS1Title">O que esta ferramenta faz</summary>
         <div class="help-text">
-          <p data-i18n-html="helpS1a">O STEGO·STUDIO tem três módulos. O <b>Encoder</b> esconde mensagens de texto dentro de imagens. O <b>Analyzer</b> examina qualquer imagem em busca de sinais de conteúdo oculto e estima a origem provável dela (foto, screenshot, arte digital ou IA). O <b>Decoder</b> vai além e tenta de fato recuperar a mensagem — tanto do protocolo do próprio STEGO·STUDIO quanto de ferramentas de terceiros. Analyzer e Decoder não são passos separados: um único botão roda os dois.</p>
+          <p data-i18n-html="helpS1a">O STEGO·STUDIO tem três módulos. O <b>Encoder</b> esconde mensagens de texto em imagens que o navegador consiga decodificar. O <b>Analyzer</b> examina imagens suportadas em busca de sinais de conteúdo oculto e estima a compatibilidade de origem (foto, screenshot, arte digital ou IA). O <b>Decoder</b> vai além e tenta recuperar a mensagem — tanto dos formatos do próprio STEGO·STUDIO quanto de formatos compatíveis de ferramentas de terceiros. Analyzer e Decoder não são passos separados: um único botão roda os dois.</p>
           <p data-i18n-html="helpS1b">Tudo roda 100% no seu navegador. Nenhuma imagem ou dado é enviado para servidores.</p>
         </div>
       </details>
       <details class="help-section">
         <summary data-i18n="helpS2Title">Esteganografia LSB</summary>
         <div class="help-text">
-          <p data-i18n-html="helpS2a">Cada pixel de uma imagem tem valores de cor (vermelho, verde, azul). O bit menos significativo (LSB) de cada valor pode ser alterado sem mudança visível na imagem. A esteganografia LSB escreve a mensagem nesses bits.</p>
-          <p data-i18n-html="helpS2b">Por isso a imagem mais furtiva é sempre salva como um <b>PNG novo (sem perda)</b> — os bits do LSB precisam de um formato lossless para sobreviver. Você pode partir de qualquer imagem, inclusive JPEG: a ferramenta a converte e embute a mensagem na saída. O que destrói uma mensagem em LSB é recomprimir <b>depois</b> (salvar como JPEG de novo, ou reenviar por rede social como foto). É exatamente esse problema que a imagem mais resistente resolve — veja a seção seguinte.</p>
-          <p data-i18n-html="helpS2c">Há duas formas de escrever o LSB. O <b>LSB Replacement (LSBR)</b> simplesmente sobrescreve o bit — simples, mas deixa uma assimetria par/ímpar estrutural que ataques estatísticos detectam com facilidade. Já o <b>LSB Matching (LSBM)</b> soma ou subtrai 1 aleatoriamente para chegar ao mesmo bit, sem deixar essa assimetria. O STEGO·STUDIO usa <b>LSBM</b>, muito mais difícil de detectar que o LSBR usado por ferramentas como OpenStego e OpenPuff.</p>
+          <p data-i18n-html="helpS2a">Cada pixel de uma imagem tem valores de cor (vermelho, verde, azul). Alterar um bit menos significativo (LSB) normalmente não produz diferença visual perceptível. A esteganografia em domínio de pixels pode usar esses bits para transportar dados.</p>
+          <p data-i18n-html="helpS2b">Por isso a imagem mais furtiva é salva como um <b>PNG novo (sem perda)</b> — os LSBs dos pixels precisam de um caminho lossless para sobreviver. Você pode partir de qualquer formato que o navegador consiga decodificar, inclusive JPEG: a ferramenta converte antes de embutir. Recomprimir o PNG gerado depois pode destruir o payload nos pixels. O JPEG resistente usa um caminho diferente, nos coeficientes DCT, para fluxos de publicação — veja a seção seguinte.</p>
+          <p data-i18n-html="helpS2c">O STEGO·STUDIO usa mais de uma estratégia para escrever LSBs. Rotas sequenciais sem STC usam <b>LSB Matching (LSBM)</b>, que chega ao bit desejado somando ou subtraindo 1. O caminho padrão orientado à furtividade usa <b>STC</b> para escolher um conjunto de alterações de baixo custo sobre o mapa HILL, e caminhos adaptativos podem definir diretamente o LSB selecionado. Portanto o produto inteiro não deve ser descrito como se usasse apenas LSBM ou apenas LSBR.</p>
           <p data-i18n-html="helpS2d">Por padrão, a mensagem usa o <b>canal azul</b> e o caminho STC orientado à furtividade. O <b>modo alta capacidade (RGB)</b> espalha o corpo pelos três canais de cor, triplicando o espaço disponível (~3 bits por pixel) — útil para mensagens maiores. O RGB prioriza espaço em vez de minimizar as alterações do embedding e pode deixar traços estatísticos mais fortes, especialmente com payloads maiores. A imagem registra qual modo foi usado, então a decodificação é automática.</p>
         </div>
       </details>
       <details class="help-section">
-        <summary data-i18n="helpRbTitle">As duas imagens: mais furtiva e mais resistente</summary>
+        <summary data-i18n="helpRbTitle">Os caminhos de saída: mais furtivo e mais resistente</summary>
         <div class="help-text">
-          <p data-i18n-html="helpRbA">Todo encode gera duas imagens, e as duas carregam a mesma mensagem. A <b>mais furtiva</b> é um PNG: escreve a mensagem nos bits menos significativos dos pixels, o que é difícil de detectar em taxas baixas de embedding — mas a mensagem é frágil à recompressão. A <b>mais resistente</b> é um JPG: escreve a mensagem nos coeficientes JPEG usando um esquema tolerante a erros projetado a partir do comportamento de recompressão medido nas principais plataformas sociais.</p>
-          <p data-i18n-html="helpRbB">Nenhuma é a melhor. Elas trocam coisas diferentes. A mais furtiva é discreta e frágil. A mais resistente sobrevive à publicação e, em troca, quem procurar especificamente por esteganografia nos coeficientes do JPEG vê o padrão — ainda que não consiga lê-lo sem a senha.</p>
-          <p data-i18n-html="helpRbC">A imagem mais resistente reduz a foto para no máximo 1080 px no lado maior. Isso não é arbitrário: acima disso, as redes sociais redimensionam a imagem, e redimensionar destrói a mensagem. Ela também gasta parte do espaço com correção de erro <b>Reed-Solomon</b>, para reparar avarias pegas no caminho. Por isso comporta bem menos — cerca de 20 KB, contra megabytes no PNG.</p>
-          <p data-i18n-html="helpRbD">Tudo isso foi medido, não estimado: imagens com payload real foram postadas no WhatsApp, no X, no Facebook e no Instagram, baixadas de volta e lidas. Cada parâmetro que o modo mais resistente usa vem dessas medições.</p>
+          <p data-i18n-html="helpRbA">Todo encode gera o PNG mais furtivo. Quando a mensagem real também cabe no caminho resistente, o Encoder oferece um segundo JPG carregando essa mesma mensagem real. O <b>PNG mais furtivo</b> escreve nos LSBs dos pixels, o que pode ser difícil de detectar em taxas baixas de embedding, mas é frágil à recompressão. O <b>JPG mais resistente</b> escreve nos coeficientes JPEG com correção de erro desenhada a partir dos danos medidos em redes sociais.</p>
+          <p data-i18n-html="helpRbB">Nenhuma é universalmente melhor. A imagem mais furtiva prioriza discrição e é frágil. A mais resistente troca parte da discrição por sobrevivência nos fluxos de publicação medidos no projeto. Em ocupação alta ela pode deixar um padrão reconhecível nos coeficientes. Se você usou senha, reconhecer esse padrão não revela a mensagem; sem senha, o conteúdo recuperado fica em texto puro.</p>
+          <p data-i18n-html="helpRbC">A imagem mais resistente limita o lado maior a 1080 px porque esse foi o envelope de trabalho nos fluxos medidos em campo. Entradas maiores foram redimensionadas em alguns caminhos testados, e redimensionar desloca a estrutura de blocos JPEG o suficiente para destruir esse payload. Ela também gasta parte do espaço com correção de erro <b>Reed-Solomon</b>, por isso comporta bem menos que o PNG — tipicamente na ordem de dezenas de KB, não megabytes.</p>
+          <p data-i18n-html="helpRbD">Os principais parâmetros de canal vieram de medições de campo, não de chute: imagens com payload QIM real passaram por fluxos medidos de WhatsApp, X, Facebook e Instagram, foram baixadas de volta e examinadas. As plataformas podem mudar, então esse é um envelope operacional medido, não uma garantia permanente.</p>
           <p data-i18n-html="helpRbE">Um limite que vale saber: a <b>mensagem alternativa</b> é escrita nos pixels, então ela existe apenas no PNG mais furtivo. A imagem mais resistente carrega só a mensagem real.</p>
         </div>
       </details>
       <details class="help-section">
         <summary data-i18n="helpSecProtTitle">Proteção e furtividade</summary>
         <div class="help-text">
-          <p data-i18n-html="helpProtA">Quando você define uma <b>senha</b>, a mensagem é criptografada com <b>AES-256-GCM</b> (chave criptográfica derivada da senha por <b>Argon2id</b>) antes de ser embutida. Mesmo que alguém extraia os bits, o conteúdo é ilegível sem a senha — e qualquer adulteração é detectada.</p>
-          <p data-i18n-html="helpProtB">A senha também <b>embaralha a ordem</b> em que os bits da mensagem são distribuídos pela imagem. Sem ela, mesmo quem souber que é LSB e extrair os bits na ordem física obtém uma sequência embaralhada.</p>
-          <p data-i18n-html="helpProtD">Definir uma senha também <b>oculta o cabeçalho</b>, sem passo extra. Normalmente o cabeçalho carrega uma assinatura fixa ("STEGO") que outras ferramentas usam para perceber que há algo embutido; com senha, ela é criptografada e some — sem a senha, o cabeçalho é indistinguível de ruído. Não é um modo à parte: acontece sozinho sempre que há senha.</p>
-          <p data-i18n-html="helpProtC">Independentemente da senha, ao <b>posicionar</b> os bits a ferramenta segue dois caminhos e escolhe sozinha. No padrão (furtividade máxima), usa <b>códigos síndrome-treliça (STC) sobre um mapa de custo HILL</b>: entre todas as formas de codificar a sua mensagem, escolhe a que altera os pixels de <b>menor custo</b> — as regiões de textura e ruído, fugindo das áreas lisas onde os ataques estatísticos RS/WS mais enxergam. É o menor rastro possível para aquela imagem, e usa só o canal azul.</p>
+          <p data-i18n-html="helpProtA">Quando você define uma <b>senha</b>, a mensagem é criptografada com <b>AES-256-GCM</b> (chave criptográfica derivada da senha por <b>Argon2id</b>) antes de ser embutida. Mesmo que alguém extraia os bits, o conteúdo protegido é ilegível sem a senha; ciphertext autenticado que tenha sido alterado é rejeitado em vez de ser devolvido como texto válido.</p>
+          <p data-i18n-html="helpProtB">A senha também fortalece <b>como o payload protegido é estruturado</b>. Nos caminhos sem STC, a ordem do corpo é derivada da senha com separação forte de chaves. O caminho padrão com STC não depende dessa ordenação; ele recupera o corpo pelo código de síndrome sobre o mapa de custo HILL.</p>
+          <p data-i18n-html="helpProtD">Definir uma senha também <b>protege o cabeçalho</b>, sem passo extra. Uma assinatura fixa e legível "STEGO" deixa de ficar exposta nos payloads protegidos, então uma análise passiva pode não encontrar um cabeçalho reconhecível sem a senha. Isso não é promessa de invisibilidade — traços estatísticos ainda podem existir.</p>
+          <p data-i18n-html="helpProtC">Independentemente da senha, ao <b>posicionar</b> os bits a ferramenta segue dois caminhos e escolhe sozinha. No caminho padrão <b>orientado à furtividade</b>, usa <b>códigos síndrome-treliça (STC) sobre um mapa de custo HILL</b>: escolhe uma solução de baixo custo de embedding, favorecendo regiões com textura/ruído em vez de áreas mais lisas. Isso minimiza o custo HILL das alterações naquela portadora; não garante que todo detector dará score menor do que em outro modo. O corpo usa somente o canal azul.</p>
           <p data-i18n-html="helpProtStc">O outro caminho é o <b>Modo de Alta Capacidade (RGB)</b>: quando você liga "Modo de Alta Capacidade" — ou automaticamente, quando a mensagem não cabe no furtivo — o corpo se espalha pelos três canais de cor, triplicando o espaço disponível. Esse caminho prioriza capacidade e pode deixar traços estatísticos mais fortes, especialmente com payloads maiores. A imagem registra qual caminho foi usado, então decodificar é sempre automático.</p>
-          <p data-i18n-html="helpProtE">Tudo isso se soma automaticamente: uma mensagem com senha fica <b>criptografada (AES-256-GCM)</b>, com <b>ordem embaralhada</b> e <b>sem cabeçalho reconhecível</b>, e o corpo é colocado por <b>STC no mapa HILL</b> no modo padrão. Você não monta nada disso à mão — cada camada cobre um tipo diferente de análise, e a ferramenta aplica o que faz sentido para o que você pediu.</p>
+          <p data-i18n-html="helpProtE">Tudo isso se soma automaticamente: uma mensagem com senha fica <b>criptografada (AES-256-GCM)</b> e usa um <b>cabeçalho protegido e autenticado</b>. Os caminhos sem STC também derivam da senha a ordem do corpo; o caminho padrão coloca o corpo com <b>STC sobre o mapa HILL</b>. Você não monta essas camadas à mão — a ferramenta aplica o caminho adequado ao que você pediu.</p>
         </div>
       </details>
       <details class="help-section">
         <summary data-i18n="helpSecDecTitle">O Decoder — o que ele lê, e o que não lê</summary>
         <div class="help-text">
           <p data-i18n-html="helpDecA">Não existe um passo separado de "decodificar". O único botão de análise identifica o formato real pelos próprios bytes do arquivo, roda a análise forense e tenta a extração com todos os motores disponíveis. Quando o resultado aparece, tudo isso já aconteceu.</p>
-          <div data-i18n-html="helpDecB">O que ele lê.</div>
-          <div data-i18n-html="helpDecC">O que ele não lê, e por quê.</div>
-          <div data-i18n-html="helpDecD">Limites honestos.</div>
+          <div data-i18n-html="helpDecB"><b>O que ele lê:</b><ul><li><b>O protocolo do próprio STEGO·STUDIO</b> — em PNG e outros formatos sem perda, com ou sem senha.</li><li><b>O modo mais resistente do STEGO·STUDIO</b> — nos coeficientes do JPEG, com ou sem senha.</li><li><b>OpenStego</b> — LSB aleatorizado em PNG/BMP.</li><li><b>Steghide</b> — em JPEG (coeficientes DCT). O caminho BMP dele não está integrado aqui, e das muitas cifras que ele oferece só a padrão (rijndael-128/CBC) e a ausência de cifra são lidas; as demais são nomeadas, não decifradas.</li><li><b>OutGuess</b> — em JPEG (coeficientes DCT), inclusive sem senha, que é o padrão dele.</li><li><b>Investigador profundo</b> — quando não há cabeçalho conhecido, varre a imagem em busca de texto legível. É uma busca, não uma garantia.</li></ul></div>
+          <div data-i18n-html="helpDecC"><b>O que ele não lê, e por quê:</b><ul><li><b>F5 (Westfeld)</b> — um marco na literatura acadêmica, mas raro na prática e caro por construção: ele precisa embaralhar a imagem inteira antes de conseguir ler o primeiro bit, o que custaria segundos em toda foto analisada, inclusive nas limpas. Esta build não inclui um decoder F5. Se esse suporte entrar no futuro, deve ser uma ação explícita em vez de impor esse custo automaticamente a toda imagem.</li><li><b>Camadas de criptografia de terceiros que não estão implementadas aqui</b> — por exemplo, um payload OpenStego com a criptografia própria da ferramenta pode ser identificado, mas esta build não decifra essa camada. Steghide e OutGuess são casos diferentes: variantes protegidas por senha são tentadas quando o formato/cifra compatível está implementado. A matriz de compatibilidade é a fronteira autoritativa.</li></ul></div>
+          <div data-i18n-html="helpDecD"><b>Limites honestos:</b><ul><li><b>Em JPEG não existe LSB aproveitável.</b> A compressão reescreve os bits menos significativos, então o que se lesse ali seria ruído do codec, não mensagem. Num JPEG, só fazem sentido os métodos de coeficiente DCT.</li><li><b>O teste do chi-quadrado nos coeficientes DCT é indicador fraco, não detector.</b> Ele pega embutimento ingênuo de alta taxa, mas ferramentas que espalham um payload pequeno passam direto por ele. Ausência de sinal nunca é atestado de limpeza.</li></ul></div>
         </div>
       </details>
       <details class="help-section">
         <summary data-i18n="helpS3Title">Threat Score — suspeita de mensagem oculta</summary>
         <div class="help-text">
-          <p data-i18n-html="helpS3a">Estima o <b>nível de suspeita</b> de conteúdo oculto. Antes da recuperação direta, é um score heurístico com teto em <b>99</b>, não uma probabilidade calibrada. <b>100 / CONFIRMADO</b> fica reservado a conteúdo válido recuperado diretamente por um método suportado.</p>
+          <p data-i18n-html="helpS3a">Estima o <b>nível de suspeita</b> de conteúdo oculto a partir de sinais forenses como evidência de protocolo conhecido, texto legível encontrado em framings suportados ou na investigação profunda, anomalias de LSB, strings suspeitas e dados após o fim do arquivo. Antes da recuperação direta, é um score heurístico, não uma probabilidade calibrada, e a soma heurística tem teto em <b>99</b>. <b>100 / CONFIRMADO</b> fica reservado a conteúdo oculto válido recuperado diretamente por um método suportado.</p>
           <p data-i18n-html="helpS3b">A recuperação confiável de uma mensagem é a evidência mais forte. Payloads criptografados ou ilegíveis ainda podem deixar traços estruturais ou estatísticos, mas esses traços indicam possível embedding — não revelam o payload por si só.</p>
           <p data-i18n-html="helpS3c">O analisador também roda dois <b>ataques estruturais</b> — RS (Regular–Singular) e WS (Weighted Stego) — voltados principalmente a traços associados ao <b>LSB Replacement</b>. A concordância entre eles pode reforçar a suspeita, especialmente em taxas de embedding maiores. Eles são menos confiáveis contra LSB Matching e posicionamento adaptativo ao conteúdo, e um resultado silencioso não prova ausência.</p>
           <p data-i18n-html="helpS3d">Há também uma <b>heurística de embedding tipo GAN</b> que procura um padrão às vezes associado à esteganografia neural: planos LSB incomumente semelhantes entre os canais de cor junto com comportamento simétrico em altas frequências. Quando esse padrão aparece, a ferramenta levanta uma <b>suspeita</b> — nunca uma confirmação. Imagens texturizadas ou sintéticas podem produzir sinais semelhantes. Trate como pista, não veredito.</p>
@@ -2088,14 +2128,14 @@ textarea.dec-t:focus { border-color:rgba(255,107,53,0.4); }
           <p data-i18n-html="helpS5a"><b>Fotografia</b> — EXIF de câmera (apenas evidência de apoio; EXIF não é autenticado e é facilmente editável), ruído de sensor, alta diversidade cromática.</p>
           <p data-i18n-html="helpS5b"><b>Screenshot</b> — bordas perfeitamente nítidas, ausência de ruído de sensor, paleta de interface, dimensões típicas de tela.</p>
           <p data-i18n-html="helpS5c"><b>Arte digital / 3D</b> — sem ruído de sensor, bordas regulares, paleta controlada, gradientes artificiais.</p>
-          <p data-i18n-html="helpS5d"><b>Sintética / IA</b> — entropia regional uniforme, gradientes suavizados demais, crominância uniforme, ou metadados C2PA/EXIF que declaram geração por IA.</p>
+          <p data-i18n-html="helpS5d"><b>Sintética / IA</b> — entropia regional uniforme, gradientes suavizados demais, crominância uniforme, ou metadados C2PA/EXIF que declaram geração por IA. Uma declaração C2PA detectada não é tratada como prova com assinatura verificada nesta build.</p>
         </div>
       </details>
       <details class="help-section">
         <summary data-i18n="helpS6Title">Limitações</summary>
         <div class="help-text">
-          <p data-i18n-html="helpS6a">Esta é uma ferramenta <b>heurística</b>, não um classificador definitivo. Ela analisa propriedades estatísticas e metadados, sem modelo neural treinado. Nada roda em servidor. Métodos que exigem modelos treinados especializados ficam fora da cobertura confiável de detecção desta build.</p>
-          <p data-i18n-html="helpS6b">Casos difíceis: imagens recomprimidas por redes sociais (que apagam metadados e alteram pixels), fotos muito editadas, e imagens de IA de última geração que imitam ruído de câmera. Use os resultados como <b>indício investigativo</b>, cruzando com outras evidências — não como prova isolada.</p>
+          <p data-i18n-html="helpS6a">O <b>classificador de origem e boa parte da esteganálise são heurísticos</b>, não classificadores definitivos. Payloads válidos recuperados diretamente são uma categoria separada e mais forte de evidência. Esta build analisa propriedades estatísticas, estrutura e metadados sem modelo neural treinado, e nada roda em servidor. Métodos que exigem modelos treinados especializados ficam fora da cobertura confiável de detecção.</p>
+          <p data-i18n-html="helpS6b">Casos difíceis: imagens processadas ou recomprimidas por redes sociais (que podem apagar metadados e alterar pixels), fotos muito editadas, e imagens de IA de última geração que imitam ruído de câmera. Use os resultados como <b>indício investigativo</b>, cruzando com outras evidências — não como prova isolada.</p>
           <p data-i18n-html="helpS6c">Do lado da esteganografia, a análise embutida é mais forte contra <b>LSB Replacement</b> e mensagens em texto puro ou com framing fraco. Para embedding tipo GAN ela oferece apenas uma <b>heurística de suspeita</b>. <b>LSB Matching</b> e métodos adaptativos ao conteúdo como HILL, UNIWARD e J-UNIWARD podem escapar da detecção porque esta build não embarca os modelos treinados especializados usados para esse trabalho. Payloads conhecidos do STEGO·STUDIO ainda podem ser reconhecidos ou decodificados pelo próprio formato. <b>Ausência de detecção aqui não é evidência de que a imagem não contenha dados ocultos.</b> Para esteganálise especializada, use um toolbox dedicado como o <b>Aletheia</b>, de Daniel Lerch (MIT, <code>github.com/daniellerch/aletheia</code>).</p>
         </div>
       </details>
@@ -2187,7 +2227,7 @@ textarea.dec-t:focus { border-color:rgba(255,107,53,0.4); }
 
 <script>
 /*
- * STEGO·STUDIO v2.43.12 — steganography and image forensics
+ * STEGO·STUDIO v2.43.20 — steganography and image forensics
  * Copyright (C) 2026 RASC
  * Concept and human direction by RASC. Developed with JOI, an AI.
  *
@@ -2283,11 +2323,11 @@ const I18N = {
     decoyPngOnlyWarn: "⚠ The alternative message goes into the stealthier image (PNG) only. The sturdier image carries the real message alone — if plausible deniability matters to you, the PNG is the one to keep and to send.",
 
     // ── Ajuda: as duas saídas do Encoder ──
-    helpRbTitle: "The two images: stealthier and sturdier",
-    helpRbA: "Every encode produces two images, and both carry the same message. The <b>stealthier</b> one is a PNG: it writes the message into the least significant bits of the pixels, which is difficult to detect at low embedding rates — but the message is fragile under recompression. The <b>sturdier</b> one is a JPG: it writes the message into JPEG coefficients using an error-tolerant scheme designed around the recompression behavior measured on major social platforms.",
-    helpRbB: "Neither is the better one. They trade different things. The stealthier image is discreet and fragile. The sturdier one survives being posted and, in exchange, anyone looking specifically for steganography in JPEG coefficients will see the pattern — though they still cannot read it without the password.",
-    helpRbC: "The sturdier image shrinks the picture to at most 1080 px on its longest side. That is not arbitrary: above that, social platforms resize the image, and resizing destroys the message. It also spends part of its room on <b>Reed-Solomon</b> error correction, so damage picked up along the way can be repaired. It therefore holds far less — around 20 KB, against megabytes in the PNG.",
-    helpRbD: "All of this was measured rather than estimated: images carrying real payloads were posted to WhatsApp, X, Facebook and Instagram, downloaded back and read. Every setting the sturdier mode uses comes from those measurements.",
+    helpRbTitle: "The output paths: stealthier and sturdier",
+    helpRbA: "Every encode produces the stealthier PNG. When the real message also fits the sturdier path, the Encoder offers a second JPG carrying that same real message. The <b>stealthier</b> PNG writes into pixel LSBs, which can be difficult to detect at low embedding rates but is fragile under recompression. The <b>sturdier</b> JPG writes into JPEG coefficients with error correction designed around measured social-platform damage.",
+    helpRbB: "Neither is universally better. The stealthier image prioritizes discretion and is fragile. The sturdier image trades some discretion for survivability in the publication workflows measured in the project. At high occupancy it can leave a recognizable coefficient pattern. If you used a password, recognizing that pattern does not reveal the message; without a password, recovered content is plaintext.",
+    helpRbC: "The sturdier image limits the longest side to 1080 px because that was the working envelope in the measured field paths. Larger inputs were resized in some tested workflows, and resizing shifts the JPEG block structure enough to destroy this payload. It also spends part of its room on <b>Reed-Solomon</b> error correction, so it holds far less than the PNG — typically on the order of tens of kilobytes rather than megabytes.",
+    helpRbD: "The main channel parameters were derived from field measurements rather than guessed: images carrying real QIM payloads were posted through measured WhatsApp, X, Facebook and Instagram workflows, downloaded back and examined. Platform behaviour can change, so this is a measured operating envelope, not a permanent guarantee.",
     helpRbE: "One limit worth knowing: the <b>alternative message</b> is written into the pixels, so it exists only in the stealthier PNG. The sturdier image carries the real message only.",
 
     // ── Modo mais resistente: segunda saída do Encoder ──
@@ -2299,15 +2339,15 @@ const I18N = {
     rbReportTitle: "What this version trades",
     rbAxisResist: "Survives the channel",
     rbAxisResistLevel: "HIGH",
-    rbAxisResistNote: "Survives recompression by WhatsApp, X, Facebook and Instagram. Measured on all four, with real posts — not estimated.",
+    rbAxisResistNote: "Designed around measured WhatsApp, X, Facebook and Instagram workflows and validated against the damage seen there. Platform pipelines can change, so this is not a universal guarantee.",
     rbAxisDiscretion: "Discretion",
     rbAxisDiscretionLevel: "LOW",
-    rbAxisDiscretionNote: "Someone looking for steganography in JPEG coefficients will see the pattern — but cannot READ it without the password.",
-    rbExplain: "The stealthier version hides better; this one survives being posted. Neither is better: they trade different things. Use whichever fits how you plan to send it.",
+    rbAxisDiscretionNote: "This path trades stealth for survivability. At high occupancy it can leave a recognizable coefficient pattern; a password protects the content, not the existence of that statistical trace.",
+    rbExplain: "The stealthier version prioritizes discretion; this one prioritizes survival through the publication paths it was designed around. Neither is universally better: use the one that fits how you plan to send it.",
     rbStatDims: "Output size",
     rbStatResized: "reduced from {orig}",
     rbStatUnchanged: "unchanged",
-    rbStatWhyResize: "Images above 1080 px get resized by social platforms, which would destroy the message.",
+    rbStatWhyResize: "1080 px is the measured working envelope. Larger images were resized in some tested platform paths, and resizing would destroy the coefficient mapping used by the message.",
     flagRobustPayload: "sturdier-mode payload extracted",
     flagThirdPartyRecovered: "third-party steganography payload recovered",
     flagThirdPartyPartial: "partial third-party steganography payload recovered",
@@ -2361,20 +2401,21 @@ const I18N = {
     // Tabs
     // Encoder
     encGuideSummary: "Quick guide — how to hide a message",
-    encGuide1: "<b>1.</b> Load a carrier image. <b>PNG, BMP or lossless WEBP</b> are ideal; other formats (JPEG, etc.) are accepted and converted. Every encode produces <b>two images</b>: a lossless PNG that hides better, and a JPG that survives being posted.",
+    encGuide1: "<b>1.</b> Load a carrier image in a format the browser can decode. <b>PNG, BMP or lossless WEBP</b> are ideal; supported lossy formats such as JPEG are accepted and converted. Every encode produces the <b>stealthier lossless PNG</b>; when the real message also fits the sturdier path, a second JPG is generated.",
     encGuide2: "<b>3.</b> Type the secret message. The capacity meter shows how many characters fit in the chosen image.",
-    encGuide3: "<b>4.</b> Optionally set a <b>password</b>. A password encrypts the message in <b>both</b> output images. In the lossless PNG it also enables stronger protected-header and structural derivation; the robust JPEG keeps its own recompression-resistant format. Without a password, recovered content is plaintext.",
+    encGuide3: "<b>4.</b> Optionally set a <b>password</b>. The password encrypts the real message in both outputs when the sturdier JPG is generated. In the protected lossless PNG it also enables stronger structural and header protection; the sturdier JPEG keeps its own compatible recompression-resistant format. Without a password, recovered content is plaintext.",
     encGuideDecoy: "<b>5.</b> Optional: turn on the <b>Second message (plausible deniability)</b> to hide <b>two</b> messages, each behind its own password, so you can hand over one and keep the other. It is written into the pixels, so it exists only in the stealthier PNG.",
-    encGuide4: "<b>2.</b> Embedding is automatic: the message is hidden in the <b>most stealthy way that fits</b>. With a password, the protected header no longer exposes a recognizable \"STEGO\" signature. Turn on <b>High Capacity Mode</b> only to fit very large messages — it uses all three RGB channels, prioritizing capacity instead of minimizing embedding changes, and can leave stronger statistical traces at higher payloads.",
-    encGuide5: "<b>6.</b> Click <b>Hide message</b>. You get <b>two images</b>, both carrying the same message: a <b>PNG</b> that hides better but dies if recompressed, and a <b>JPG</b> that survives being posted to social media. Download the one that fits how you plan to send it.",
-    encGuideTip: "ℹ Both images are generated fresh. All original metadata — camera EXIF, colour profile, and digital signatures such as C2PA — is <b>removed</b>. The picture stays; everything written around it does not.",
-    encGuideWa: "⚠ Sending it matters as much as hiding it. The <b>PNG</b> must travel as a <b>file/document</b>: sent as a photo, it gets recompressed and the message is gone. The <b>JPG</b> is the one built to be posted — it was tested on WhatsApp, X, Facebook and Instagram, sent as a photo, and came back intact. On the receiving end, <b>save the file</b> — do not copy the image (Ctrl+C), which re-encodes it and destroys the message.",
+    encGuide4: "<b>2.</b> Embedding is automatic: the main PNG uses the <b>stealth-oriented path that fits</b>. With a password, its protected header no longer exposes a recognizable \"STEGO\" signature. Turn on <b>High Capacity Mode</b> only when you need the extra room — it uses all three RGB channels, prioritizes capacity instead of minimizing embedding changes, and can leave stronger statistical traces at higher payloads.",
+    encGuide5: "<b>6.</b> Click <b>Hide message</b>. The <b>PNG</b> is generated as the stealthier output. If the real message fits the sturdier path, a <b>JPG</b> is generated too. The real message is shared by both outputs; the optional alternative message exists only in the PNG. Choose the output that fits how you plan to send it.",
+    encGuideTip: "ℹ Every generated output is built fresh. Original metadata — camera EXIF, colour profile, and digital signatures such as C2PA — is <b>removed</b>. The picture stays; everything written around it does not.",
+    encGuideWa: "⚠ Sending matters as much as hiding. The safe path for the <b>PNG</b> is <b>file/document transfer</b>: if a service re-encodes it as a photo, the pixel LSB payload is destroyed. The <b>JPG</b> is designed for publication and was calibrated from real WhatsApp, X, Facebook and Instagram field paths, but platform pipelines can change. At the receiving end, <b>save the returned file</b> — do not copy the displayed image (Ctrl+C), which can re-encode it and destroy the message.",
     fieldCarrier: "// carrier image",
     fieldMessage: "// secret message",
     fieldKey: "// password",
     fieldKeyEnc: "// encoding password",
     fieldCapacity: "// capacity",
-    fieldGenerated: "// generated image",
+    fieldGenerated: "Generated image",
+    processingTime: "// processing time",
     keyPlaceholder: "Optional",
     msgPlaceholder: "Type the message to hide...",
     encMessageExpand: "Expand message editor",
@@ -2390,7 +2431,7 @@ const I18N = {
     tabEncode: "⬡ ENCODE",
     tabAnalyze: "⬢ ANALYZE · DECODE",
     dropHintEnc: "Drag, click or <span class=\"eh\">paste (Ctrl+V)</span><br>to select the carrier image",
-    dropHintDec: "Drag, click or <span class=\"eh\">paste (Ctrl+V)</span><br>to select the image to analyze<br><span class=\"eh\">any format</span>",
+    dropHintDec: "Drag, click or <span class=\"eh\">paste (Ctrl+V)</span><br>to select an image the browser can decode<br><span class=\"eh\">PNG · BMP · WEBP · JPEG · AVIF and other supported formats</span>",
     encKeyHint: "If set, the message will be encrypted with AES-256-GCM before embedding.",
     encKeyWarn: "⚠ Without a password the message stays as plaintext in both images — whoever finds it can read it.",
     decoyToggle: "Second message (plausible deniability)",
@@ -2431,9 +2472,9 @@ const I18N = {
     decKeyHint: "Enter the password if the message is encrypted.",
     // Analyzer
     decGuideSummary: "Quick guide — how to read the analysis",
-    decGuide1: "<b>1.</b> Load any image — <b>any format</b>. The forensic analysis runs automatically and is password-independent.",
+    decGuide1: "<b>1.</b> Load an image in a format the browser can decode and click <b>Analyze image</b>. The forensic pipeline and recovery attempts run in the same step; the forensic analysis itself does not depend on a password. HEIC/HEIF support is browser-dependent; if the browser cannot decode it, the tool asks you to convert it to PNG or JPEG.",
     decGuide2: "<b>2.</b> The <b>Threat Score</b> indicates suspicion of a hidden message (steganography). Before direct recovery it is heuristic: higher means stronger evidence, and heuristic accumulation is capped at <b>99</b>. The value <b>100 / CONFIRMED</b> is reserved for valid hidden content directly recovered by a supported method.",
-    decGuide3: "<b>3.</b> If the image holds a protected message, enter the <b>password</b> and analyze again to decode it. Password-protected STEGO·STUDIO payloads may expose no recognizable Studio header to a passive scan, so the password is needed to attempt recognition and recovery. Plaintext messages are recovered automatically, no password needed. The Decoder also reads <b>OpenStego</b>, <b>Steghide</b> and <b>OutGuess</b> images — including Steghide in JPEG (DCT domain) with AES — automatically without a password, or with the password when provided.",
+    decGuide3: "<b>3.</b> If the image holds a protected message, enter the <b>password</b> and analyze again. Password-protected STEGO·STUDIO payloads may expose no recognizable Studio header to a passive scan, so the password is needed to attempt recognition and recovery. Plaintext in recognized/supported framings can be recovered without a password. The Decoder also attempts <b>OpenStego</b>, <b>Steghide</b> and <b>OutGuess</b> within the compatibility limits documented in <b>How it works</b>; support is not blanket coverage of every cipher, mode or container those tools offer.",
     decGuide4: "<b>4.</b> The <b>Origin compatibility score</b> compares the image with heuristic patterns associated with photos, screenshots, digital art and AI-generated images. The category scores are independent — several can be high. The highest score means strongest compatibility, not a calibrated probability.",
     decGuide5: "<b>5.</b> Open the <b>indicators</b> to see the technical details of each signal and understand why each score was assigned.",
     decGuideAdaptive: "⚠ Some methods leave only faint structural traces. <b>LSB Matching</b> and content-adaptive steganography such as HILL can keep the Threat Score modest even when hidden data is present. They may evade detection here. A low score is not evidence that the image contains no hidden data.",
@@ -2441,10 +2482,11 @@ const I18N = {
     analyzeBtn: "ANALYZE IMAGE",
     decPlaceholder: "Load an image and click Analyze to see results.",
     fieldImageAnalyze: "// image to analyze",
-    dropHintDec2: "Drag, click or <span class=\"dh\">paste (Ctrl+V)</span><br>any suspicious or encoded image<br><span class=\"dh\">PNG · BMP · WEBP · JPEG · any format</span>",
+    dropHintDec2: "Drag, click or <span class=\"dh\">paste (Ctrl+V)</span><br>any suspicious or encoded image the browser can decode<br><span class=\"dh\">PNG · BMP · WEBP · JPEG · AVIF · other supported formats</span>",
     decKeyHint2: "Only needed if the message was encrypted. The forensic analysis runs independently of the password.",
     decKeyFlashMissing: "This encrypted message needs a password before it can be opened.",
     decKeyFlashWrong: "The supplied password did not open the encrypted message.",
+    decKeyFlashJpegInconclusive: "The supplied password did not open a compatible JPEG payload. It may be incorrect, or this image may not contain a supported password-protected payload.",
     exportHint: "📄 Export the full report as JSON and send it to your preferred AI — Claude, ChatGPT, Gemini — for a deeper investigative interpretation of the results.",
     exportBtn: "⬇ EXPORT JSON REPORT",
     // Results
@@ -2542,6 +2584,7 @@ const I18N = {
     protoNameGeneric: "Generic (deep scan)",
     protoNameUndetermined: "Undetermined (possible encrypted content)",
     protoBadgeGeneric: "GENERIC PROTOCOL",
+    protoBadgeFramed: "STRUCTURED RECOVERY",
     protoBadgeEmbedding: "LSB EMBEDDING EVIDENCE",
     protoBadgeCipher: "POSSIBLE ENCRYPTED CONTENT",
     protoBadgeNone: "none detected",
@@ -2943,6 +2986,7 @@ const I18N = {
     compressionMayMask: "⚠ {ext} — compression may mask some indicators",
     decStatusLossySuffix: " uses lossy compression",
     deepInvestText: "Text detected via {mode} (deep investigation)",
+    decStatusFramedRecovered: "Structured message recovered via {mode}",
     exportHintJSON: "Send this file to your preferred AI for in-depth analysis.",
     capAvailable: "available",
     // AI verdict
@@ -2981,6 +3025,7 @@ const I18N = {
     // interpretModule — Studio
     interpStudioHeader: "\"STEGO\\0\" header confirmed in the LSBs — {bytes} bytes of structured payload. This image was encoded by STEGO·STUDIO.",
     interpStudioDeepHeader: "Hidden text recovered by deep investigation. The header \"{hdr}\" was identified before the message — a protocol signature from another tool. Even without a record of this protocol, the investigator located and extracted the message by analyzing the least significant bits directly.",
+    interpStudioFramed: "The recognized LSB frame \"{hdr}\" declared a payload of {bytes} bytes, and that exact range decoded as valid UTF-8. This is direct structured recovery, not a sliding-window text candidate.",
     interpStudioDeepNoHeader: "Hidden text recovered by deep investigation, with no recognizable proprietary header. The image was encoded by a third-party tool using LSB steganography. The investigator located and extracted the message by analyzing the least significant bits directly.",
     interpStudioExtracted: "The hidden message was located and recovered. This is the strongest confirmation available: the payload was not merely suspected, its content was read successfully.",
     interpStudioHeaderOnly: "A STEGO·STUDIO header was located, so a message is definitely present — but its content could not be reassembled. The body is most likely damaged, truncated, or was altered after being written.",
@@ -3026,8 +3071,8 @@ const I18N = {
     termImageInserted: "Image inserted",
     termTypeMsg: "Type the message to hide and the password (optional)",
     termMetaWarn: "Metadata detected ({types}) — will be removed in the generated image",
-    termWillConvertPng: "{ext} will be converted — the message goes into the converted pixels. Two images come out: a lossless PNG that hides better, and a JPG that survives being posted",
-    termHeicUnsupported: "HEIC/HEIF (Apple) is not supported in the browser — convert it to PNG or JPEG and try again",
+    termWillConvertPng: "{ext} will be converted before embedding. The stealthier PNG is generated; when the real message fits the sturdier path, a publication-oriented JPG is generated too",
+    termHeicUnsupported: "This browser could not decode HEIC/HEIF (Apple) — convert it to PNG or JPEG and try again",
     termDecodeFailed: "could not decode the image — the file may be corrupted or in an unsupported format",
     termReadyAnalysis: "Ready for full forensic analysis",
     termAnalysisComplete: "Analysis complete",
@@ -3036,45 +3081,45 @@ const I18N = {
     // Ticker
     ticker: [
       "100% local analysis in your browser — no image is sent to servers",
-      "Social media recompress images: the stealthier PNG must travel as a file; the sturdier JPG survives being posted",
-      "Every encode produces two images — one that hides better, one that survives being posted; both carry the same message",
+      "Social platforms may recompress or resize images: file/document transfer is the safe path for the stealthier PNG; the sturdier JPG is designed around measured publication workflows",
+      "Every encode produces the stealthier PNG; when the real message fits the sturdier path, a second JPG is generated — the alternative message, if used, remains PNG-only",
       "Ctrl+V pastes an image directly into the encode or analysis area",
-      "LSB steganography hides data in the least significant bits of each pixel",
-      "A 1080p image can hide tens of thousands of characters with no visible change",
+      "LSB steganography can carry data in the least significant bits of pixel colour channels",
+      "A 1080p carrier can hold tens of thousands of characters with no perceptible visual change, depending on the selected embedding path",
       "The password is optional, but it encrypts the message; in the protected lossless PNG it also strengthens the header and structural derivation — without a password, recovered content is plaintext",
       "The deep investigator sweeps the image for readable text when there is no known header — it is a search, not a guarantee",
-      "Encrypted messages become statistical noise — the tool flags the suspicion via chi-square",
-      "The Decoder also reads OpenStego, Steghide and OutGuess images — with no password, or with the password when there is one",
+      "Encrypted payloads can create random-looking LSB regions; chi-square contributes only a suspicion signal, not proof of encryption or steganography",
+      "The Decoder also attempts compatible OpenStego, Steghide and OutGuess formats — coverage is limited by container, cipher and mode",
       "Analysing and decoding happen in the same step — by the time the result appears, extraction has already been attempted",
-      "JPEG has no usable LSB: what the tool analyses there are the DCT coefficients",
+      "JPEG has no meaningful spatial LSB for steganography: hidden-content analysis uses DCT coefficients there, while metadata and origin analysis still run",
       "No statistical signal is not a clean bill of health — small payloads slip past first-order tests",
-      "EXIF naming a camera is supporting evidence of a real photo — not proof, since EXIF is unauthenticated",
+      "EXIF naming a camera supports compatibility with a photograph — it is not proof, because EXIF is unauthenticated and editable",
       "Origin classification is heuristic — use as a clue, not as definitive proof",
     ],
     // Help modal
     helpTitle: "How STEGO·STUDIO works",
     helpS1Title: "What this tool does",
-    helpS1a: "STEGO·STUDIO has three modules. The <b>Encoder</b> hides text messages inside images. The <b>Analyzer</b> examines any image for signs of hidden content and estimates its likely origin (photo, screenshot, digital art or AI). The <b>Decoder</b> goes further and tries to actually recover the message — both from STEGO·STUDIO's own protocol and from third-party tools. Analyzer and Decoder are not separate steps: a single button runs both.",
+    helpS1a: "STEGO·STUDIO has three modules. The <b>Encoder</b> hides text messages inside images the browser can decode. The <b>Analyzer</b> examines supported images for signs of hidden content and estimates origin compatibility (photo, screenshot, digital art or AI). The <b>Decoder</b> goes further and tries to recover the message — both from STEGO·STUDIO's own formats and from compatible third-party formats. Analyzer and Decoder are not separate steps: a single button runs both.",
     helpS1b: "Everything runs 100% in your browser. No image or data is sent to any server.",
     helpSecDecTitle: "The Decoder — what it reads, and what it doesn't",
     helpDecA: "There is no separate \"decode\" step. The single analyse button identifies the real format from the file's own bytes, runs the forensic analysis and attempts extraction with every available engine. By the time the results appear, all of that has already happened.",
-    helpDecB: "<b>What it reads:</b><ul><li><b>STEGO·STUDIO's own protocol</b> — in PNG and other lossless formats, with or without a password.</li><li><b>STEGO·STUDIO's sturdier mode</b> — in the JPEG coefficients, with or without a password.</li><li><b>OpenStego</b> — randomised LSB in PNG.</li><li><b>Steghide</b> — in JPEG (DCT coefficients). Its BMP path is not integrated here, and of its many cipher options only the default (rijndael-128/CBC) and no-encryption are read; other ciphers are named, not decrypted.</li><li><b>OutGuess</b> — in JPEG (DCT coefficients), including with no password, which is its default.</li><li><b>Deep investigator</b> — when there is no known header, it sweeps the image for readable text. A search, not a guarantee.</li></ul>",
-    helpDecC: "<b>What it does not read, and why:</b><ul><li><b>F5 (Westfeld)</b> — a landmark in the academic literature, but rare in practice and expensive by construction: it must shuffle the entire image before it can read the first bit, which would cost seconds on every photo analysed, including clean ones. This build does not include an F5 decoder. If support is added in the future, it should be an explicit action rather than an automatic cost on every image.</li><li><b>Anything locked behind someone else's password</b> — an OpenStego message encrypted with AES, for example, is detected and reported, but decrypting it requires OpenStego itself and the right password. Without it the content is indistinguishable from noise, and that is by design.</li></ul>",
+    helpDecB: "<b>What it reads:</b><ul><li><b>STEGO·STUDIO's own protocol</b> — in PNG and other lossless formats, with or without a password.</li><li><b>STEGO·STUDIO's sturdier mode</b> — in the JPEG coefficients, with or without a password.</li><li><b>OpenStego</b> — randomised LSB in PNG/BMP.</li><li><b>Steghide</b> — in JPEG (DCT coefficients). Its BMP path is not integrated here, and of its many cipher options only the default (rijndael-128/CBC) and no-encryption are read; other ciphers are named, not decrypted.</li><li><b>OutGuess</b> — in JPEG (DCT coefficients), including with no password, which is its default.</li><li><b>Deep investigator</b> — when there is no known header, it sweeps the image for readable text. A search, not a guarantee.</li></ul>",
+    helpDecC: "<b>What it does not read, and why:</b><ul><li><b>F5 (Westfeld)</b> — a landmark in the academic literature, but rare in practice and expensive by construction: it must shuffle the entire image before it can read the first bit, which would cost seconds on every photo analysed, including clean ones. This build does not include an F5 decoder. If support is added in the future, it should be an explicit action rather than an automatic cost on every image.</li><li><b>Third-party encryption layers that are not implemented here</b> — for example, OpenStego's own encrypted payload can be identified, but this build does not decrypt that layer. Steghide and OutGuess are different cases: compatible password-protected variants are attempted when their supported format/cipher path is implemented. The compatibility matrix is the authoritative boundary.</li></ul>",
     helpDecD: "<b>Honest limits:</b><ul><li><b>JPEG has no usable LSB.</b> Compression rewrites the least significant bits, so anything read there would be codec noise rather than a message. In a JPEG, only DCT-coefficient methods make sense.</li><li><b>The DCT chi-square test is a weak indicator, not a detector.</b> It catches naive high-rate embedding, but tools that spread a small payload walk straight past it. Absence of a signal is never a clean bill of health.</li></ul>",
     helpS2Title: "LSB steganography",
-    helpS2a: "Each pixel in an image has color values (red, green, blue). The least significant bit (LSB) of each value can be altered with no visible change to the image. LSB steganography writes the message into those bits.",
-    helpS2b: "That is why the stealthier image is always saved as a fresh <b>lossless PNG</b> — LSB bits need a lossless format to survive. You can start from any image, JPEG included: the tool converts it and embeds the message in the output. What destroys an LSB message is recompressing it <b>afterwards</b> (re-saving as JPEG, or resending through social media as a photo). That is exactly the problem the sturdier image solves — see the next section.",
-    helpS2c: "There are two ways to write the LSB. <b>LSB Replacement (LSBR)</b> simply overwrites the bit — simple, but it leaves a structural even/odd asymmetry that statistical attacks detect easily. <b>LSB Matching (LSBM)</b> instead adds or subtracts 1 at random to reach the same bit, leaving no such asymmetry. STEGO·STUDIO uses <b>LSBM</b>, which is much harder to detect than the LSBR used by tools like OpenStego and OpenPuff.",
+    helpS2a: "Each pixel in an image has color values (red, green, blue). Changing a least significant bit (LSB) usually produces no perceptible visual difference. Pixel-domain steganography can use those bits to carry data.",
+    helpS2b: "That is why the stealthier image is saved as a fresh <b>lossless PNG</b> — pixel LSBs need a lossless path to survive. You can start from any image format the browser can decode, JPEG included: the tool converts it before embedding. Recompressing the generated PNG afterwards can destroy the pixel payload. The sturdier JPEG uses a different DCT-coefficient path for publication workflows — see the next section.",
+    helpS2c: "STEGO·STUDIO uses more than one LSB-writing strategy. Sequential non-STC paths use <b>LSB Matching (LSBM)</b>, which reaches the desired bit by adding or subtracting 1. The default stealth-oriented path instead uses <b>STC</b> to choose a low-cost set of LSB changes over the HILL map, and adaptive paths may set the selected LSB directly. So the product as a whole should not be described as using only LSBM or only LSBR.",
     helpS2d: "By default the message uses the <b>blue channel</b> and the stealth-oriented STC path. The <b>high-capacity (RGB) mode</b> spreads the body across all three color channels, tripling the available space (~3 bits per pixel) — useful for larger messages. RGB prioritizes room rather than minimizing embedding changes and can leave stronger statistical traces, especially at higher payloads. The image records which mode was used, so decoding is automatic.",
     helpSecProtTitle: "Protection and stealth",
-    helpProtA: "When you set a <b>password</b>, the message is encrypted with <b>AES-256-GCM</b> (cryptographic key derived from the password via <b>Argon2id</b>) before being embedded. Even if someone extracts the bits, the content is unreadable without the password — and any tampering is detected.",
+    helpProtA: "When you set a <b>password</b>, the message is encrypted with <b>AES-256-GCM</b> (cryptographic key derived from the password via <b>Argon2id</b>) before being embedded. Even if someone extracts the bits, the protected content is unreadable without the password; authenticated ciphertext that has been altered is rejected rather than returned as valid plaintext.",
     helpProtB: "A password also strengthens <b>how the protected payload is structured</b>. On non-STC paths, the body order is derived from the password with strong key separation. The default STC path does not depend on that ordering; it recovers the body through its syndrome code over the HILL cost map.",
-    helpProtC: "Independently of the password, when <b>placing</b> the bits the tool follows two paths and picks for you. In the default (maximum-stealth) path it uses <b>Syndrome-Trellis Codes (STC) over a HILL cost map</b>: it chooses a solution with low embedding cost, favoring textured/noisy regions over smoother areas. This minimizes the HILL cost of the changes for that carrier; it does not guarantee that every detector will score it lower than another mode. The body uses only the blue channel.",
+    helpProtC: "Independently of the password, when <b>placing</b> the bits the tool follows two paths and picks for you. In the default <b>stealth-oriented</b> path it uses <b>Syndrome-Trellis Codes (STC) over a HILL cost map</b>: it chooses a solution with low embedding cost, favoring textured/noisy regions over smoother areas. This minimizes the HILL cost of the changes for that carrier; it does not guarantee that every detector will score it lower than another mode. The body uses only the blue channel.",
     helpProtStc: "The other path is <b>High Capacity Mode (RGB)</b>: when you switch on \"High Capacity Mode\" — or automatically, when the message will not fit in stealth — the body spreads across all three color channels, tripling the space available. This path prioritizes capacity and can leave stronger statistical traces, especially with larger payloads. The image records which path was used, so decoding is always automatic.",
     helpProtD: "Setting a password also <b>protects the header</b>, with no extra step. A fixed readable \"STEGO\" signature is no longer exposed in protected payloads, so a passive scan may have no recognizable Studio header without the password. This is not a promise of invisibility — statistical traces can still exist.",
     helpProtE: "All of this stacks automatically: a message with a password is <b>encrypted (AES-256-GCM)</b> and uses a <b>protected, authenticated header</b>. Non-STC paths also derive their body order from the password; the default path instead places the body with <b>STC over the HILL map</b>. You do not assemble these layers by hand — the tool applies the path that fits what you asked for.",
     helpS3Title: "Threat Score — hidden message suspicion",
-    helpS3a: "Estimates the <b>level of suspicion</b> for hidden content from forensic signals such as known protocol evidence, reliably recovered text, LSB anomalies, suspicious strings and data after the end of the file. Before direct recovery it is a heuristic score, not a calibrated probability, and heuristic accumulation is capped at <b>99</b>. <b>100 / CONFIRMED</b> is reserved for valid hidden content directly recovered by a supported method.",
+    helpS3a: "Estimates the <b>level of suspicion</b> for hidden content from forensic signals such as known protocol evidence, readable text found in supported framings or deep investigation, LSB anomalies, suspicious strings and data after the end of the file. Before direct recovery it is a heuristic score, not a calibrated probability, and heuristic accumulation is capped at <b>99</b>. <b>100 / CONFIRMED</b> is reserved for valid hidden content directly recovered by a supported method.",
     helpS3b: "Reliable message recovery is the strongest evidence. Encrypted or otherwise unreadable payloads may still leave structural or statistical traces, but those traces indicate possible embedding — they do not reveal the payload by themselves.",
     helpS3c: "The analyzer also runs two <b>structural attacks</b> — RS (Regular–Singular) and WS (Weighted Stego) — aimed primarily at traces associated with <b>LSB Replacement</b>. Agreement between them can strengthen suspicion, especially at higher embedding rates. They are less reliable against LSB Matching and content-adaptive placement, and a quiet result is not proof of absence.",
     helpS3d: "There is also a <b>GAN-like embedding heuristic</b> that looks for a pattern sometimes associated with neural steganography: unusually similar LSB planes across color channels together with symmetric high-frequency behavior. When that pattern appears, the tool raises a <b>suspicion</b> — never a confirmation. Textured or synthetic images can produce similar signals. Treat it as a lead, not a verdict.",
@@ -3086,10 +3131,10 @@ const I18N = {
     helpS5a: "<b>Photo</b> — camera EXIF (supporting evidence only; EXIF is unauthenticated and easily edited), sensor noise, high color diversity.",
     helpS5b: "<b>Screenshot</b> — perfectly sharp edges, absence of sensor noise, interface palette, typical screen dimensions.",
     helpS5c: "<b>Digital art / 3D</b> — no sensor noise, regular edges, controlled palette, artificial gradients.",
-    helpS5d: "<b>AI / Synthetic</b> — uniform regional entropy, overly smoothed gradients, uniform chrominance, or C2PA/EXIF metadata declaring AI generation.",
+    helpS5d: "<b>AI / Synthetic</b> — uniform regional entropy, overly smoothed gradients, uniform chrominance, or C2PA/EXIF metadata declaring AI generation. A detected C2PA declaration is not treated as signature-verified proof in this build.",
     helpS6Title: "Limitations",
-    helpS6a: "This is a <b>heuristic</b> tool, not a definitive classifier. It analyzes statistical properties and metadata, with no trained neural model. Nothing runs on a server. Methods that require specialised trained models are outside the reliable detection coverage of this build.",
-    helpS6b: "Hard cases: images recompressed by social media (which erase metadata and alter pixels), heavily edited photos, and latest-generation AI images that mimic camera noise. Use the results as <b>investigative evidence</b>, cross-referencing with other evidence — not as standalone proof.",
+    helpS6a: "The <b>origin classifier and much of the steganalysis are heuristic</b>, not definitive classifiers. Directly recovered valid payloads are a separate, stronger kind of evidence. This build analyzes statistical properties, structure and metadata without a trained neural model, and nothing runs on a server. Methods that require specialised trained models are outside its reliable detection coverage.",
+    helpS6b: "Hard cases: images processed or recompressed by social media (which may erase metadata and alter pixels), heavily edited photos, and latest-generation AI images that mimic camera noise. Use the results as an <b>investigative clue</b>, cross-checking with other evidence — not as standalone proof.",
     helpS6c: "On the steganography side, the built-in analysis is strongest against <b>LSB Replacement</b> and plaintext or weakly framed messages. For GAN-like embedding it offers a <b>suspicion-level</b> heuristic only. <b>LSB Matching</b> and content-adaptive methods such as HILL, UNIWARD and J-UNIWARD may evade detection because this build does not ship the specialised trained models used for that work. Known STEGO·STUDIO payloads may still be recognised or decoded by their format. <b>Absence of detection here is not evidence that an image contains no hidden data.</b> For specialised steganalysis, use a dedicated toolbox such as <b>Aletheia</b>, by Daniel Lerch (MIT, <code>github.com/daniellerch/aletheia</code>).",
     // Footer
     footerCredit: "Concept and human direction by RASC. Developed with JOI, an AI.",
@@ -3100,11 +3145,11 @@ const I18N = {
     decoyPngOnlyWarn: "⚠ A mensagem alternativa vai apenas na imagem mais furtiva (PNG). A imagem mais resistente carrega só a mensagem real — se a negação plausível importa para você, é o PNG que você deve guardar e enviar.",
 
     // ── Ajuda: as duas saídas do Encoder ──
-    helpRbTitle: "As duas imagens: mais furtiva e mais resistente",
-    helpRbA: "Todo encode gera duas imagens, e as duas carregam a mesma mensagem. A <b>mais furtiva</b> é um PNG: escreve a mensagem nos bits menos significativos dos pixels, o que é difícil de detectar em taxas baixas de embedding — mas a mensagem é frágil à recompressão. A <b>mais resistente</b> é um JPG: escreve a mensagem nos coeficientes JPEG usando um esquema tolerante a erros projetado a partir do comportamento de recompressão medido nas principais plataformas sociais.",
-    helpRbB: "Nenhuma é a melhor. Elas trocam coisas diferentes. A mais furtiva é discreta e frágil. A mais resistente sobrevive à publicação e, em troca, quem procurar especificamente por esteganografia nos coeficientes do JPEG vê o padrão — ainda que não consiga lê-lo sem a senha.",
-    helpRbC: "A imagem mais resistente reduz a foto para no máximo 1080 px no lado maior. Isso não é arbitrário: acima disso, as redes sociais redimensionam a imagem, e redimensionar destrói a mensagem. Ela também gasta parte do espaço com correção de erro <b>Reed-Solomon</b>, para reparar avarias pegas no caminho. Por isso comporta bem menos — cerca de 20 KB, contra megabytes no PNG.",
-    helpRbD: "Tudo isso foi medido, não estimado: imagens com payload real foram postadas no WhatsApp, no X, no Facebook e no Instagram, baixadas de volta e lidas. Cada parâmetro que o modo mais resistente usa vem dessas medições.",
+    helpRbTitle: "Os caminhos de saída: mais furtivo e mais resistente",
+    helpRbA: "Todo encode gera o PNG mais furtivo. Quando a mensagem real também cabe no caminho resistente, o Encoder oferece um segundo JPG carregando essa mesma mensagem real. O <b>PNG mais furtivo</b> escreve nos LSBs dos pixels, o que pode ser difícil de detectar em taxas baixas de embedding, mas é frágil à recompressão. O <b>JPG mais resistente</b> escreve nos coeficientes JPEG com correção de erro desenhada a partir dos danos medidos em redes sociais.",
+    helpRbB: "Nenhuma é universalmente melhor. A imagem mais furtiva prioriza discrição e é frágil. A mais resistente troca parte da discrição por sobrevivência nos fluxos de publicação medidos no projeto. Em ocupação alta ela pode deixar um padrão reconhecível nos coeficientes. Se você usou senha, reconhecer esse padrão não revela a mensagem; sem senha, o conteúdo recuperado fica em texto puro.",
+    helpRbC: "A imagem mais resistente limita o lado maior a 1080 px porque esse foi o envelope de trabalho nos fluxos medidos em campo. Entradas maiores foram redimensionadas em alguns caminhos testados, e redimensionar desloca a estrutura de blocos JPEG o suficiente para destruir esse payload. Ela também gasta parte do espaço com correção de erro <b>Reed-Solomon</b>, por isso comporta bem menos que o PNG — tipicamente na ordem de dezenas de KB, não megabytes.",
+    helpRbD: "Os principais parâmetros de canal vieram de medições de campo, não de chute: imagens com payload QIM real passaram por fluxos medidos de WhatsApp, X, Facebook e Instagram, foram baixadas de volta e examinadas. As plataformas podem mudar, então esse é um envelope operacional medido, não uma garantia permanente.",
     helpRbE: "Um limite que vale saber: a <b>mensagem alternativa</b> é escrita nos pixels, então ela existe apenas no PNG mais furtivo. A imagem mais resistente carrega só a mensagem real.",
 
     // ── Modo mais resistente: segunda saída do Encoder ──
@@ -3116,15 +3161,15 @@ const I18N = {
     rbReportTitle: "O que esta versão troca",
     rbAxisResist: "Resistência ao canal",
     rbAxisResistLevel: "ALTA",
-    rbAxisResistNote: "Sobrevive à recompressão do WhatsApp, do X, do Facebook e do Instagram. Medido nas quatro, com postagens reais — não estimado.",
+    rbAxisResistNote: "Projetado a partir de fluxos medidos de WhatsApp, X, Facebook e Instagram e validado contra os danos observados neles. As plataformas podem mudar; não é uma garantia universal.",
     rbAxisDiscretion: "Discrição",
     rbAxisDiscretionLevel: "BAIXA",
-    rbAxisDiscretionNote: "Quem procurar por esteganografia nos coeficientes do JPEG vê o padrão — mas não consegue LER sem a senha.",
-    rbExplain: "A versão mais furtiva esconde melhor; esta sobrevive à publicação. Nenhuma é melhor: elas trocam coisas diferentes. Use a que combina com o jeito que você vai enviar.",
+    rbAxisDiscretionNote: "Este caminho troca furtividade por resistência. Em ocupação alta pode deixar um padrão reconhecível nos coeficientes; a senha protege o conteúdo, não a existência desse traço estatístico.",
+    rbExplain: "A versão mais furtiva prioriza discrição; esta prioriza sobreviver aos caminhos de publicação para os quais foi desenhada. Nenhuma é universalmente melhor: use a que combina com o jeito que você vai enviar.",
     rbStatDims: "Tamanho de saída",
     rbStatResized: "reduzida de {orig}",
     rbStatUnchanged: "sem alteração",
-    rbStatWhyResize: "Imagens acima de 1080 px são redimensionadas pelas redes sociais, o que destruiria a mensagem.",
+    rbStatWhyResize: "1080 px é o envelope de trabalho medido. Imagens maiores foram redimensionadas em alguns caminhos de plataforma testados, e isso destruiria o mapeamento de coeficientes usado pela mensagem.",
     flagRobustPayload: "payload do modo resistente extraído",
     flagThirdPartyRecovered: "payload de método esteganográfico externo recuperado",
     flagThirdPartyPartial: "payload parcial de método esteganográfico externo recuperado",
@@ -3175,20 +3220,21 @@ const I18N = {
     clLegacyDivider: "abaixo: versões pré-semver (Legacy) · o versionamento passou a seguir versionamento semântico a partir da v2.10",
     langLabel: "Idioma",
     encGuideSummary: "Guia rápido — como ocultar uma mensagem",
-    encGuide1: "<b>1.</b> Carregue uma imagem portadora. <b>PNG, BMP ou WEBP lossless</b> são ideais; outros formatos (JPEG, etc.) são aceitos e convertidos. Todo encode gera <b>duas imagens</b>: um PNG sem perda, que esconde melhor, e um JPG que sobrevive a ser publicado.",
+    encGuide1: "<b>1.</b> Carregue uma imagem portadora em um formato que o navegador consiga decodificar. <b>PNG, BMP ou WEBP lossless</b> são ideais; formatos lossy suportados, como JPEG, são aceitos e convertidos. Todo encode gera o <b>PNG lossless mais furtivo</b>; quando a mensagem real também cabe no caminho resistente, um segundo JPG é gerado.",
     encGuide2: "<b>3.</b> Digite a mensagem secreta. O medidor de capacidade mostra quantos caracteres cabem na imagem escolhida.",
-    encGuide3: "<b>4.</b> Opcionalmente, defina uma <b>senha</b>. A senha criptografa a mensagem nas <b>duas</b> imagens de saída. No PNG lossless ela também ativa proteção estrutural e de cabeçalho mais fortes; o JPEG robusto mantém seu próprio formato resistente à recompressão. Sem senha, o conteúdo recuperado fica em texto puro.",
+    encGuide3: "<b>4.</b> Opcionalmente, defina uma <b>senha</b>. A senha criptografa a mensagem real nas duas saídas quando o JPG resistente é gerado. No PNG lossless protegido ela também ativa proteção estrutural e de cabeçalho mais fortes; o JPEG resistente mantém seu próprio formato compatível e tolerante à recompressão. Sem senha, o conteúdo recuperado fica em texto puro.",
     encGuideDecoy: "<b>5.</b> Opcional: ative a <b>Segunda mensagem (negação plausível)</b> para esconder <b>duas</b> mensagens, cada uma com sua própria senha, e poder entregar uma guardando a outra. Ela é escrita nos pixels, então existe apenas no PNG mais furtivo.",
-    encGuide4: "<b>2.</b> O embedding é automático: a mensagem é escondida da <b>forma mais furtiva que couber</b>. Com senha, o cabeçalho protegido deixa de expor uma assinatura \"STEGO\" reconhecível. Ligue <b>Modo de Alta Capacidade</b> apenas para caber mensagens muito grandes — usa os três canais RGB, prioriza capacidade em vez de minimizar as alterações do embedding e pode deixar traços estatísticos mais fortes em payloads maiores.",
-    encGuide5: "<b>6.</b> Clique em <b>Ocultar mensagem</b>. Você recebe <b>duas imagens</b>, as duas com a mesma mensagem: um <b>PNG</b> que esconde melhor mas morre se for recomprimido, e um <b>JPG</b> que sobrevive a ser publicado em rede social. Baixe a que combina com o jeito que você vai enviar.",
-    encGuideTip: "ℹ As duas imagens são geradas do zero. Todos os metadados originais — EXIF de câmera, perfil de cor, e assinaturas digitais como C2PA — são <b>removidos</b>. A foto permanece; tudo o que estava escrito em volta dela, não.",
-    encGuideWa: "⚠ Enviar importa tanto quanto esconder. O <b>PNG</b> precisa viajar como <b>arquivo/documento</b>: mandado como foto, ele é recomprimido e a mensagem se perde. O <b>JPG</b> é o feito para ser publicado — foi testado no WhatsApp, no X, no Facebook e no Instagram, enviado como foto, e voltou íntegro. Na ponta que recebe, <b>salve o arquivo</b> — não copie a imagem (Ctrl+C), o que a reencoda e destrói a mensagem.",
+    encGuide4: "<b>2.</b> O embedding é automático: o PNG principal usa o <b>caminho orientado à furtividade que couber</b>. Com senha, o cabeçalho protegido dele deixa de expor uma assinatura \"STEGO\" reconhecível. Ligue <b>Modo de Alta Capacidade</b> apenas quando precisar do espaço extra — ele usa os três canais RGB, prioriza capacidade em vez de minimizar as alterações do embedding e pode deixar traços estatísticos mais fortes em payloads maiores.",
+    encGuide5: "<b>6.</b> Clique em <b>Ocultar mensagem</b>. O <b>PNG</b> é gerado como saída mais furtiva. Se a mensagem real couber no caminho resistente, um <b>JPG</b> também é gerado. A mensagem real é comum às duas saídas; a mensagem alternativa opcional existe apenas no PNG. Escolha a saída que combina com o jeito que você vai enviar.",
+    encGuideTip: "ℹ Cada saída gerada é construída do zero. Os metadados originais — EXIF de câmera, perfil de cor e assinaturas digitais como C2PA — são <b>removidos</b>. A imagem visual permanece; tudo o que estava escrito ao redor dela, não.",
+    encGuideWa: "⚠ Enviar importa tanto quanto esconder. O caminho seguro para o <b>PNG</b> é transferência como <b>arquivo/documento</b>: se um serviço o recodificar como foto, o payload nos LSBs dos pixels é destruído. O <b>JPG</b> foi feito para publicação e calibrado a partir de fluxos reais de WhatsApp, X, Facebook e Instagram, mas as plataformas podem mudar. Na ponta que recebe, <b>salve o arquivo retornado</b> — não copie a imagem exibida (Ctrl+C), porque isso pode reencodá-la e destruir a mensagem.",
     fieldCarrier: "// imagem portadora",
     fieldMessage: "// mensagem secreta",
     fieldKey: "// senha",
     fieldKeyEnc: "// senha de codificação",
     fieldCapacity: "// capacidade",
-    fieldGenerated: "// imagem gerada",
+    fieldGenerated: "Imagem gerada",
+    processingTime: "// tempo de processamento",
     keyPlaceholder: "Opcional",
     msgPlaceholder: "Digite a mensagem a ocultar...",
     encMessageExpand: "Expandir editor de mensagem",
@@ -3204,7 +3250,7 @@ const I18N = {
     tabEncode: "⬡ ENCODE",
     tabAnalyze: "⬢ ANALYZE · DECODE",
     dropHintEnc: "Arraste, clique ou <span class=\"eh\">cole (Ctrl+V)</span><br>para selecionar a imagem portadora",
-    dropHintDec: "Arraste, clique ou <span class=\"eh\">cole (Ctrl+V)</span><br>para selecionar a imagem a analisar<br><span class=\"eh\">qualquer formato</span>",
+    dropHintDec: "Arraste, clique ou <span class=\"eh\">cole (Ctrl+V)</span><br>para selecionar uma imagem que o navegador consiga decodificar<br><span class=\"eh\">PNG · BMP · WEBP · JPEG · AVIF e outros formatos suportados</span>",
     encKeyHint: "Se informada, a mensagem será criptografada com AES-256-GCM antes de ser embutida.",
     encKeyWarn: "⚠ Sem senha a mensagem fica em texto puro nas duas imagens — quem a encontrar consegue ler.",
     decoyToggle: "Segunda mensagem (negação plausível)",
@@ -3244,9 +3290,9 @@ const I18N = {
     fieldKeyDec: "// senha de decodificação",
     decKeyHint: "Insira a senha se a mensagem estiver criptografada.",
     decGuideSummary: "Guia rápido — como interpretar a análise",
-    decGuide1: "<b>1.</b> Carregue qualquer imagem — <b>qualquer formato</b>. A análise forense roda automaticamente e é independente de senha.",
+    decGuide1: "<b>1.</b> Carregue uma imagem em formato que o navegador consiga decodificar e clique em <b>Analisar imagem</b>. O pipeline forense e as tentativas de recuperação rodam no mesmo passo; a análise forense em si independe de senha. O suporte a HEIC/HEIF depende do navegador; se ele não conseguir decodificar o arquivo, a ferramenta pede conversão para PNG ou JPEG.",
     decGuide2: "<b>2.</b> O <b>Threat Score</b> indica suspeita de mensagem oculta (esteganografia). Antes da recuperação direta, ele é heurístico: quanto maior, mais forte a evidência, com teto em <b>99</b>. O valor <b>100 / CONFIRMADO</b> fica reservado a conteúdo oculto válido recuperado diretamente por um método suportado.",
-    decGuide3: "<b>3.</b> Se a imagem contém uma mensagem protegida, insira a <b>senha</b> e analise de novo para decodificá-la. Payloads do STEGO·STUDIO protegidos por senha podem não expor um cabeçalho reconhecível numa análise passiva, então a senha é necessária para tentar reconhecê-los e recuperá-los. Mensagens em texto puro são recuperadas automaticamente, sem senha. O Decoder também lê imagens do <b>OpenStego</b>, do <b>Steghide</b> e do <b>OutGuess</b> — inclusive Steghide em JPEG (domínio DCT) com AES — automaticamente sem senha, ou com a senha quando informada.",
+    decGuide3: "<b>3.</b> Se a imagem contém uma mensagem protegida, insira a <b>senha</b> e analise de novo. Payloads do STEGO·STUDIO protegidos por senha podem não expor um cabeçalho reconhecível numa análise passiva, então a senha é necessária para tentar reconhecê-los e recuperá-los. Texto puro em framings reconhecidos/suportados pode ser recuperado sem senha. O Decoder também tenta <b>OpenStego</b>, <b>Steghide</b> e <b>OutGuess</b> dentro dos limites de compatibilidade documentados em <b>Como funciona</b>; não é cobertura completa de todas as cifras, modos ou contêineres dessas ferramentas.",
     decGuide4: "<b>4.</b> O <b>Índice de compatibilidade com origem</b> compara a imagem com padrões heurísticos associados a fotografia, screenshot, arte digital e imagens geradas por IA. Os scores são independentes — vários podem ser altos. O maior score indica maior compatibilidade, não uma probabilidade calibrada.",
     decGuide5: "<b>5.</b> Abra os <b>indicadores</b> para ver os detalhes técnicos de cada sinal e entender por que cada score foi atribuído.",
     decGuideAdaptive: "⚠ Alguns métodos deixam apenas traços estruturais fracos. <b>LSB Matching</b> e esteganografia adaptativa ao conteúdo, como HILL, podem manter o Threat Score modesto mesmo com dados ocultos presentes. Eles podem escapar da detecção aqui. Um score baixo não é evidência de que a imagem não contenha dados ocultos.",
@@ -3254,10 +3300,11 @@ const I18N = {
     analyzeBtn: "ANALISAR IMAGEM",
     decPlaceholder: "Carregue uma imagem e clique em Analisar para ver os resultados.",
     fieldImageAnalyze: "// imagem para análise",
-    dropHintDec2: "Arraste, clique ou <span class=\"dh\">cole (Ctrl+V)</span><br>qualquer imagem suspeita ou codificada<br><span class=\"dh\">PNG · BMP · WEBP · JPEG · qualquer formato</span>",
+    dropHintDec2: "Arraste, clique ou <span class=\"dh\">cole (Ctrl+V)</span><br>qualquer imagem suspeita ou codificada que o navegador consiga decodificar<br><span class=\"dh\">PNG · BMP · WEBP · JPEG · AVIF · outros formatos suportados</span>",
     decKeyHint2: "Necessária apenas se a mensagem foi criptografada. A análise forense roda independente da senha.",
     decKeyFlashMissing: "Esta mensagem criptografada precisa de uma senha para ser aberta.",
     decKeyFlashWrong: "A senha informada não abriu a mensagem criptografada.",
+    decKeyFlashJpegInconclusive: "A senha informada não abriu um payload JPEG compatível. Ela pode estar incorreta, ou esta imagem pode não conter um payload protegido por senha compatível.",
     exportHint: "📄 Exporte o relatório completo em JSON e envie para sua IA de preferência — Claude, ChatGPT, Gemini — para uma interpretação investigativa mais aprofundada dos resultados.",
     exportBtn: "⬇ EXPORTAR RELATÓRIO JSON",
     resultTitle: "RESULTADO",
@@ -3352,6 +3399,7 @@ const I18N = {
     protoNameGeneric: "Genérico (investigação profunda)",
     protoNameUndetermined: "Indeterminado (possível conteúdo criptografado)",
     protoBadgeGeneric: "PROTOCOLO GENÉRICO",
+    protoBadgeFramed: "RECUPERAÇÃO ESTRUTURADA",
     protoBadgeEmbedding: "EVIDÊNCIA DE EMBEDDING LSB",
     protoBadgeCipher: "POSSÍVEL CONTEÚDO CRIPTOGRAFADO",
     protoBadgeNone: "nenhum detectado",
@@ -3753,6 +3801,7 @@ const I18N = {
     compressionMayMask: "⚠ {ext} — compressão pode mascarar alguns indicadores",
     decStatusLossySuffix: " usa compressão lossy",
     deepInvestText: "Texto detectado via {mode} (investigação profunda)",
+    decStatusFramedRecovered: "Mensagem estruturada recuperada via {mode}",
     exportHintJSON: "Envie este arquivo para sua IA de preferência para análise aprofundada.",
     capAvailable: "disponíveis",
     // AI verdict
@@ -3791,6 +3840,7 @@ const I18N = {
     // interpretModule — Studio
     interpStudioHeader: "Header \"STEGO\\0\" confirmado nos LSBs — {bytes} bytes de payload estruturado. Esta imagem foi codificada pelo STEGO·STUDIO.",
     interpStudioDeepHeader: "Texto oculto recuperado por investigação profunda. Foi identificado o header \"{hdr}\" antes da mensagem — uma assinatura de protocolo de outra ferramenta. Mesmo sem registro deste protocolo, o investigador localizou e extraiu a mensagem analisando os bits menos significativos diretamente.",
+    interpStudioFramed: "O framing LSB reconhecido \"{hdr}\" declarou um payload de {bytes} bytes, e exatamente esse intervalo decodificou como UTF-8 válido. Isto é recuperação estruturada direta, não um candidato de texto por janela deslizante.",
     interpStudioDeepNoHeader: "Texto oculto recuperado por investigação profunda, sem header proprietário reconhecível. A imagem foi codificada por uma ferramenta de terceiros usando esteganografia LSB. O investigador localizou e extraiu a mensagem analisando os bits menos significativos diretamente.",
     interpStudioExtracted: "A mensagem oculta foi localizada e recuperada. É a confirmação mais forte disponível: o payload não foi apenas suspeitado, seu conteúdo foi lido com sucesso.",
     interpStudioHeaderOnly: "Um header STEGO·STUDIO foi localizado, então há mensagem presente — mas o conteúdo não pôde ser remontado. O corpo provavelmente está danificado, truncado, ou foi alterado depois de escrito.",
@@ -3835,8 +3885,8 @@ const I18N = {
     termImageInserted: "Imagem inserida",
     termTypeMsg: "Digite a mensagem a ocultar e a senha (opcional)",
     termMetaWarn: "Metadados detectados ({types}) — serão removidos na imagem gerada",
-    termWillConvertPng: "{ext} será convertido — a mensagem entra nos pixels convertidos. Saem duas imagens: um PNG sem perda, que esconde melhor, e um JPG que sobrevive a ser publicado",
-    termHeicUnsupported: "HEIC/HEIF (Apple) não é suportado no navegador — converta para PNG ou JPEG e tente de novo",
+    termWillConvertPng: "{ext} será convertido antes do embedding. O PNG mais furtivo é gerado; quando a mensagem real cabe no caminho resistente, também é gerado um JPG voltado à publicação",
+    termHeicUnsupported: "Este navegador não conseguiu decodificar HEIC/HEIF (Apple) — converta para PNG ou JPEG e tente de novo",
     termDecodeFailed: "não foi possível decodificar a imagem — o arquivo pode estar corrompido ou em formato não suportado",
     termReadyAnalysis: "Pronto para análise forense completa",
     termAnalysisComplete: "Análise completa",
@@ -3844,44 +3894,44 @@ const I18N = {
     termDecodeStatus: "Decode Status",
     ticker: [
       "Análise 100% local no seu navegador — nenhuma imagem é enviada a servidores",
-      "Redes sociais recomprimem imagens: a PNG mais furtiva precisa viajar como arquivo; a JPG mais resistente sobrevive à publicação",
-      "Todo encode produz duas imagens — uma que esconde melhor, outra que sobrevive à publicação; as duas carregam a mesma mensagem",
+      "Plataformas sociais podem recomprimir ou redimensionar imagens: arquivo/documento é o caminho seguro para o PNG mais furtivo; o JPG resistente foi desenhado para fluxos de publicação medidos",
+      "Todo encode produz o PNG mais furtivo; quando a mensagem real cabe no caminho resistente, um segundo JPG é gerado — a mensagem alternativa, se usada, permanece só no PNG",
       "Ctrl+V cola uma imagem diretamente na área de codificação ou análise",
-      "Esteganografia LSB esconde dados nos bits menos significativos de cada pixel",
-      "Uma imagem 1080p pode ocultar dezenas de milhares de caracteres sem alteração visível",
+      "Esteganografia LSB pode carregar dados nos bits menos significativos dos canais de cor dos pixels",
+      "Uma portadora 1080p pode comportar dezenas de milhares de caracteres sem alteração visual perceptível, dependendo do caminho de embedding escolhido",
       "A senha é opcional, mas ativa a criptografia da mensagem; no PNG lossless protegido ela também fortalece o cabeçalho e a derivação estrutural — sem senha, o conteúdo recuperado fica em texto puro",
       "O investigador profundo varre a imagem em busca de texto legível quando não há cabeçalho conhecido — é uma busca, não uma garantia",
-      "Mensagens criptografadas viram ruído estatístico — a ferramenta sinaliza a suspeita pelo chi-quadrado",
-      "O Decoder também lê imagens do OpenStego, Steghide e OutGuess — sem senha, ou com a senha quando houver",
+      "Payloads criptografados podem criar regiões de LSB com aparência aleatória; o chi-quadrado contribui apenas como sinal de suspeita, não como prova de cifra ou esteganografia",
+      "O Decoder também tenta formatos compatíveis de OpenStego, Steghide e OutGuess — a cobertura depende de contêiner, cifra e modo",
       "Analisar e decodificar acontecem no mesmo passo — quando o resultado aparece, a extração já foi tentada",
-      "Em JPEG não existe LSB aproveitável: o que a ferramenta analisa ali são os coeficientes DCT",
+      "Em JPEG não há LSB espacial significativo para esteganografia: a análise de conteúdo oculto usa coeficientes DCT, enquanto metadados e origem continuam sendo analisados",
       "Ausência de sinal estatístico não é atestado de limpeza — payloads pequenos passam por testes de primeira ordem",
-      "EXIF nomeando uma câmera é evidência de apoio de foto real — não prova, pois EXIF não é autenticado",
+      "EXIF nomeando uma câmera apoia compatibilidade com fotografia — não é prova, pois EXIF não é autenticado e pode ser editado",
       "A classificação de origem é heurística — use como indício, não como prova definitiva",
     ],
     helpTitle: "Como funciona o STEGO·STUDIO",
     helpS1Title: "O que esta ferramenta faz",
-    helpS1a: "O STEGO·STUDIO tem três módulos. O <b>Encoder</b> esconde mensagens de texto dentro de imagens. O <b>Analyzer</b> examina qualquer imagem em busca de sinais de conteúdo oculto e estima a origem provável dela (foto, screenshot, arte digital ou IA). O <b>Decoder</b> vai além e tenta de fato recuperar a mensagem — tanto do protocolo do próprio STEGO·STUDIO quanto de ferramentas de terceiros. Analyzer e Decoder não são passos separados: um único botão roda os dois.",
+    helpS1a: "O STEGO·STUDIO tem três módulos. O <b>Encoder</b> esconde mensagens de texto em imagens que o navegador consiga decodificar. O <b>Analyzer</b> examina imagens suportadas em busca de sinais de conteúdo oculto e estima a compatibilidade de origem (foto, screenshot, arte digital ou IA). O <b>Decoder</b> vai além e tenta recuperar a mensagem — tanto dos formatos do próprio STEGO·STUDIO quanto de formatos compatíveis de ferramentas de terceiros. Analyzer e Decoder não são passos separados: um único botão roda os dois.",
     helpS1b: "Tudo roda 100% no seu navegador. Nenhuma imagem ou dado é enviado para servidores.",
     helpSecDecTitle: "O Decoder — o que ele lê, e o que não lê",
     helpDecA: "Não existe um passo separado de \"decodificar\". O único botão de análise identifica o formato real pelos próprios bytes do arquivo, roda a análise forense e tenta a extração com todos os motores disponíveis. Quando o resultado aparece, tudo isso já aconteceu.",
-    helpDecB: "<b>O que ele lê:</b><ul><li><b>O protocolo do próprio STEGO·STUDIO</b> — em PNG e outros formatos sem perda, com ou sem senha.</li><li><b>O modo mais resistente do STEGO·STUDIO</b> — nos coeficientes do JPEG, com ou sem senha.</li><li><b>OpenStego</b> — LSB aleatorizado em PNG.</li><li><b>Steghide</b> — em JPEG (coeficientes DCT). O caminho BMP dele não está integrado aqui, e das muitas cifras que ele oferece só a padrão (rijndael-128/CBC) e a ausência de cifra são lidas; as demais são nomeadas, não decifradas.</li><li><b>OutGuess</b> — em JPEG (coeficientes DCT), inclusive sem senha, que é o padrão dele.</li><li><b>Investigador profundo</b> — quando não há cabeçalho conhecido, varre a imagem em busca de texto legível. É uma busca, não uma garantia.</li></ul>",
-    helpDecC: "<b>O que ele não lê, e por quê:</b><ul><li><b>F5 (Westfeld)</b> — um marco na literatura acadêmica, mas raro na prática e caro por construção: ele precisa embaralhar a imagem inteira antes de conseguir ler o primeiro bit, o que custaria segundos em toda foto analisada, inclusive nas limpas. Esta build não inclui um decoder F5. Se esse suporte entrar no futuro, deve ser uma ação explícita em vez de impor esse custo automaticamente a toda imagem.</li><li><b>Qualquer coisa trancada pela senha de outra ferramenta</b> — uma mensagem do OpenStego criptografada com AES, por exemplo, é detectada e reportada, mas descriptografar exige o próprio OpenStego e a senha certa. Sem ela, o conteúdo é indistinguível de ruído — e isso é o projeto funcionando, não uma falha.</li></ul>",
+    helpDecB: "<b>O que ele lê:</b><ul><li><b>O protocolo do próprio STEGO·STUDIO</b> — em PNG e outros formatos sem perda, com ou sem senha.</li><li><b>O modo mais resistente do STEGO·STUDIO</b> — nos coeficientes do JPEG, com ou sem senha.</li><li><b>OpenStego</b> — LSB aleatorizado em PNG/BMP.</li><li><b>Steghide</b> — em JPEG (coeficientes DCT). O caminho BMP dele não está integrado aqui, e das muitas cifras que ele oferece só a padrão (rijndael-128/CBC) e a ausência de cifra são lidas; as demais são nomeadas, não decifradas.</li><li><b>OutGuess</b> — em JPEG (coeficientes DCT), inclusive sem senha, que é o padrão dele.</li><li><b>Investigador profundo</b> — quando não há cabeçalho conhecido, varre a imagem em busca de texto legível. É uma busca, não uma garantia.</li></ul>",
+    helpDecC: "<b>O que ele não lê, e por quê:</b><ul><li><b>F5 (Westfeld)</b> — um marco na literatura acadêmica, mas raro na prática e caro por construção: ele precisa embaralhar a imagem inteira antes de conseguir ler o primeiro bit, o que custaria segundos em toda foto analisada, inclusive nas limpas. Esta build não inclui um decoder F5. Se esse suporte entrar no futuro, deve ser uma ação explícita em vez de impor esse custo automaticamente a toda imagem.</li><li><b>Camadas de criptografia de terceiros que não estão implementadas aqui</b> — por exemplo, um payload OpenStego com a criptografia própria da ferramenta pode ser identificado, mas esta build não decifra essa camada. Steghide e OutGuess são casos diferentes: variantes protegidas por senha são tentadas quando o formato/cifra compatível está implementado. A matriz de compatibilidade é a fronteira autoritativa.</li></ul>",
     helpDecD: "<b>Limites honestos:</b><ul><li><b>Em JPEG não existe LSB aproveitável.</b> A compressão reescreve os bits menos significativos, então o que se lesse ali seria ruído do codec, não mensagem. Num JPEG, só fazem sentido os métodos de coeficiente DCT.</li><li><b>O teste do chi-quadrado nos coeficientes DCT é indicador fraco, não detector.</b> Ele pega embutimento ingênuo de alta taxa, mas ferramentas que espalham um payload pequeno passam direto por ele. Ausência de sinal nunca é atestado de limpeza.</li></ul>",
     helpS2Title: "Esteganografia LSB",
-    helpS2a: "Cada pixel de uma imagem tem valores de cor (vermelho, verde, azul). O bit menos significativo (LSB) de cada valor pode ser alterado sem mudança visível na imagem. A esteganografia LSB escreve a mensagem nesses bits.",
-    helpS2b: "Por isso a imagem mais furtiva é sempre salva como um <b>PNG novo (sem perda)</b> — os bits do LSB precisam de um formato lossless para sobreviver. Você pode partir de qualquer imagem, inclusive JPEG: a ferramenta a converte e embute a mensagem na saída. O que destrói uma mensagem em LSB é recomprimir <b>depois</b> (salvar como JPEG de novo, ou reenviar por rede social como foto). É exatamente esse problema que a imagem mais resistente resolve — veja a seção seguinte.",
-    helpS2c: "Há duas formas de escrever o LSB. O <b>LSB Replacement (LSBR)</b> simplesmente sobrescreve o bit — simples, mas deixa uma assimetria par/ímpar estrutural que ataques estatísticos detectam com facilidade. Já o <b>LSB Matching (LSBM)</b> soma ou subtrai 1 aleatoriamente para chegar ao mesmo bit, sem deixar essa assimetria. O STEGO·STUDIO usa <b>LSBM</b>, muito mais difícil de detectar que o LSBR usado por ferramentas como OpenStego e OpenPuff.",
+    helpS2a: "Cada pixel de uma imagem tem valores de cor (vermelho, verde, azul). Alterar um bit menos significativo (LSB) normalmente não produz diferença visual perceptível. A esteganografia em domínio de pixels pode usar esses bits para transportar dados.",
+    helpS2b: "Por isso a imagem mais furtiva é salva como um <b>PNG novo (sem perda)</b> — os LSBs dos pixels precisam de um caminho lossless para sobreviver. Você pode partir de qualquer formato que o navegador consiga decodificar, inclusive JPEG: a ferramenta converte antes de embutir. Recomprimir o PNG gerado depois pode destruir o payload nos pixels. O JPEG resistente usa um caminho diferente, nos coeficientes DCT, para fluxos de publicação — veja a seção seguinte.",
+    helpS2c: "O STEGO·STUDIO usa mais de uma estratégia para escrever LSBs. Rotas sequenciais sem STC usam <b>LSB Matching (LSBM)</b>, que chega ao bit desejado somando ou subtraindo 1. O caminho padrão orientado à furtividade usa <b>STC</b> para escolher um conjunto de alterações de baixo custo sobre o mapa HILL, e caminhos adaptativos podem definir diretamente o LSB selecionado. Portanto o produto inteiro não deve ser descrito como se usasse apenas LSBM ou apenas LSBR.",
     helpS2d: "Por padrão, a mensagem usa o <b>canal azul</b> e o caminho STC orientado à furtividade. O <b>modo alta capacidade (RGB)</b> espalha o corpo pelos três canais de cor, triplicando o espaço disponível (~3 bits por pixel) — útil para mensagens maiores. O RGB prioriza espaço em vez de minimizar as alterações do embedding e pode deixar traços estatísticos mais fortes, especialmente com payloads maiores. A imagem registra qual modo foi usado, então a decodificação é automática.",
     helpSecProtTitle: "Proteção e furtividade",
-    helpProtA: "Quando você define uma <b>senha</b>, a mensagem é criptografada com <b>AES-256-GCM</b> (chave criptográfica derivada da senha por <b>Argon2id</b>) antes de ser embutida. Mesmo que alguém extraia os bits, o conteúdo é ilegível sem a senha — e qualquer adulteração é detectada.",
+    helpProtA: "Quando você define uma <b>senha</b>, a mensagem é criptografada com <b>AES-256-GCM</b> (chave criptográfica derivada da senha por <b>Argon2id</b>) antes de ser embutida. Mesmo que alguém extraia os bits, o conteúdo protegido é ilegível sem a senha; ciphertext autenticado que tenha sido alterado é rejeitado em vez de ser devolvido como texto válido.",
     helpProtB: "A senha também fortalece <b>como o payload protegido é estruturado</b>. Nos caminhos sem STC, a ordem do corpo é derivada da senha com separação forte de chaves. O caminho padrão com STC não depende dessa ordenação; ele recupera o corpo pelo código de síndrome sobre o mapa de custo HILL.",
-    helpProtC: "Independentemente da senha, ao <b>posicionar</b> os bits a ferramenta segue dois caminhos e escolhe sozinha. No caminho padrão (furtividade máxima), usa <b>códigos síndrome-treliça (STC) sobre um mapa de custo HILL</b>: escolhe uma solução de baixo custo de embedding, favorecendo regiões com textura/ruído em vez de áreas mais lisas. Isso minimiza o custo HILL das alterações naquela portadora; não garante que todo detector dará score menor do que em outro modo. O corpo usa somente o canal azul.",
+    helpProtC: "Independentemente da senha, ao <b>posicionar</b> os bits a ferramenta segue dois caminhos e escolhe sozinha. No caminho padrão <b>orientado à furtividade</b>, usa <b>códigos síndrome-treliça (STC) sobre um mapa de custo HILL</b>: escolhe uma solução de baixo custo de embedding, favorecendo regiões com textura/ruído em vez de áreas mais lisas. Isso minimiza o custo HILL das alterações naquela portadora; não garante que todo detector dará score menor do que em outro modo. O corpo usa somente o canal azul.",
     helpProtStc: "O outro caminho é o <b>Modo de Alta Capacidade (RGB)</b>: quando você liga \"Modo de Alta Capacidade\" — ou automaticamente, quando a mensagem não cabe no furtivo — o corpo se espalha pelos três canais de cor, triplicando o espaço disponível. Esse caminho prioriza capacidade e pode deixar traços estatísticos mais fortes, especialmente com payloads maiores. A imagem registra qual caminho foi usado, então decodificar é sempre automático.",
     helpProtD: "Definir uma senha também <b>protege o cabeçalho</b>, sem passo extra. Uma assinatura fixa e legível \"STEGO\" deixa de ficar exposta nos payloads protegidos, então uma análise passiva pode não encontrar um cabeçalho reconhecível sem a senha. Isso não é promessa de invisibilidade — traços estatísticos ainda podem existir.",
     helpProtE: "Tudo isso se soma automaticamente: uma mensagem com senha fica <b>criptografada (AES-256-GCM)</b> e usa um <b>cabeçalho protegido e autenticado</b>. Os caminhos sem STC também derivam da senha a ordem do corpo; o caminho padrão coloca o corpo com <b>STC sobre o mapa HILL</b>. Você não monta essas camadas à mão — a ferramenta aplica o caminho adequado ao que você pediu.",
     helpS3Title: "Threat Score — suspeita de mensagem oculta",
-    helpS3a: "Estima o <b>nível de suspeita</b> de conteúdo oculto a partir de sinais forenses como evidência de protocolo conhecido, texto recuperado de forma confiável, anomalias de LSB, strings suspeitas e dados após o fim do arquivo. Antes da recuperação direta, é um score heurístico, não uma probabilidade calibrada, e a soma heurística tem teto em <b>99</b>. <b>100 / CONFIRMADO</b> fica reservado a conteúdo oculto válido recuperado diretamente por um método suportado.",
+    helpS3a: "Estima o <b>nível de suspeita</b> de conteúdo oculto a partir de sinais forenses como evidência de protocolo conhecido, texto legível encontrado em framings suportados ou na investigação profunda, anomalias de LSB, strings suspeitas e dados após o fim do arquivo. Antes da recuperação direta, é um score heurístico, não uma probabilidade calibrada, e a soma heurística tem teto em <b>99</b>. <b>100 / CONFIRMADO</b> fica reservado a conteúdo oculto válido recuperado diretamente por um método suportado.",
     helpS3b: "A recuperação confiável de uma mensagem é a evidência mais forte. Payloads criptografados ou ilegíveis ainda podem deixar traços estruturais ou estatísticos, mas esses traços indicam possível embedding — não revelam o payload por si só.",
     helpS3c: "O analisador também roda dois <b>ataques estruturais</b> — RS (Regular–Singular) e WS (Weighted Stego) — voltados principalmente a traços associados ao <b>LSB Replacement</b>. A concordância entre eles pode reforçar a suspeita, especialmente em taxas de embedding maiores. Eles são menos confiáveis contra LSB Matching e posicionamento adaptativo ao conteúdo, e um resultado silencioso não prova ausência.",
     helpS3d: "Há também uma <b>heurística de embedding tipo GAN</b> que procura um padrão às vezes associado à esteganografia neural: planos LSB incomumente semelhantes entre os canais de cor junto com comportamento simétrico em altas frequências. Quando esse padrão aparece, a ferramenta levanta uma <b>suspeita</b> — nunca uma confirmação. Imagens texturizadas ou sintéticas podem produzir sinais semelhantes. Trate como pista, não veredito.",
@@ -3893,10 +3943,10 @@ const I18N = {
     helpS5a: "<b>Fotografia</b> — EXIF de câmera (apenas evidência de apoio; EXIF não é autenticado e é facilmente editável), ruído de sensor, alta diversidade cromática.",
     helpS5b: "<b>Screenshot</b> — bordas perfeitamente nítidas, ausência de ruído de sensor, paleta de interface, dimensões típicas de tela.",
     helpS5c: "<b>Arte digital / 3D</b> — sem ruído de sensor, bordas regulares, paleta controlada, gradientes artificiais.",
-    helpS5d: "<b>Sintética / IA</b> — entropia regional uniforme, gradientes suavizados demais, crominância uniforme, ou metadados C2PA/EXIF que declaram geração por IA.",
+    helpS5d: "<b>Sintética / IA</b> — entropia regional uniforme, gradientes suavizados demais, crominância uniforme, ou metadados C2PA/EXIF que declaram geração por IA. Uma declaração C2PA detectada não é tratada como prova com assinatura verificada nesta build.",
     helpS6Title: "Limitações",
-    helpS6a: "Esta é uma ferramenta <b>heurística</b>, não um classificador definitivo. Ela analisa propriedades estatísticas e metadados, sem modelo neural treinado. Nada roda em servidor. Métodos que exigem modelos treinados especializados ficam fora da cobertura confiável de detecção desta build.",
-    helpS6b: "Casos difíceis: imagens recomprimidas por redes sociais (que apagam metadados e alteram pixels), fotos muito editadas, e imagens de IA de última geração que imitam ruído de câmera. Use os resultados como <b>indício investigativo</b>, cruzando com outras evidências — não como prova isolada.",
+    helpS6a: "O <b>classificador de origem e boa parte da esteganálise são heurísticos</b>, não classificadores definitivos. Payloads válidos recuperados diretamente são uma categoria separada e mais forte de evidência. Esta build analisa propriedades estatísticas, estrutura e metadados sem modelo neural treinado, e nada roda em servidor. Métodos que exigem modelos treinados especializados ficam fora da cobertura confiável de detecção.",
+    helpS6b: "Casos difíceis: imagens processadas ou recomprimidas por redes sociais (que podem apagar metadados e alterar pixels), fotos muito editadas, e imagens de IA de última geração que imitam ruído de câmera. Use os resultados como <b>indício investigativo</b>, cruzando com outras evidências — não como prova isolada.",
     helpS6c: "Do lado da esteganografia, a análise embutida é mais forte contra <b>LSB Replacement</b> e mensagens em texto puro ou com framing fraco. Para embedding tipo GAN ela oferece apenas uma <b>heurística de suspeita</b>. <b>LSB Matching</b> e métodos adaptativos ao conteúdo como HILL, UNIWARD e J-UNIWARD podem escapar da detecção porque esta build não embarca os modelos treinados especializados usados para esse trabalho. Payloads conhecidos do STEGO·STUDIO ainda podem ser reconhecidos ou decodificados pelo próprio formato. <b>Ausência de detecção aqui não é evidência de que a imagem não contenha dados ocultos.</b> Para esteganálise especializada, use um toolbox dedicado como o <b>Aletheia</b>, de Daniel Lerch (MIT, <code>github.com/daniellerch/aletheia</code>).",
     footerCredit: "Idealização e direção humana por RASC. Desenvolvido com JOI, uma IA.",
     footerOpensource: "Software livre sob GPL-3.0 &middot; código em <code>github.com/rickschaves/stegostudio</code>",
@@ -3947,6 +3997,7 @@ function applyTranslations() {
 function setLang(lang) {
   LANG = lang;
   applyTranslations();
+  if (typeof refreshProcessingTimes === 'function') refreshProcessingTimes();
   if (typeof updateEncMessageModalCount === 'function') updateEncMessageModalCount();
   // Se um aviso de chave está ativo, applyTranslations restaura a hint padrão;
   // reaplica o texto do aviso no novo idioma sem reiniciar o timer.
@@ -4025,6 +4076,33 @@ function hideHelpModal() {
 // CHANGELOG contém versões semver (v2.10+). CHANGELOG_LEGACY preserva versões pré-semver (≤ v2.9.1),
 // exibidas com sufixo "— Legacy". O divisor entre os dois é renderizado em renderChangelog.
 const CHANGELOG = [
+  { ver:'v2.43.20', date:'2026-08-19', title:{en:'More readable JPEG password feedback',pt:'Feedback de senha JPEG mais legível'}, items:[
+    {t:'fix', en:'<b>The inconclusive JPEG password notice now remains visible for eight seconds.</b> The longer window improves readability without changing the diagnosis: a failed password attempt can still mean either an incorrect password or no compatible protected JPEG payload.', pt:'<b>O aviso inconclusivo de senha em JPEG agora permanece visível por oito segundos.</b> A janela maior melhora a leitura sem mudar o diagnóstico: uma tentativa sem recuperação ainda pode significar senha incorreta ou ausência de payload JPEG protegido compatível.'},
+  ]},
+  { ver:'v2.43.19', date:'2026-08-19', title:{en:'Honest JPEG password feedback',pt:'Feedback honesto de senha em JPEG'}, items:[
+    {t:'fix', en:'<b>JPEG analysis now gives explicit feedback when a supplied password opens no compatible payload.</b> Because the robust JPEG slot plan itself depends on the password, the tool does not falsely claim that the password is definitely wrong; it says the password may be incorrect or the image may not contain a supported protected payload, while confirmed tool/damage states keep their specific diagnosis.', pt:'<b>A análise de JPEG agora dá feedback explícito quando a senha informada não abre nenhum payload compatível.</b> Como o próprio plano de posições do JPEG resistente depende da senha, a ferramenta não afirma falsamente que a senha está definitivamente errada; informa que ela pode estar incorreta ou que a imagem pode não conter um payload protegido compatível, enquanto estados confirmados de ferramenta/dano mantêm seu diagnóstico específico.'},
+  ]},
+  { ver:'v2.43.18', date:'2026-08-18', title:{en:'Browser-enforced offline boundary',pt:'Barreira offline imposta pelo navegador'}, items:[
+    {t:'add', en:'<b>The single-file build now carries a restrictive Content Security Policy.</b> Script-initiated network connections are blocked by the browser, executable inline scripts are pinned to build-time SHA-256 hashes, and frames, objects, workers and form submissions are disabled while the local blob/data resources needed by the tool remain available.', pt:'<b>O arquivo único agora leva uma Content Security Policy restritiva.</b> Conexões de rede iniciadas por scripts são bloqueadas pelo navegador, os scripts inline executáveis ficam presos a hashes SHA-256 calculados no build e frames, objetos, workers e envio de formulários são desativados, mantendo disponíveis apenas os recursos locais blob/data necessários à ferramenta.'},
+    {t:'chg', en:'<b>The CSP is defense in depth, not a replacement for sanitization or the build-time offline allowlist.</b> Argon2 WebAssembly is allowed through the narrower wasm-only execution permission; general JavaScript eval remains blocked.', pt:'<b>A CSP é defesa em profundidade, não substitui sanitização nem a allowlist offline do build.</b> O WebAssembly do Argon2 é permitido pela autorização mais estreita específica para WASM; avaliação dinâmica geral de JavaScript continua bloqueada.'},
+  ]},
+  { ver:'v2.43.17', date:'2026-08-18', title:{en:'Guidance aligned with current behavior',pt:'Orientação alinhada ao comportamento atual'}, items:[
+    {t:'chg', en:'<b>The top ticker, both Quick Guides and How it works now describe the same current boundaries.</b> The sturdier JPG is presented as a conditional second output calibrated to measured publication workflows, not as a universal social-platform guarantee; the optional alternative message is correctly described as PNG-only.', pt:'<b>O ticker do topo, os dois Guias rápidos e o Como funciona agora descrevem os mesmos limites atuais.</b> O JPG resistente aparece como segunda saída condicional calibrada para fluxos de publicação medidos, não como garantia universal para redes sociais; a mensagem alternativa opcional é descrita corretamente como exclusiva do PNG.'},
+    {t:'chg', en:'<b>Format, password and recovery guidance is more precise.</b> Inputs are limited by what the browser can decode, HEIC/HEIF is treated as browser-dependent, third-party coverage follows the documented container/cipher/mode limits, and direct confirmed recovery remains distinct from heuristic evidence.', pt:'<b>As orientações sobre formatos, senha e recuperação ficaram mais precisas.</b> A entrada depende do que o navegador consegue decodificar, HEIC/HEIF é tratado como dependente do navegador, a cobertura de terceiros segue os limites documentados de contêiner/cifra/modo e recuperação direta confirmada continua separada de evidência heurística.'},
+    {t:'chg', en:'<b>The LSB and protection explanations now match the actual paths used by the Encoder.</b> STC/HILL, sequential LSB Matching and adaptive writes are described as different strategies instead of attributing one write method to the whole product.', pt:'<b>As explicações de LSB e proteção agora correspondem aos caminhos reais usados pelo Encoder.</b> STC/HILL, LSB Matching sequencial e escrita adaptativa são descritos como estratégias diferentes, em vez de atribuir um único método de escrita ao produto inteiro.'},
+  ]},
+  { ver:'v2.43.16', date:'2026-08-18', title:{en:'Cleaner Encoder output heading',pt:'Cabeçalho de saída do Encoder mais limpo'}, items:[
+    {t:'chg', en:'<b>The Encoder output now uses GENERATED IMAGE with the same visual hierarchy as the Analyzer/Decoder RESULT heading.</b> The redundant // prefix was removed from the main heading while the amber processing-time label keeps its technical marker.', pt:'<b>A saída do Encoder agora usa IMAGEM GERADA com a mesma hierarquia visual do RESULTADO no Analyzer/Decoder.</b> O prefixo // redundante saiu do título principal, enquanto o tempo de processamento em âmbar mantém seu marcador técnico.'},
+  ]},
+  { ver:'v2.43.15', date:'2026-08-18', title:{en:'Consistent confirmed recovery',pt:'Recuperação confirmada consistente'}, items:[
+    {t:'fix', en:'<b>Direct structured legacy recovery now shows 100 / CONFIRMED consistently instead of 100 / HIGH.</b> Processing-time values also keep the seconds unit in lowercase.', pt:'<b>A recuperação direta estruturada de formatos legados agora mostra 100 / CONFIRMADO de forma consistente, em vez de 100 / ALTO.</b> Os valores de tempo de processamento também mantêm a unidade de segundos em minúsculo.'},
+  ]},
+  { ver:'v2.43.14', date:'2026-08-18', title:{en:'Structured legacy LSB recovery',pt:'Recuperação estruturada de LSB legado'}, items:[
+    {t:'fix', en:'<b>Recognized JOI_LSB and Steg/v1 messages are now parsed by their declared framing instead of relying only on deep-scan text cleanup.</b> A complete structured recovery can reach 100 / CONFIRMED; header-like or heuristic text without valid framing remains below the terminal state.', pt:'<b>Mensagens reconhecidas JOI_LSB e Steg/v1 agora são lidas pelo framing declarado em vez de depender apenas da limpeza de texto da investigação profunda.</b> Uma recuperação estruturada completa pode chegar a 100 / CONFIRMADO; texto heurístico ou apenas semelhante a header sem framing válido permanece abaixo do estado terminal.'},
+  ]},
+  { ver:'v2.43.13', date:'2026-08-18', title:{en:'Visible processing time',pt:'Tempo de processamento visível'}, items:[
+    {t:'add', en:'<b>Encoder and Analyzer/Decoder now show the total processing time directly beside the result heading.</b> The value is measured locally for the current operation only and is not embedded in the image or exported in the forensic report.', pt:'<b>Encoder e Analyzer/Decoder agora mostram o tempo total de processamento diretamente ao lado do título do resultado.</b> O valor é medido apenas localmente para a operação atual e não é gravado na imagem nem exportado no relatório forense.'},
+  ]},
   { ver:'v2.43.12', date:'2026-08-18', title:{en:'Cleaner stegomalware previews',pt:'Prévia de stegomalware mais limpa'}, items:[
     {t:'fix', en:'<b>Self-contained stegomalware indicators no longer repeat unrelated surrounding message text.</b> URLs, crypto addresses and long Base64 blobs show only the matched indicator, while script-like triggers keep the short Unicode-safe context needed to show the relevant code.', pt:'<b>Indicadores autocontidos de stegomalware não repetem mais trechos sem relação da mensagem ao redor.</b> URLs, endereços cripto e blobs Base64 longos mostram apenas o indicador encontrado, enquanto gatilhos como scripts mantêm o contexto curto e Unicode-safe necessário para exibir o código relevante.'},
   ]},
@@ -4834,6 +4912,7 @@ document.getElementById('btn-clear-dec').addEventListener('click', () => {
       resetStatus('dec-status');
       document.getElementById('results-area').classList.remove('visible');
       document.getElementById('export-wrap').classList.remove('visible');
+      clearProcessingTime('dec-processing-time');
       document.getElementById('dec-placeholder').style.display = 'block';
       document.getElementById('modules-wrap').textContent = '';
       document.getElementById('decoded-box').classList.remove('visible');
@@ -8089,6 +8168,70 @@ function neuralStegoHeuristic(data, width, height) {
   };
 }
 
+// Parser estrutural para dois framings LSB históricos observados em arquivos reais.
+// Diferente do deep scan, este caminho NÃO procura uma ilha "plausível": ele exige
+// magic conhecido + comprimento declarado que caiba no buffer + UTF-8 íntegro.
+// Só esse conjunto promove a recuperação genérica ao estado terminal confirmado.
+function parseLegacyFramedLSB(bytes) {
+  if (!(bytes instanceof Uint8Array) || bytes.length < 12) return null;
+
+  const u32be = off => {
+    if (off < 0 || off + 4 > bytes.length) return null;
+    return (((bytes[off] << 24) >>> 0) | (bytes[off+1] << 16) |
+            (bytes[off+2] << 8) | bytes[off+3]) >>> 0;
+  };
+  const asciiAt = (off, text) => {
+    if (off < 0 || off + text.length > bytes.length) return false;
+    for (let i=0;i<text.length;i++) {
+      const b=bytes[off+i], c=text.charCodeAt(i);
+      // O framing "Steg" foi observado com essa capitalização; aceitamos apenas
+      // ASCII case-insensitive para o magic, nunca prefixos arbitrários.
+      if ((b|32) !== (c|32)) return false;
+    }
+    return true;
+  };
+  const finish = (headerName, payloadOffset, payloadLength, framingVersion=null) => {
+    if (!Number.isInteger(payloadLength) || payloadLength <= 0) return null;
+    if (payloadOffset < 0 || payloadOffset + payloadLength > bytes.length) return null;
+    const payload = bytes.slice(payloadOffset, payloadOffset + payloadLength);
+    let text;
+    try { text = new TextDecoder('utf-8',{fatal:true}).decode(payload); }
+    catch (_) { return null; }
+    if (!text.length) return null;
+    // O framing histórico transporta texto. Controles de layout usuais são
+    // permitidos; controles binários dentro do corpo invalidam a promoção.
+    for (let i=0;i<text.length;i++) {
+      const cp=text.charCodeAt(i);
+      if (cp < 0x20 && cp !== 0x09 && cp !== 0x0A && cp !== 0x0D) return null;
+    }
+    return { text, headerName, payloadBytes:payloadLength, payloadOffset, framingVersion };
+  };
+
+  // JOI_LSB / JOI_LSB0..9: magic ASCII seguido por comprimento uint32 BE.
+  // Os relatórios de campo mostram, por exemplo, JOI_LSB2 00 00 00 27 + 39 bytes.
+  if (asciiAt(0,'JOI_LSB')) {
+    let headerLen=7;
+    if (bytes.length > 7 && bytes[7] >= 0x30 && bytes[7] <= 0x39) headerLen=8;
+    const headerName = new TextDecoder('ascii').decode(bytes.slice(0,headerLen));
+    const len = u32be(headerLen);
+    const parsed = finish(headerName, headerLen+4, len);
+    if (parsed) return parsed;
+  }
+
+  // Framing "Steg" observado: magic + versão uint32 BE (=1) + comprimento uint32 BE.
+  // Ex.: Steg 00 00 00 01 00 00 00 62 + 98 bytes de texto.
+  if (asciiAt(0,'Steg')) {
+    const version = u32be(4);
+    const len = u32be(8);
+    if (version === 1) {
+      const parsed = finish('Steg', 12, len, version);
+      if (parsed) return parsed;
+    }
+  }
+
+  return null;
+}
+
 // Generic LSB extract — testa múltiplos modos e retorna o melhor
 function extractLSBRaw(imageData, maxBytes) {
   const d = imageData.data;
@@ -8147,20 +8290,21 @@ function extractLSBRaw(imageData, maxBytes) {
   // INVESTIGADOR DE JANELA DESLIZANTE
   // Procura a maior sequência contígua de texto legível em cada modo,
   // ignorando header e lixo ao redor. Funciona com qualquer codificador.
-  let best = null;
+  let best = null, bestFramed = null;
   for (const c of candidates) {
     const island = findTextIsland(c.bytes);
     c.printableRatio = printable(c.bytes);  // mantém compat com resto do código
     c.island = island;
+    c.framed = parseLegacyFramedLSB(c.bytes);
+    if (c.framed && !bestFramed) bestFramed = c; // ordem de modos é determinística
     if (!best || island.score > best.island.score) best = c;
   }
 
-  // Anexa a melhor ilha de texto encontrada como propriedade extra
-  best.foundText = best.island.text;
-  best.foundTextLength = best.island.length;
-  // Identifica o header: bytes ASCII imediatamente antes da ilha de texto.
-  // Muitas ferramentas escrevem um magic (ex: "JOI_LSB2", "STEGO") antes da mensagem.
-  best.headerName = extractHeader(best.bytes, best.island.start);
+  // Framing validado vence heurística de ilha: magic+LEN+UTF-8 é evidência direta.
+  if (bestFramed) best = bestFramed;
+  best.foundText = best.framed ? best.framed.text : best.island.text;
+  best.foundTextLength = best.framed ? best.framed.payloadBytes : best.island.length;
+  best.headerName = best.framed ? best.framed.headerName : extractHeader(best.bytes, best.island.start);
   return best;
 }
 
@@ -9358,7 +9502,10 @@ function clearKeyFlash() {
 function refreshKeyFlashText() {
   if (!keyFlashReason) return;
   const hint = document.getElementById('dec-key-hint');
-  if (hint) hint.textContent = t(keyFlashReason === 'wrong' ? 'decKeyFlashWrong' : 'decKeyFlashMissing');
+  if (!hint) return;
+  const key = keyFlashReason === 'wrong' ? 'decKeyFlashWrong'
+    : (keyFlashReason === 'jpeg' ? 'decKeyFlashJpegInconclusive' : 'decKeyFlashMissing');
+  hint.textContent = t(key);
 }
 function flashKey(reason='missing') {
   clearKeyFlash();
@@ -9372,7 +9519,8 @@ function flashKey(reason='missing') {
   if (icon) icon.textContent = '⚠';
   refreshKeyFlashText();
   if (!k.value) k.placeholder = '⚠ ' + t('keyPlaceholder');
-  keyFlashTimer = setTimeout(clearKeyFlash, 5000);
+  const flashMs = reason === 'jpeg' ? 8000 : 5000;
+  keyFlashTimer = setTimeout(clearKeyFlash, flashMs);
 }
 // Verifica se bytes brutos têm ratio de ASCII puro (usado para LSB raw / extração genérica)
 function printable(bytes) {
@@ -9919,6 +10067,7 @@ function bumpAnalysisGeneration(){ analysisGeneration++; }
 async function loadDecoderFile(file) {
   if (isAnalysisBusy()) return;
   bumpAnalysisGeneration();
+  clearProcessingTime('dec-processing-time');
   decFile = file;
   // sniff de magic bytes → detecção robusta (pega .jfif, MIME errado, etc.)
   let magic=null; try{ magic=new Uint8Array(await file.slice(0,16).arrayBuffer()); }catch(_){}
@@ -9960,8 +10109,9 @@ function encMark(nome) {
   __encT.marcas.push({ nome, ms: +(agora - __encT.t0).toFixed(1) });
 }
 function encTimingsReset(){ __encT.marcas = []; __encT.t0 = 0; }
-// `coreTotal` termina quando o PNG fica pronto; `uiReadyTotal` inclui também a
-// avaliação de furtividade e a geração da saída JPEG mais resistente.
+// `coreTotal` termina quando o PNG fica pronto; `uiReadyTotal` acompanha o ponto
+// em que o botão principal é liberado. A saída JPEG robusta termina de forma
+// independente e o tempo TOTAL visível usa o fechamento das duas saídas.
 function encTimingsFlush(final) {
   const m = __encT.marcas;
   if (m.length < 2) return null;
@@ -9977,6 +10127,43 @@ function encTimingsFlush(final) {
     if (final) console.info('[encode] core ' + out.coreTotal + 'ms · ui-ready ' + out.uiReadyTotal + 'ms', fases);
   } catch(_) {}
   return out;
+}
+
+// ── TEMPO DE PROCESSAMENTO VISÍVEL ──────────────────────────────────────────
+// Informação local de UX/diagnóstico. Nunca entra no payload, no relatório JSON,
+// no localStorage nem em qualquer cálculo forense.
+function processingNow() {
+  return (typeof performance !== 'undefined' && typeof performance.now === 'function')
+    ? performance.now() : Date.now();
+}
+function formatProcessingTime(ms) {
+  const n = Number(ms);
+  if (!Number.isFinite(n) || n < 0) return '';
+  if (n < 1000) return Math.round(n) + ' ms';
+  const raw = (n / 1000).toFixed(2);
+  return (typeof LANG !== 'undefined' && LANG === 'pt' ? raw.replace('.', ',') : raw) + ' s';
+}
+function showProcessingTime(id, ms) {
+  const el = document.getElementById(id);
+  if (!el || !Number.isFinite(Number(ms)) || Number(ms) < 0) return;
+  el.dataset.ms = String(Number(ms));
+  const val = el.querySelector('.processing-time-value');
+  if (val) val.textContent = formatProcessingTime(Number(ms));
+  el.classList.add('visible');
+}
+function clearProcessingTime(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  delete el.dataset.ms;
+  const val = el.querySelector('.processing-time-value');
+  if (val) val.textContent = '';
+  el.classList.remove('visible');
+}
+function refreshProcessingTimes() {
+  document.querySelectorAll('.processing-time.visible[data-ms]').forEach(el => {
+    const val = el.querySelector('.processing-time-value');
+    if (val) val.textContent = formatProcessingTime(Number(el.dataset.ms));
+  });
 }
 
 function updateDecKeyClear() {
@@ -10262,6 +10449,7 @@ let encOutputGeneration=0; // invalida resultados assíncronos da segunda saída
 // troca de portadora restaurem exatamente o mesmo conjunto de elementos.
 function resetEncOutputs() {
   encOutputGeneration++;
+  clearProcessingTime('enc-processing-time');
   const hide = id => { const e = document.getElementById(id); if (e) e.classList.remove('visible'); };
   ['enc-dl','enc-rb','enc-tips','rb-body','rb-unavailable','enc-stealth'].forEach(hide);
   const vazio = id => { const e = document.getElementById(id); if (e) e.textContent = ''; };
@@ -10281,7 +10469,16 @@ function resetEncOutputs() {
 
 document.getElementById('btn-encode').addEventListener('click',async ()=>{
   const _btn=document.getElementById('btn-encode'), _btnHtml=_btn.innerHTML;
+  const processingStartedAt = processingNow();
   let _stopWork=()=>{};
+  let _selfDone=false, _robustDone=false;
+  const _finishVisibleTiming=()=>{
+    if (!_selfDone || !_robustDone) return;
+    if (encOutputRun !== encOutputGeneration) return;
+    showProcessingTime('enc-processing-time', processingNow() - processingStartedAt);
+  };
+  const _markSelfDone=()=>{ _selfDone=true; _finishVisibleTiming(); };
+  const _markRobustDone=()=>{ _robustDone=true; _finishVisibleTiming(); };
   const _restore=()=>{ encMark('ui-ready'); encTimingsFlush(true);
     _btn.disabled=false; _btn.classList.remove('working'); _btn.innerHTML=_btnHtml; _stopWork(); };
   _btn.disabled=true; _btn.classList.add('working');
@@ -10477,8 +10674,8 @@ document.getElementById('btn-encode').addEventListener('click',async ()=>{
           +'<div class="sr-floornote">'+t('encStealthFloor')+': ~'+FLOOR+'%</div>'
           +'<div class="stealth-verdict'+(st.verdict==='detect'?' sr-alarm':'')+'" style="color:'+vCol+'">'+vMark+' '+t(vKey)+'</div>'
           +'<div class="stealth-caveat">'+t('encStealthCaveat')+'</div>';
-        _restore();
-      }catch(_){ box.classList.remove('visible'); box.textContent=''; _restore(); } }, 30);
+        _restore(); _markSelfDone();
+      }catch(_){ box.classList.remove('visible'); box.textContent=''; _restore(); _markSelfDone(); } }, 30);
     })();
 
     // ── SEGUNDA SAÍDA: versão mais resistente (JPEG/DCT) ─────────────────
@@ -10538,6 +10735,7 @@ document.getElementById('btn-encode').addEventListener('click',async ()=>{
           nope.classList.add('visible');
         }
         wrap.classList.add('visible');
+        _markRobustDone();
       }, 60);
     })();
   } catch(e) { _stopWork(); setStatus('enc-status','✗ '+e.message,'err'); _restore(); }
@@ -11610,7 +11808,7 @@ function computeThreat(r) {
   // stegomalware, RS forte e texto oculto confiável continuam prevalecendo.
   const hardStego = !!(
     r.strings?.appendedData || r.studio?.hasHeader ||
-    r.studio?.nativeExtracted || r.studio?.nativeHeaderMatched ||
+    r.studio?.nativeExtracted || r.studio?.nativeHeaderMatched || r.studio?.framedExtracted ||
     r.studio?.robust === true || r.studio?.robust === 'locked' ||
     r.studio?.robust === 'content-error' ||
     ['recovered','partial'].includes(thirdPartyLevel) ||
@@ -11752,7 +11950,7 @@ function computeThreat(r) {
   // confirmação; por isso satura em 99. Recuperação nativa, robusta ou por um
   // método externo suportado fecha em 100 sem recalibrar os pesos acima.
   const directThreatConfirmed = r.studio?.nativeExtracted === true ||
-    r.studio?.robust === true || thirdPartyLevel==='recovered';
+    r.studio?.framedExtracted === true || r.studio?.robust === true || thirdPartyLevel==='recovered';
   score = directThreatConfirmed ? 100 : Math.min(score,99);
 
   return {score,flags};
@@ -11832,6 +12030,7 @@ function interpretModule(key, r) {
     if(proto.level === 'extracted')   return t('interpStudioExtracted');
     if(proto.level === 'headerOnly')  return t('interpStudioHeaderOnly');
     if(proto.level === 'passive')     return t('interpStudioHeader').replace('{bytes}', r.studio.payloadBytes);
+    if(proto.level === 'framed')      return t('interpStudioFramed').replace('{hdr}', escapeHTML(r.studio.headerName||r.lsb?.headerName||'—')).replace('{bytes}', escapeHTML(String(r.studio.framedPayloadBytes||0)));
     if(proto.level === 'generic') {
       const hdr = r.studio.headerName || r.lsb?.headerName;
       if (hdr) return t('interpStudioDeepHeader').replace('{hdr}', escapeHTML(hdr));
@@ -12477,12 +12676,25 @@ function resolveStegoSurface(r) {
 //  Por isso todas as superfícies derivam a decisão desta mesma função, com
 //  precedência da evidência mais forte para a mais fraca.
 // ─────────────────────────────────────────────────────────────────────────────
+function resolveThreatLevelKey(r, score) {
+  const s = Number(score) || 0;
+  const confirmed = r.studio?.nativeExtracted === true ||
+    r.studio?.framedExtracted === true || r.studio?.robust === true ||
+    resolveThirdPartyEvidence(r).level === 'recovered';
+  if (confirmed) return 'levelConfirmed';
+  if (s > 60) return 'levelHigh';
+  if (s > 30) return 'levelMedium';
+  if (s > 0) return 'levelLow';
+  return 'levelClean';
+}
+
 function resolveProtocolState(r) {
   const st = r.studio;
   if (!st?.available)        return { level:'na',        name:'—',                       badge:t('badgeNA'),            cls:'mb-scan' };
   if (st.nativeExtracted)    return { level:'extracted', name:'STEGO·STUDIO',            badge:'STEGO·STUDIO',          cls:'mb-crit' };
   if (st.nativeHeaderMatched)return { level:'headerOnly',name:'STEGO·STUDIO',            badge:'STEGO·STUDIO',          cls:'mb-crit' };
   if (st.hasHeader)          return { level:'passive',   name:'STEGO·STUDIO',            badge:'STEGO·STUDIO',          cls:'mb-crit' };
+  if (st.framedExtracted)    return { level:'framed',    name:st.headerName||r.lsb?.headerName||t('protoNameGeneric'), badge:t('protoBadgeFramed'), cls:'mb-crit' };
 
   const printable = parseFloat(r.lsb?.printableRatio) || 0;
   const toolHeader = !!(st.headerName || r.lsb?.headerName);
@@ -12667,8 +12879,7 @@ function renderResults(r, decodedMsg, decodeStatus, renderMeta={}) {
   const tn=document.getElementById('threat-num');
   tn.textContent=tScore; tn.style.color=tColor; tn.style.textShadow=`0 0 16px ${tColor}`;
   const tl=document.getElementById('threat-level');
-  const threatConfirmed = r.studio?.nativeExtracted === true || r.studio?.robust === true || resolveThirdPartyEvidence(r).level==='recovered';
-  tl.textContent=threatConfirmed?t('levelConfirmed'):(tScore>60?t('levelHigh'):tScore>30?t('levelMedium'):tScore>0?t('levelLow'):t('levelClean'));
+  tl.textContent=t(resolveThreatLevelKey(r, tScore));
   tl.style.color=tColor;
   document.getElementById('threat-flags').innerHTML=
     tFlags.map(f=>`<span class="score-flag threat">${f}</span>`).join('');
@@ -12744,7 +12955,7 @@ function renderResults(r, decodedMsg, decodeStatus, renderMeta={}) {
       stBody=`<div style="padding:10px;background:rgba(167,139,250,0.05);border:1px solid rgba(167,139,250,0.15);border-radius:3px;font-size:0.68rem;color:var(--scan);line-height:1.8">ℹ ${escapeHTML(r.studio?.note||'')}</div>`;
       stBody+=row(t('rowDecodeStatus'), decodeStatus||'—');
     } else {
-      const protoForte = proto.level==='extracted'||proto.level==='headerOnly'||proto.level==='passive';
+      const protoForte = proto.level==='extracted'||proto.level==='headerOnly'||proto.level==='passive'||proto.level==='framed';
       stBody=row(t('rowProtocolDetected'), protoName, protoForte||r.studio.deepScan?'finding-crit':'');
       if(proto.level==='extracted'){
         const recoveredDetail = r.studio.hasHeader && r.studio.payloadBytes
@@ -12753,6 +12964,8 @@ function renderResults(r, decodedMsg, decodeStatus, renderMeta={}) {
         stBody+=row(t('rowPayload'), recoveredDetail, 'finding-crit');
       } else if(proto.level==='headerOnly'){
         stBody+=row(t('rowHeader'), t('headerFoundNoContent'), 'finding-crit');
+      } else if(proto.level==='framed'){
+        stBody+=row(t('rowPayload'), (r.studio.framedPayloadBytes||0)+' bytes', 'finding-crit');
       } else if(r.studio.hasHeader){
         stBody+=row(t('rowHeader'), t('modeChannelBHeader'), 'finding-crit');
         stBody+=row(t('rowPayload'), r.studio.payloadBytes+' bytes', 'finding-crit');
@@ -13160,9 +13373,24 @@ function resolveRecoveredStatusKind(decodedMsg, studio, nativePayloadRecovered=f
     : studio?.foreignEncrypted ? 'identified'
     : studio?.foreignTruncated ? 'partial' : 'recovered';
   if (recoveredFile && tp==='recovered' && !decodedMsg) return 'file';
-  if (nativePayloadRecovered || nativeLayerRecovered || studio?.robust===true || tp==='recovered') return 'recovered';
+  if (nativePayloadRecovered || nativeLayerRecovered || studio?.framedExtracted===true || studio?.robust===true || tp==='recovered') return 'recovered';
   if (tp==='partial') return 'partial';
   return 'none';
+}
+
+// Feedback de senha em JPEG precisa ser honesto sobre uma limitação estrutural:
+// no modo robusto clássico, a própria ordem/dither dos coeficientes depende da
+// senha. Com uma senha errada, o decoder normalmente não encontra nem o header,
+// então não há como distinguir de forma forte entre "senha errada" e "este JPEG
+// não contém um payload compatível". O helper abaixo mantém o alerta visual sem
+// transformar essa ambiguidade em uma afirmação forense falsa.
+function resolveJpegPasswordFeedback({keyProvided=false, decodedMsg=null, recoveredFile=null, robustState=null, toolprint=[]}={}) {
+  if (!keyProvided || decodedMsg || recoveredFile) return 'none';
+  if (robustState === 'locked') return 'wrong';
+  if (robustState) return 'none'; // damaged/content-error já têm diagnóstico próprio
+  const confirmedTool = Array.isArray(toolprint) && toolprint.some(x => x && x.level === 'confirmado');
+  if (confirmedTool) return 'none';
+  return 'inconclusive';
 }
 
 // Normaliza uma extração nativa bem-sucedida para UM estado público.
@@ -13291,6 +13519,7 @@ const PUBLIC_REPORT_SCHEMA = {
     robust:true, robustCorrected:true,
     thirdParty:true, foreignFile:true, foreignEncrypted:true, foreignTruncated:true,
     genericMode:true, deepScan:true, headerName:true,
+    framedExtracted:true, framedPayloadBytes:true,
     nativeExtracted:true, nativeHeaderMatched:true
   },
   dct: {available:true, reason:true, blockCount:true, stdDev:true, mean:true, suspicious:true},
@@ -13395,6 +13624,8 @@ document.getElementById('btn-analyze').addEventListener('click', async ()=>{
   if(_analisando) return;
   _analisando = true;
   setAnalysisBusy(true);   // contrato de interação, não efeito colateral da thread
+  const processingStartedAt = processingNow();
+  clearProcessingTime('dec-processing-time');
 
   // ── SNAPSHOT ──
   // A partir daqui a execução usa SÓ estas cópias. Se a imagem trocar no meio,
@@ -13663,8 +13894,21 @@ document.getElementById('btn-analyze').addEventListener('click', async ()=>{
         const generic=extractLSBRaw(runID,maxBytes);
         const hasC2PA=report.c2pa?.found||report.c2pa?.manifestDetected;
 
+        // Framing histórico validado: magic + comprimento coerente + UTF-8 íntegro.
+        // É recuperação direta, não candidato de janela deslizante; uma senha
+        // informada não participa deste formato e é explicitamente ignorada.
+        if(generic.framed){
+          decodedMsg=generic.framed.text;
+          decodeStatus=t('decStatusFramedRecovered').replace('{mode}',translateMode(generic.mode));
+          decodedFromDeepScan=false;
+          if(key.length>0) passwordIgnored=true;
+          report.studio={...report.studio,
+            genericMode:generic.mode, deepScan:false,
+            headerName:generic.framed.headerName,
+            framedExtracted:true, framedPayloadBytes:generic.framed.payloadBytes};
+        }
         // Com chave: tenta decifrar os bytes brutos (AES novo ou XOR legado)
-        if(key.length>0){
+        else if(key.length>0){
           let decrypted=null;
           if(isAesPayload(generic.bytes)){
             try{ decrypted=await aesDecrypt(generic.bytes,key); }catch(_){ decrypted=null; }
@@ -13685,19 +13929,13 @@ document.getElementById('btn-analyze').addEventListener('click', async ()=>{
         // exibir ruído estatístico curto como mensagem decodificada.
         else if(generic.foundText && generic.foundTextLength >= 12 && !hasC2PA){
           let msg = generic.foundText;
-          const hadHeader = !!generic.headerName;
-          // O formato legado JOI_LSB usa um byte de tamanho logo após o header;
-          // outros formatos podem não usar. Só o removemos quando esse header é reconhecido.
           const isJoiHeader = /^JOI_LSB/i.test(generic.headerName || '');
           // Remove headers de ferramentas conhecidas no início (JOI_LSB2, STEGO, etc.)
           msg = msg.replace(/^(JOI_LSB\d?|STEGO|LSB|STEG)[\x00-\x20]*/i, '');
           // Remove caracteres de controle e nulls
           msg = msg.replace(/[\x00-\x1F]/g, '').trim();
-          // Formato legado JOI_LSB/STEGO: header + bytes-nulos + [1 byte de tamanho] + texto.
-          // A ilha de texto começa no byte de tamanho, que vira o 1º caractere do
-          // foundText (ex: 'Q' = 0x51 = 81 ≈ comprimento da msg). Como esse byte
-          // pode calhar de ser uma letra ASCII, não dá para distingui-lo pelo
-          // valor — então, havendo header conhecido, removemos 1 caractere inicial.
+          // Compatibilidade heurística para variantes antigas que tenham header
+          // reconhecido, mas não satisfaçam o framing estrutural validado acima.
           if (isJoiHeader && msg.length > 1) {
             msg = msg.slice(1).trim();
           }
@@ -13802,7 +14040,19 @@ document.getElementById('btn-analyze').addEventListener('click', async ()=>{
     // Uma extração nativa alternativa ou de terceiro bem-sucedida cancela o flash;
     // identificação de ferramenta de terceiro também cancela, porque "insira a
     // chave" seria enganoso quando a limitação é de compatibilidade do decoder.
-    if (pendingKeyFlash && !decodedMsg && !report.studio?.thirdParty) flashKey('wrong');
+    if (pendingKeyFlash && !decodedMsg && !report.studio?.thirdParty) {
+      flashKey('wrong');
+    } else if (fmt?.ext === 'JPEG') {
+      const jpegKeyFeedback = resolveJpegPasswordFeedback({
+        keyProvided:key.length>0,
+        decodedMsg,
+        recoveredFile,
+        robustState:report.studio?.robust || null,
+        toolprint:report.toolprint || []
+      });
+      if (jpegKeyFeedback === 'wrong') flashKey('wrong');
+      else if (jpegKeyFeedback === 'inconclusive') flashKey('jpeg');
+    }
 
     // ── PORTÃO ──
     // Última chance antes de publicar. Se a imagem trocou durante os awaits,
@@ -13816,6 +14066,7 @@ document.getElementById('btn-analyze').addEventListener('click', async ()=>{
     // Guarda os argumentos do render para poder refazê-lo ao trocar de idioma
     lastRenderArgs = {report, decodedMsg, decodeStatus, passwordIgnored, recoveredFile, gen: run};
     renderResults(report,decodedMsg,decodeStatus,{passwordIgnored,recoveredFile});
+    showProcessingTime('dec-processing-time', processingNow() - processingStartedAt);
     // Rola até o topo dos resultados para o usuário ver os scores imediatamente,
     // sem precisar rolar manualmente. Funciona tanto no scroll da coluna direita
     // (desktop) quanto no scroll do painel inteiro (mobile).
@@ -13869,7 +14120,7 @@ document.getElementById('btn-analyze').addEventListener('click', async ()=>{
 // ════════════════════════════════════════
 document.getElementById('btn-export-json').addEventListener('click',()=>{
   if(!lastReport) return;
-  const payload={_tool:'STEGO·STUDIO v2.43.12',_schema:'forensic-report-v2',
+  const payload={_tool:'STEGO·STUDIO v2.43.20',_schema:'forensic-report-v2',
     _hint:t('exportHintJSON'),
     ...lastReport};
   const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});

@@ -67,6 +67,7 @@ assert(consolidated.decodeStatus==='verdictEmbeddingNoReliableText','deep-scan s
 // Protocol state precedence remains proof > header-only > passive > heuristic.
 for(const [state,expected] of [
   [{available:true,nativeExtracted:true,nativeHeaderMatched:true,hasHeader:true},'extracted'],
+  [{available:true,framedExtracted:true,headerName:'JOI_LSB2'},'framed'],
   [{available:true,nativeHeaderMatched:true,hasHeader:true},'headerOnly'],
   [{available:true,hasHeader:true},'passive']
 ]){

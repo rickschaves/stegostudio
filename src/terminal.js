@@ -231,7 +231,10 @@ function clearKeyFlash() {
 function refreshKeyFlashText() {
   if (!keyFlashReason) return;
   const hint = document.getElementById('dec-key-hint');
-  if (hint) hint.textContent = t(keyFlashReason === 'wrong' ? 'decKeyFlashWrong' : 'decKeyFlashMissing');
+  if (!hint) return;
+  const key = keyFlashReason === 'wrong' ? 'decKeyFlashWrong'
+    : (keyFlashReason === 'jpeg' ? 'decKeyFlashJpegInconclusive' : 'decKeyFlashMissing');
+  hint.textContent = t(key);
 }
 function flashKey(reason='missing') {
   clearKeyFlash();
@@ -245,7 +248,8 @@ function flashKey(reason='missing') {
   if (icon) icon.textContent = '⚠';
   refreshKeyFlashText();
   if (!k.value) k.placeholder = '⚠ ' + t('keyPlaceholder');
-  keyFlashTimer = setTimeout(clearKeyFlash, 5000);
+  const flashMs = reason === 'jpeg' ? 8000 : 5000;
+  keyFlashTimer = setTimeout(clearKeyFlash, flashMs);
 }
 // Verifica se bytes brutos têm ratio de ASCII puro (usado para LSB raw / extração genérica)
 function printable(bytes) {

@@ -28,6 +28,7 @@ assert(h.score===99,`evidência apenas heurística não saturou em 99 (${h.score
 
 for(const [name,studio] of [
  ['native',{nativeExtracted:true}],
+ ['framed',{framedExtracted:true}],
  ['robust',{robust:true}],
  ['third-party',{thirdParty:'OutGuess'}]
 ]){

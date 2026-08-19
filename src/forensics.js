@@ -1039,7 +1039,7 @@ function computeThreat(r) {
   // stegomalware, RS forte e texto oculto confiável continuam prevalecendo.
   const hardStego = !!(
     r.strings?.appendedData || r.studio?.hasHeader ||
-    r.studio?.nativeExtracted || r.studio?.nativeHeaderMatched ||
+    r.studio?.nativeExtracted || r.studio?.nativeHeaderMatched || r.studio?.framedExtracted ||
     r.studio?.robust === true || r.studio?.robust === 'locked' ||
     r.studio?.robust === 'content-error' ||
     ['recovered','partial'].includes(thirdPartyLevel) ||
@@ -1181,7 +1181,7 @@ function computeThreat(r) {
   // confirmação; por isso satura em 99. Recuperação nativa, robusta ou por um
   // método externo suportado fecha em 100 sem recalibrar os pesos acima.
   const directThreatConfirmed = r.studio?.nativeExtracted === true ||
-    r.studio?.robust === true || thirdPartyLevel==='recovered';
+    r.studio?.framedExtracted === true || r.studio?.robust === true || thirdPartyLevel==='recovered';
   score = directThreatConfirmed ? 100 : Math.min(score,99);
 
   return {score,flags};
@@ -1261,6 +1261,7 @@ function interpretModule(key, r) {
     if(proto.level === 'extracted')   return t('interpStudioExtracted');
     if(proto.level === 'headerOnly')  return t('interpStudioHeaderOnly');
     if(proto.level === 'passive')     return t('interpStudioHeader').replace('{bytes}', r.studio.payloadBytes);
+    if(proto.level === 'framed')      return t('interpStudioFramed').replace('{hdr}', escapeHTML(r.studio.headerName||r.lsb?.headerName||'—')).replace('{bytes}', escapeHTML(String(r.studio.framedPayloadBytes||0)));
     if(proto.level === 'generic') {
       const hdr = r.studio.headerName || r.lsb?.headerName;
       if (hdr) return t('interpStudioDeepHeader').replace('{hdr}', escapeHTML(hdr));

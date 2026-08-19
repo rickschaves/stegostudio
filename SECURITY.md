@@ -17,13 +17,34 @@ fields. Anything drawn from a file and shown on screen is escaped before it
 reaches the page.
 
 Everything runs in your browser. Nothing is uploaded, and the build refuses to
-emit a file that would contact the network at runtime.
+emit a file that would contact the network at runtime. The distributed HTML also
+contains a restrictive Content Security Policy: `connect-src 'none'` blocks
+script-initiated network connections at runtime, executable inline scripts are
+authorized by build-time SHA-256 hashes, and general JavaScript `eval` is not
+allowed. The Argon2 bundle receives the narrower `'wasm-unsafe-eval'` permission
+needed to instantiate its embedded WebAssembly.
 
 ## Known limits
 
 These are design limits, not oversights. Stating them plainly is more useful
 than implying coverage that does not exist.
 
+- **The CSP is defense in depth, not a complete browser sandbox.** It is delivered
+  inside the standalone HTML with a `<meta http-equiv>` policy so the same artifact
+  works when opened directly from disk. Meta-delivered CSP cannot enforce directives
+  such as `frame-ancestors`, reporting, or CSP `sandbox`; those require response
+  headers or are unavailable in meta policies. The current UI also uses inline style
+  attributes and CSSOM updates extensively, so `style-src 'unsafe-inline'` remains a
+  deliberate compatibility allowance. Script execution is still hash-pinned and
+  `script-src-attr 'none'` keeps inline event handlers disabled.
+  `img-src 'self' data: blob:` is also deliberate. The deployed favicon and touch-icon
+  files are real compatibility resources (including Android/high-density scenarios),
+  and their `data:` behaviour has not been verified across all browser/home-screen
+  flows, especially Safari/iOS. Keeping `'self'` means that, **if hostile script were
+  already executing**, an image request to the same origin could still carry data in
+  its path or query string. `connect-src 'none'` does not close that separate image
+  channel. This residual channel is documented rather than hidden; removing `'self'`
+  should wait for browser/device compatibility tests, not assumption.
 - **Carriers are not sanitized.** The Encoder overwrites the positions its new
   payload needs and leaves the rest of the image unchanged. Reusing an image
   that already contained hidden data can therefore preserve traces of the
@@ -70,6 +91,12 @@ than implying coverage that does not exist.
   resistant format. Migrating it safely requires a JPEG-specific design that
   preserves ECC/QIM/recompression behaviour, so it is intentionally outside the
   lossless-format change above.
+- **Structured recovery of legacy LSB frames is not cryptographic authentication.**
+  For recognized historical framings such as `JOI_LSB` and the observed `Steg` v1
+  layout, the Decoder can validate the declared byte range and require that exact
+  payload to decode as UTF-8 before treating it as direct structured recovery. That
+  is stronger than a sliding-window text guess, but the framing itself has no MAC or
+  signature: it can be forged by anyone who can write those LSBs.
 - **Third-party extraction is partial.** OpenStego encrypted payloads are
   identified but not decrypted; Steghide covers 2 of roughly 129 cipher/mode
   pairs and its BMP path is not integrated. Full matrix, with the validation

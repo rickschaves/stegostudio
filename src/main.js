@@ -18,9 +18,24 @@ function resolveRecoveredStatusKind(decodedMsg, studio, nativePayloadRecovered=f
     : studio?.foreignEncrypted ? 'identified'
     : studio?.foreignTruncated ? 'partial' : 'recovered';
   if (recoveredFile && tp==='recovered' && !decodedMsg) return 'file';
-  if (nativePayloadRecovered || nativeLayerRecovered || studio?.robust===true || tp==='recovered') return 'recovered';
+  if (nativePayloadRecovered || nativeLayerRecovered || studio?.framedExtracted===true || studio?.robust===true || tp==='recovered') return 'recovered';
   if (tp==='partial') return 'partial';
   return 'none';
+}
+
+// Feedback de senha em JPEG precisa ser honesto sobre uma limitação estrutural:
+// no modo robusto clássico, a própria ordem/dither dos coeficientes depende da
+// senha. Com uma senha errada, o decoder normalmente não encontra nem o header,
+// então não há como distinguir de forma forte entre "senha errada" e "este JPEG
+// não contém um payload compatível". O helper abaixo mantém o alerta visual sem
+// transformar essa ambiguidade em uma afirmação forense falsa.
+function resolveJpegPasswordFeedback({keyProvided=false, decodedMsg=null, recoveredFile=null, robustState=null, toolprint=[]}={}) {
+  if (!keyProvided || decodedMsg || recoveredFile) return 'none';
+  if (robustState === 'locked') return 'wrong';
+  if (robustState) return 'none'; // damaged/content-error já têm diagnóstico próprio
+  const confirmedTool = Array.isArray(toolprint) && toolprint.some(x => x && x.level === 'confirmado');
+  if (confirmedTool) return 'none';
+  return 'inconclusive';
 }
 
 // Normaliza uma extração nativa bem-sucedida para UM estado público.
@@ -149,6 +164,7 @@ const PUBLIC_REPORT_SCHEMA = {
     robust:true, robustCorrected:true,
     thirdParty:true, foreignFile:true, foreignEncrypted:true, foreignTruncated:true,
     genericMode:true, deepScan:true, headerName:true,
+    framedExtracted:true, framedPayloadBytes:true,
     nativeExtracted:true, nativeHeaderMatched:true
   },
   dct: {available:true, reason:true, blockCount:true, stdDev:true, mean:true, suspicious:true},
@@ -253,6 +269,8 @@ document.getElementById('btn-analyze').addEventListener('click', async ()=>{
   if(_analisando) return;
   _analisando = true;
   setAnalysisBusy(true);   // contrato de interação, não efeito colateral da thread
+  const processingStartedAt = processingNow();
+  clearProcessingTime('dec-processing-time');
 
   // ── SNAPSHOT ──
   // A partir daqui a execução usa SÓ estas cópias. Se a imagem trocar no meio,
@@ -521,8 +539,21 @@ document.getElementById('btn-analyze').addEventListener('click', async ()=>{
         const generic=extractLSBRaw(runID,maxBytes);
         const hasC2PA=report.c2pa?.found||report.c2pa?.manifestDetected;
 
+        // Framing histórico validado: magic + comprimento coerente + UTF-8 íntegro.
+        // É recuperação direta, não candidato de janela deslizante; uma senha
+        // informada não participa deste formato e é explicitamente ignorada.
+        if(generic.framed){
+          decodedMsg=generic.framed.text;
+          decodeStatus=t('decStatusFramedRecovered').replace('{mode}',translateMode(generic.mode));
+          decodedFromDeepScan=false;
+          if(key.length>0) passwordIgnored=true;
+          report.studio={...report.studio,
+            genericMode:generic.mode, deepScan:false,
+            headerName:generic.framed.headerName,
+            framedExtracted:true, framedPayloadBytes:generic.framed.payloadBytes};
+        }
         // Com chave: tenta decifrar os bytes brutos (AES novo ou XOR legado)
-        if(key.length>0){
+        else if(key.length>0){
           let decrypted=null;
           if(isAesPayload(generic.bytes)){
             try{ decrypted=await aesDecrypt(generic.bytes,key); }catch(_){ decrypted=null; }
@@ -543,19 +574,13 @@ document.getElementById('btn-analyze').addEventListener('click', async ()=>{
         // exibir ruído estatístico curto como mensagem decodificada.
         else if(generic.foundText && generic.foundTextLength >= 12 && !hasC2PA){
           let msg = generic.foundText;
-          const hadHeader = !!generic.headerName;
-          // O formato legado JOI_LSB usa um byte de tamanho logo após o header;
-          // outros formatos podem não usar. Só o removemos quando esse header é reconhecido.
           const isJoiHeader = /^JOI_LSB/i.test(generic.headerName || '');
           // Remove headers de ferramentas conhecidas no início (JOI_LSB2, STEGO, etc.)
           msg = msg.replace(/^(JOI_LSB\d?|STEGO|LSB|STEG)[\x00-\x20]*/i, '');
           // Remove caracteres de controle e nulls
           msg = msg.replace(/[\x00-\x1F]/g, '').trim();
-          // Formato legado JOI_LSB/STEGO: header + bytes-nulos + [1 byte de tamanho] + texto.
-          // A ilha de texto começa no byte de tamanho, que vira o 1º caractere do
-          // foundText (ex: 'Q' = 0x51 = 81 ≈ comprimento da msg). Como esse byte
-          // pode calhar de ser uma letra ASCII, não dá para distingui-lo pelo
-          // valor — então, havendo header conhecido, removemos 1 caractere inicial.
+          // Compatibilidade heurística para variantes antigas que tenham header
+          // reconhecido, mas não satisfaçam o framing estrutural validado acima.
           if (isJoiHeader && msg.length > 1) {
             msg = msg.slice(1).trim();
           }
@@ -660,7 +685,19 @@ document.getElementById('btn-analyze').addEventListener('click', async ()=>{
     // Uma extração nativa alternativa ou de terceiro bem-sucedida cancela o flash;
     // identificação de ferramenta de terceiro também cancela, porque "insira a
     // chave" seria enganoso quando a limitação é de compatibilidade do decoder.
-    if (pendingKeyFlash && !decodedMsg && !report.studio?.thirdParty) flashKey('wrong');
+    if (pendingKeyFlash && !decodedMsg && !report.studio?.thirdParty) {
+      flashKey('wrong');
+    } else if (fmt?.ext === 'JPEG') {
+      const jpegKeyFeedback = resolveJpegPasswordFeedback({
+        keyProvided:key.length>0,
+        decodedMsg,
+        recoveredFile,
+        robustState:report.studio?.robust || null,
+        toolprint:report.toolprint || []
+      });
+      if (jpegKeyFeedback === 'wrong') flashKey('wrong');
+      else if (jpegKeyFeedback === 'inconclusive') flashKey('jpeg');
+    }
 
     // ── PORTÃO ──
     // Última chance antes de publicar. Se a imagem trocou durante os awaits,
@@ -674,6 +711,7 @@ document.getElementById('btn-analyze').addEventListener('click', async ()=>{
     // Guarda os argumentos do render para poder refazê-lo ao trocar de idioma
     lastRenderArgs = {report, decodedMsg, decodeStatus, passwordIgnored, recoveredFile, gen: run};
     renderResults(report,decodedMsg,decodeStatus,{passwordIgnored,recoveredFile});
+    showProcessingTime('dec-processing-time', processingNow() - processingStartedAt);
     // Rola até o topo dos resultados para o usuário ver os scores imediatamente,
     // sem precisar rolar manualmente. Funciona tanto no scroll da coluna direita
     // (desktop) quanto no scroll do painel inteiro (mobile).
@@ -727,7 +765,7 @@ document.getElementById('btn-analyze').addEventListener('click', async ()=>{
 // ════════════════════════════════════════
 document.getElementById('btn-export-json').addEventListener('click',()=>{
   if(!lastReport) return;
-  const payload={_tool:'STEGO·STUDIO v2.43.12',_schema:'forensic-report-v2',
+  const payload={_tool:'STEGO·STUDIO v2.43.20',_schema:'forensic-report-v2',
     _hint:t('exportHintJSON'),
     ...lastReport};
   const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});

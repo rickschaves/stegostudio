@@ -1,4 +1,53 @@
+## v2.43.20 — 2026-08-19
+**More readable JPEG password feedback**
+
+- The inconclusive JPEG password notice now stays visible for eight seconds, giving slower readers more time without changing the underlying diagnosis or Threat semantics.
+
+## v2.43.19 — 2026-08-19
+**Honest JPEG password feedback**
+
+- JPEG analysis now gives explicit key-field feedback when a supplied password does not open any compatible payload.
+- The warning is deliberately non-categorical: the robust JPEG slot plan itself is password-dependent, so a wrong password is structurally indistinguishable from many JPEGs with no supported protected payload. The UI says the password **may** be incorrect instead of presenting that ambiguity as proof.
+- Confirmed robust/tool states, damage states and successful recovery keep their more specific status and do not receive the generic warning.
+
+## v2.43.18 — 2026-08-18
+**Browser-enforced offline boundary**
+
+- The standalone HTML now includes a restrictive Content Security Policy: script-initiated network connections are blocked by the browser, executable inline scripts are pinned to build-time SHA-256 hashes, and frames, objects, workers and form submissions are disabled while the local blob/data resources required by the tool remain available.
+- Argon2 WebAssembly uses the narrower `wasm-unsafe-eval` permission; general JavaScript `eval` remains blocked. The CSP complements the existing sanitization and build-time offline allowlist rather than replacing them.
+
 # Changelog
+
+## v2.43.17 — 2026-08-18
+**Orientação pública alinhada ao comportamento atual**
+
+- O ticker superior, os dois Guias rápidos e o **Como funciona** agora descrevem os mesmos limites atuais do produto. O JPG resistente é uma segunda saída condicional calibrada para fluxos de publicação medidos, não uma garantia universal de redes sociais; a mensagem alternativa continua exclusiva do PNG.
+- As orientações de formato, senha e recuperação agora refletem o que o navegador realmente consegue decodificar, tratam HEIC/HEIF como dependente do navegador e deixam explícitos os limites de contêiner/cifra/modo dos motores de terceiros.
+- As explicações de LSB/proteção distinguem o caminho STC/HILL, rotas sequenciais com LSB Matching e escrita adaptativa, mantendo recuperação direta confirmada separada de evidência heurística.
+
+---
+
+## v2.43.16 — 2026-08-18
+**Cleaner Encoder output heading**
+
+- The Encoder output now uses **GENERATED IMAGE** with the same visual hierarchy as the Analyzer/Decoder **RESULT** heading. The redundant `//` prefix was removed from the main heading while the processing-time label keeps its technical marker.
+
+## v2.43.15 — 2026-08-18
+**Consistent confirmed recovery**
+
+- Direct structured legacy recovery that reaches Threat 100 now also displays **CONFIRMED** instead of HIGH.
+- Processing-time values keep the seconds unit lowercase (`1.27 s` / `1,27 s`).
+
+
+## v2.43.14 — 2026-08-18
+**Structured legacy LSB recovery**
+
+- Recognized **JOI_LSB** and **Steg/v1** messages are now parsed from their declared framing and payload length instead of relying only on sliding-window text cleanup. Complete structured recovery can reach **100 / CONFIRMED**; header-like or heuristic text without valid framing remains below the terminal state.
+
+## v2.43.13 — 2026-08-18
+**Visible processing time**
+
+- Encoder and Analyzer/Decoder now show the total processing time directly beside the result heading. The measurement is local to the current operation, resets on the next run, and is not embedded in generated images or exported in the forensic report.
 
 ## v2.43.12 — 2026-08-18
 **Cleaner stegomalware previews**
