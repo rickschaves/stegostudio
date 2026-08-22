@@ -150,8 +150,10 @@ node build.js           # assembles dist/stego_studio_v<VERSION>.html
 node test.js            # full offline regression harness
 ```
 
-No bundler and no dependencies. `build.js` concatenates the JavaScript source modules,
-the stylesheet and an inlined Argon2id WebAssembly bundle into a single file,
+No package install or bundler is required. The build vendors Acorn 8.15.0 (MIT) under
+`tools/vendor/` only to identify JavaScript comments safely before producing the final
+artifact; the parser is **not** included in the published HTML. `build.js` assembles the
+JavaScript source modules, the stylesheet and an inlined Argon2id WebAssembly bundle into a single file,
 then **refuses to emit** anything that would reach the network at runtime. The final
 HTML also carries a restrictive Content Security Policy: browser script networking is
 blocked with `connect-src 'none'`, executable inline scripts are pinned to build-time
@@ -162,7 +164,7 @@ Binary assets (fonts, icons) are stored as base64 with SHA-256 checksums in
 `ASSETS_BASE64.md`; `unpack_assets.js` restores them and verifies every hash
 before writing.
 
-The repository also ships a zero-dependency GitHub Actions workflow (`.github/workflows/regression.yml`) that rebuilds the single-file artifact and runs the full Node 22 regression harness on pushes and pull requests. The harness is intentionally broad, but it is not a proof of security and does not replace real-browser/device testing.
+The repository also ships a no-install GitHub Actions workflow (`.github/workflows/regression.yml`) that rebuilds the single-file artifact and runs the full Node 22 regression harness on pushes and pull requests. The harness is intentionally broad, but it is not a proof of security and does not replace real-browser/device testing.
 
 ---
 
@@ -170,6 +172,7 @@ The repository also ships a zero-dependency GitHub Actions workflow (`.github/wo
 
 ```
 src/            JavaScript modules + styles.css + hash-wasm.js
+tools/vendor/   build-only vendored parser + license; not shipped in the HTML
 template.html   page markup; the build injects CSS and JS into it
 build.js        the build
 test.js         regression harness (build, security gates, round-trips, malformed corpus, fixtures, ...)

@@ -76,9 +76,18 @@ function fixed(n,seed){const a=new Uint8Array(n);for(let i=0;i<n;i++)a[i]=(seed+
   const huge=api.f21BuildHeaderCore({modeFlags:flags,stcW:0,bodyLen:5_000_000,contentIv:iv});
   assert(await api.f21VerifyHeaderWithKeys(salt,await remask(huge),keys,1000)===null,
     'LEN autenticado mas incompatível com capacidade foi aceito');
-  const badReserved=api.f21BuildHeaderCore({modeFlags:flags|0x80,stcW:0,bodyLen:packet.body.length,contentIv:iv});
-  assert(await api.f21VerifyHeaderWithKeys(salt,await remask(badReserved),keys,10000)===null,
-    'flag reservado autenticado foi aceito');
+  const badSpreadNoStc=api.f21BuildHeaderCore({modeFlags:flags,stcW:0,bodyLen:packet.body.length,contentIv:iv});
+  badSpreadNoStc[7]=0x20; // bit spread no w-byte, mas modeFlags sem STC
+  assert(await api.f21VerifyHeaderWithKeys(salt,await remask(badSpreadNoStc),keys,10000)===null,
+    'spread no w-byte sem STC foi aceito');
+  const badReservedMode=api.f21BuildHeaderCore({modeFlags:flags|0x80,stcW:0,bodyLen:packet.body.length,contentIv:iv});
+  assert(await api.f21VerifyHeaderWithKeys(salt,await remask(badReservedMode),keys,10000)===null,
+    'bit reservado 0x80 do mode byte foi aceito');
+  const badReservedW=api.f21BuildHeaderCore({modeFlags:api.MODE_B|api.FLAG_STEALTH|api.FLAG_STC,
+    stcW:4,bodyLen:packet.body.length,contentIv:iv});
+  badReservedW[7]|=0x40;
+  assert(await api.f21VerifyHeaderWithKeys(salt,await remask(badReservedW),keys,10000)===null,
+    'bit reservado 6 do w-byte STC foi aceito');
   const badStc=api.f21BuildHeaderCore({modeFlags:api.MODE_B|api.FLAG_STEALTH|api.FLAG_STC|api.FLAG_SHUFFLED,
     stcW:4,bodyLen:packet.body.length,contentIv:iv});
   assert(await api.f21VerifyHeaderWithKeys(salt,await remask(badStc),keys,10000)===null,

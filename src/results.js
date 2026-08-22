@@ -182,8 +182,8 @@ function resolveProtocolState(r) {
   const rsRate = parseFloat(r.lsb?.rsRate) || 0;
   const wsRate = parseFloat(r.lsb?.wsRate) || 0;
   const wsReliable = r.lsb?.wsReliable !== false;
-  const embeddingEvidence = !!r.lsb?.lsbrDetected || rsRate >= 25 || (wsRate >= 25 && wsReliable);
-  if (embeddingEvidence)     return { level:'embedded',  name:t('protoNameUndetermined'),badge:t('protoBadgeEmbedding'),cls:'mb-warn' };
+  const embeddingIndication = !!r.lsb?.lsbrDetected || rsRate >= 25 || (wsRate >= 25 && wsReliable);
+  if (embeddingIndication)   return { level:'embedded',  name:t('protoNameUndetermined'),badge:t('protoBadgeEmbedding'),cls:'mb-warn' };
 
   return                            { level:'none',      name:t('protoNameNone'),        badge:t('protoBadgeNone'),     cls:'mb-ok' };
 }

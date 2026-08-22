@@ -53,7 +53,10 @@ assert(files.includes('_markRobustDone();'),'JPEG robusto não fecha timing em s
 const start=main.indexOf('const processingStartedAt = processingNow();');
 const stale=main.indexOf('if (obsoleta()) return;',start);
 const render=main.indexOf('renderResults(report,decodedMsg,decodeStatus,{passwordIgnored,recoveredFile});',stale);
-const publish=main.indexOf("showProcessingTime('dec-processing-time', processingNow() - processingStartedAt);",render);
+const publish=Math.max(
+  main.indexOf("showProcessingTime('dec-processing-time', processingNow() - processingStartedAt);",render),
+  main.indexOf("showProcessingTime('dec-processing-time', analysisLab.total);",render)
+);
 assert(start>=0 && stale>start && render>stale && publish>render,'ordem segura do timing do Analyzer/Decoder foi quebrada');
 assert(main.slice(start-180,start).includes('_analisando = true'),'cronômetro do Analyzer começa antes da guarda de reentrância');
 assert(main.includes("clearProcessingTime('dec-processing-time');"),'Analyzer não limpa tempo anterior no início');

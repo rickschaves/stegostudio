@@ -57,3 +57,45 @@ function pickStcW(bodyBits, availBodyPx) {
   if (fit < 1) return 0;
   return Math.min(STC_WMAX, fit);
 }
+
+
+// P1A / O1-E1 — seleção espacial do pool STC.
+// Divide o pool físico restante em `count` estratos contíguos de tamanhos quase
+// iguais e escolhe um ponto determinístico dentro de cada estrato. Assim o STC
+// recebe carriers distribuídos por toda a cover em payloads pequenos, sem sort
+// global, sem lista de índices e sem depender do mapa HILL para reconstrução.
+// A seleção é pública/reproduzível por desenho; segurança continua vindo da cifra,
+// não do segredo das posições. `next()` devolve índice LÓGICO no pool de opacos.
+function stcSpreadSeed(width, height, start, available, count, stcW) {
+  let s = 0x53505244; // "SPRD"
+  const mix = v => {
+    s ^= (v >>> 0);
+    s = Math.imul(s, 0x9E3779B1) >>> 0;
+    s ^= s >>> 16;
+  };
+  mix(width); mix(height); mix(start); mix(available); mix(count); mix(stcW);
+  return s >>> 0;
+}
+function makeStcSpreadCursor(start, available, count, width, height, stcW) {
+  if (![start,available,count,width,height,stcW].every(Number.isSafeInteger) ||
+      start < 0 || available < 0 || count < 0 || width < 1 || height < 1 || stcW < 1 || count > available) {
+    throw new Error('STC spread: parâmetros inválidos');
+  }
+  if (count === 0) return { next(){ throw new Error('STC spread: cursor vazio'); } };
+  const base = Math.floor(available / count);
+  const extra = available - base * count;
+  let binStart = start, err = 0;
+  const rnd = mulberry32(stcSpreadSeed(width,height,start,available,count,stcW));
+  let used = 0;
+  return { next() {
+    if (used >= count) throw new Error('STC spread: cursor esgotado');
+    let span = base;
+    err += extra;
+    if (err >= count) { span++; err -= count; }
+    const offset = span > 1 ? Math.floor(rnd() * span) : 0;
+    const out = binStart + offset;
+    binStart += span;
+    used++;
+    return out;
+  }};
+}

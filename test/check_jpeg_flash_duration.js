@@ -17,7 +17,7 @@ assert(scripts.length >= 1, 'scripts inline não encontrados no HTML final');
 const app = scripts.reduce((a, b) => (b.length > a.length ? b : a), '');
 
 const start = app.indexOf('let keyFlashTimer = null;');
-const end = app.indexOf('// Verifica se bytes brutos', start);
+const end = app.indexOf('function printable(bytes)', start);
 assert(start >= 0 && end > start, 'bloco de flash de senha não encontrado no HTML final');
 const block = app.slice(start, end);
 

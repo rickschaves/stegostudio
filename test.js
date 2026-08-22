@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /*
- * STEGO·STUDIO — harness de teste (Node puro, zero dependência)
+ * STEGO·STUDIO — harness de teste (Node puro, zero instalação externa)
  *
  * Faz um build em memória e valida invariantes explícitos do projeto. Sai com
  * código 1 se qualquer propriedade coberta falhar. Um resultado verde prova
@@ -10,7 +10,7 @@
 const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
-const { build, MODULE_ORDER, VERSION } = require('./build.js');
+const { build, MODULE_ORDER, VERSION, compactJsForBuild, compactCssForBuild } = require('./build.js');
 
 const SRC = path.join(__dirname, 'src');
 let html; // build em memória, preenchido no check 0
@@ -111,11 +111,11 @@ check(`versão consistente (v${VERSION}) nos identificadores públicos`, () => {
 // ---------------------------------------------------------------------------
 check('injeção literal dos blocos (sem consumo de $)', () => {
   const blobs = {
-    'styles.css':   fs.readFileSync(path.join(SRC, 'styles.css'), 'utf8').replace(/\s+$/, ''),
+    'styles.css':   compactCssForBuild(fs.readFileSync(path.join(SRC, 'styles.css'), 'utf8').replace(/\s+$/, '')),
     'hash-wasm.js': fs.readFileSync(path.join(SRC, 'hash-wasm.js'), 'utf8').replace(/\s+$/, ''),
   };
   for (const m of MODULE_ORDER) {
-    blobs[m] = fs.readFileSync(path.join(SRC, m), 'utf8').replace(/\s+$/, '');
+    blobs[m] = compactJsForBuild(fs.readFileSync(path.join(SRC, m), 'utf8').replace(/\s+$/, ''));
   }
   const risky = /\$\$|\$&|\$`|\$'|\$<\w+>/;
   const faltando = [];
@@ -134,8 +134,9 @@ check('injeção literal dos blocos (sem consumo de $)', () => {
 // ---------------------------------------------------------------------------
 check('offline: 0 dependências de rede em runtime', () => {
   assert(!/fonts\.(googleapis|gstatic)\.com/.test(html), 'Google Fonts voltou ao HTML!');
-  const SAFE = /schema\.org|w3\.org|ns\.adobe\.com|stegostudio\.com|npmjs\.com/;
-  const urls = [...new Set((html.match(/https?:\/\/[^"'\s)]+/g) || []).filter(u => !SAFE.test(u)))];
+  const SAFE_EXACT = new Set(['https://stegostudio.com/','https://stegostudio.com/og-image.png','https://github.com/rickschaves/stegostudio/blob/main/CHANGELOG.md']);
+  const SAFE_NS = /^https?:\/\/(schema\.org|www\.w3\.org|ns\.adobe\.com|www\.npmjs\.com)([\/#]|$)/;
+  const urls = [...new Set((html.match(/https?:\/\/[^"'\s)]+/g) || []).filter(u => !SAFE_EXACT.has(u) && !SAFE_NS.test(u)))];
   assert(urls.length === 0, `URL(s) de runtime inesperadas: ${urls.join(', ')}`);
   return 'nenhuma URL de runtime';
 });
@@ -225,7 +226,7 @@ check('eventos: alvos no DOM + funções definidas', () => {
   // quando o próprio botão já está disponível. Não pode interferir em IME,
   // repetir ao segurar a tecla, nem transformar textarea de mensagem em submit.
   const enterStart = html.indexOf('function bindEnterToEnabledAction');
-  const enterEnd = html.indexOf('// Fecha ao clicar fora do menu', enterStart);
+  const enterEnd = html.indexOf("document.addEventListener('click'", enterStart);
   const enterBlock = html.slice(enterStart, enterEnd);
   assert(enterStart >= 0 && enterEnd > enterStart, 'helper de ENTER não encontrado');
   assert(enterBlock.includes("e.key !== 'Enter'") && enterBlock.includes('e.repeat') &&
@@ -746,7 +747,7 @@ check('Threat e Protocolo concordam sobre a mesma evidência', () => {
 
   // ── QUARTA superfície: nota de limitação offline ──
   const offStart = html.indexOf("const offNote = document.getElementById('offline-limit-note')");
-  const offEnd = html.indexOf('// ── Aviso de conteúdo adversarial', offStart);
+  const offEnd = html.indexOf('renderAdversarialWarning(r);', offStart);
   const offBlock = html.slice(offStart, offEnd);
   assert(offStart >= 0 && offEnd > offStart, 'nota offline-limit não encontrada');
   assert(offBlock.includes('resolveProtocolState(r).level'),
@@ -802,7 +803,7 @@ check('leitura de arquivo: erro vira rejeição, nunca promessa pendente', () =>
     'drop/upload não usa loadDecoderFile');
   // o paste GLOBAL do decoder precisa passar pelo helper, não montar o próprio caminho
   const pasteGlobal = html.slice(html.indexOf("document.addEventListener('paste'"),
-                                 html.indexOf('// ── ENCODE DROP ──'));
+                                 html.indexOf('let encID=', html.indexOf("document.addEventListener('paste'")));
   assert(pasteGlobal.includes('loadDecoderFile('),
     'o Ctrl+V global não usa loadDecoderFile — não invalida a análise em voo');
   assert(!/decFile\s*=\s*f;/.test(pasteGlobal),
@@ -896,7 +897,9 @@ check('camadas + robusto: formato, portadora e regras de evidência', () => {
   // sua decisão DIRETAMENTE. Uma cópia mutável intermediária criaria uma segunda
   // superfície capaz de divergir da função pura testada.
   const resolverCall = /resolveNativeEvidence\(\{\s*decodedMsg,\s*nativeHeaderMatched,\s*nativePayloadRecovered,\s*nativeLayerRecovered\s*\}\)\.level/g;
-  const nativeClose = html.slice(html.indexOf('CONSOLIDAÇÃO INICIAL'), html.indexOf('// ── PORTÃO ──'));
+  const nativeCloseStart = html.indexOf('const recoveredStatusKind=resolveRecoveredStatusKind');
+  const nativeCloseEnd = html.indexOf('if (obsoleta()) return;', nativeCloseStart);
+  const nativeClose = html.slice(nativeCloseStart, nativeCloseEnd);
   const resolverCalls = nativeClose.match(resolverCall) || [];
   assert(resolverCalls.length === 2,
     `fechamento usa resolveNativeEvidence ${resolverCalls.length} vezes; esperado consumo direto nos ramos extracted/headerOnly`);
@@ -931,8 +934,8 @@ check('camadas + robusto: formato, portadora e regras de evidência', () => {
     'rota principal não registra recuperação local do payload');
 
   // A rota alternativa usa flag local e o MESMO status público da rota AES.
-  const decoyStart = html.indexOf('NEGAÇÃO PLAUSÍVEL: sonda da mensagem-isca');
-  const thirdStart = html.indexOf('MOTOR DE TERCEIRO: OpenStego', decoyStart);
+  const decoyStart = html.indexOf('if(isLossless && key.length>0 && !decodedMsg){');
+  const thirdStart = html.indexOf('if(isLossless && (!decodedMsg || decodedFromDeepScan)){', decoyStart);
   const decoyBlock = html.slice(decoyStart, thirdStart);
   assert(decoyBlock.includes('nativeLayerRecovered=true'),
     'rota alternativa não registra recuperação local');
@@ -951,7 +954,8 @@ check('camadas + robusto: formato, portadora e regras de evidência', () => {
     `rota principal tem ${headerValidStatus.length} statements exatos de status válido; esperado 3 (F21 + AES legado + XOR legado)`);
 
   // O erro provisório da rota genérica não pode piscar antes da camada alternativa.
-  const genericStart = html.indexOf('// Com chave: tenta decifrar os bytes brutos');
+  const genericFramedStart = html.indexOf('if(generic.framed){');
+  const genericStart = html.indexOf('else if(key.length>0){', genericFramedStart);
   const genericBlock = html.slice(genericStart, decoyStart);
   assert(genericBlock.includes('pendingKeyFlash=true'),
     'falha provisória da rota genérica não foi adiada');
@@ -960,7 +964,7 @@ check('camadas + robusto: formato, portadora e regras de evidência', () => {
   // A mesma regra vale para a rota do header quando HÁ chave: GCM/inflate/XOR
   // podem falhar provisoriamente e outra rota ainda recuperar conteúdo depois.
   const keyBranchStart = headerBranch.indexOf('if(key.length>0){');
-  const keyBranchEnd = headerBranch.indexOf('// Sem chave:', keyBranchStart);
+  const keyBranchEnd = headerBranch.indexOf("decodeStatus=t('decStatusCipherFound')", keyBranchStart);
   const headerKeyBranch = headerBranch.slice(keyBranchStart, keyBranchEnd);
   assert(keyBranchStart >= 0 && keyBranchEnd > keyBranchStart,
     'não foi possível isolar a rota do header com chave');
@@ -976,7 +980,7 @@ check('camadas + robusto: formato, portadora e regras de evidência', () => {
   // box-shadow diretamente no input recorta topo/base e deixa só duas barras
   // verticais. O destaque deve pertencer ao controle externo inteiro.
   const flashStart = html.indexOf('let keyFlashTimer');
-  const flashEnd = html.indexOf('// Verifica se bytes brutos', flashStart);
+  const flashEnd = html.indexOf('function printable(bytes)', flashStart);
   const flashBlock = html.slice(flashStart, flashEnd);
   assert(flashBlock.includes("closest('.key-field')") &&
          flashBlock.includes("classList.add('key-flash')") &&
@@ -1022,8 +1026,22 @@ check('camadas + robusto: formato, portadora e regras de evidência', () => {
   const statusWrites = (analyzeBlock.match(/decodeStatus\s*(?:=|\+=|-=|\*=|\/=)/g) || []).length;
   assert(studioWrites === 12,
     `handler tem ${studioWrites} escritas em report.studio; esperado 12 — revisar autoria/evidência`);
-  assert(statusWrites === 36,
-    `handler tem ${statusWrites} escritas em decodeStatus; esperado 36 — revisar simetria de status`);
+  // P1A/R2 acrescenta estados de decode específicos do STC spread. A catraca
+  // global continua exata (qualquer nova escrita força revisão), mas a simetria
+  // que justificou 36→40 também fica presa semanticamente: dano geométrico do
+  // spread deve existir tanto com senha preenchida quanto sem senha.
+  const spreadDamagedWrites = (analyzeBlock.match(/decodeStatus\s*=\s*t\('decStatusSpreadDamaged'\)/g) || []).length;
+  assert(spreadDamagedWrites === 2,
+    `STC spread tem ${spreadDamagedWrites} diagnósticos de dano; esperado 2 (com senha e sem senha)`);
+  assert(/if\(isSpreadClassic\)\{[\s\S]*?decStatusSpreadDamaged/.test(analyzeBlock) &&
+         /else\s*\{[\s\S]*?if\(isSpreadClassic\)\{[\s\S]*?decStatusSpreadDamaged/.test(analyzeBlock),
+    'diagnóstico de STC spread não está simétrico entre os caminhos com e sem senha');
+  assert(statusWrites === 40,
+    `handler tem ${statusWrites} escritas em decodeStatus; esperado 40 — revisar simetria de status`);
+  // A nota exclusiva da saída resistente não pode herdar o tamanho-base do
+  // contêiner e virar uma chamada visual maior que os próprios stats.
+  assert(/\.stat-impact\s+\.sv-dim\s*\{[^}]*font-size\s*:\s*0\.72rem\s*;[^}]*line-height\s*:\s*1\.45\s*;?[^}]*\}/.test(html),
+    'nota da mensagem alternativa no JPG deixou de usar a escala tipográfica compacta dos stats');
   // Catraca também para propriedades irmãs de `report.studio`, porque qualquer
   // campo top-level novo pode alcançar o relatório exportado antes da projeção.
   const topWrites = [...analyzeBlock.matchAll(/report\.([A-Za-z_$][\w$]*)\s*(?:=|\+=|-=|\*=|\/=)/g)]
@@ -1038,10 +1056,10 @@ check('camadas + robusto: formato, portadora e regras de evidência', () => {
   // FRONTEIRA DE EXPORTAÇÃO: catracas de fonte são defesa em profundidade;
   // a propriedade final é que campos não declarados NÃO saem no JSON, qualquer
   // que seja a sintaxe usada para criá-los internamente. Exercita a função real.
-  const allowStart = html.indexOf('//  PUBLIC REPORT ALLOWLIST');
-  const allowEnd = html.indexOf('// PUBLIC REPORT ALLOWLIST — END', allowStart);
+  const allowStart = html.indexOf('const PUBLIC_REPORT_SCHEMA = {');
+  const allowEnd = html.indexOf('let _analisando = false;', allowStart);
   assert(allowStart >= 0 && allowEnd > allowStart, 'fronteira pública de relatório não encontrada');
-  const allowBlock = html.slice(allowStart, allowEnd + '// PUBLIC REPORT ALLOWLIST — END'.length);
+  const allowBlock = html.slice(allowStart, allowEnd);
   const serializePublicModules = new Function(allowBlock + '\nreturn serializePublicModules;')();
   const leakProbe = {
     format:{cat:'lossless',ext:'PNG',encOk:true,privateRoute:'tail'},
@@ -1089,8 +1107,8 @@ check('camadas + robusto: formato, portadora e regras de evidência', () => {
 
   // Pista robusta JPEG: uma vez que robustExtract confirmou o envelope, falha do
   // conteúdo não pode virar "nada encontrado" nem aviso falso de chave.
-  const robustStart = html.indexOf('MODO MAIS RESISTENTE — tentado antes');
-  const robustEnd = html.indexOf('MOTOR DE TERCEIRO: OutGuess', robustStart);
+  const robustStart = html.indexOf('let rb = robustExtract(bytes, key, dec);');
+  const robustEnd = html.indexOf('let shRes=null;', robustStart);
   const robustBlock = html.slice(robustStart, robustEnd);
   assert(robustStart >= 0 && robustEnd > robustStart, 'rota robusta JPEG não encontrada');
   assert(robustBlock.includes("robust:'locked'") && robustBlock.includes("t('rbDecLocked')"),
@@ -1674,6 +1692,143 @@ check('v2.43.21: aviso é anunciado e mensagem recuperada devolve scroll vertica
   const out = execSync(`node "${path.join(__dirname, 'test', 'check_v24321_post_audit.js')}"`, {encoding:'utf8'}).trim();
   assert(out.includes('v2.43.21 post-audit OK'), 'fechamento pós-auditoria da .21 falhou');
   return out.replace(/^v2\.43\.21 post-audit OK\s*[—-]?\s*/, '');
+});
+
+// ---------------------------------------------------------------------------
+// CHECK 75 — O1-S2: bounded local history + canonical external archive
+// ---------------------------------------------------------------------------
+check('v2.43.22 interna: histórico local fica em 10 releases e arquivo completo sai do runtime', () => {
+  const out = execSync(`node "${path.join(__dirname, 'test', 'check_o1_recent_history.js')}"`, {encoding:'utf8'}).trim();
+  assert(out.includes('O1-S2 recent history OK'), 'contrato O1-S2 de histórico enxuto falhou');
+  return out.replace(/^O1-S2 recent history OK\s*[—-]?\s*/, '');
+});
+
+// ---------------------------------------------------------------------------
+// CHECK 76 — O1-S1: deterministic build-only compaction preserves semantics
+// ---------------------------------------------------------------------------
+check('v2.43.23 interna: build remove peso de desenvolvimento sem minificar os fontes', () => {
+  const out = execSync(`node "${path.join(__dirname, 'test', 'check_o1_build_compaction.js')}"`, {encoding:'utf8'}).trim();
+  assert(out.includes('O1-S1 build compaction OK'), 'contrato O1-S1 de compactação segura falhou');
+  return out.replace(/^O1-S1 build compaction OK\s*[—-]?\s*/, '');
+});
+
+// ---------------------------------------------------------------------------
+// CHECK 77 — smoke semantics: statistical wording + persistent Decoder heading
+// ---------------------------------------------------------------------------
+check('v2.43.23 interna: smoke preserva honestidade estatística e RESULTADO sempre visível', () => {
+  const out = execSync(`node "${path.join(__dirname, 'test', 'check_v24323_smoke_semantics.js')}"`, {encoding:'utf8'}).trim();
+  assert(out.includes('v2.43.23 smoke semantics OK'), 'fechamento semântico do smoke .23 falhou');
+  return out.replace(/^v2\.43\.23 smoke semantics OK\s*[—-]?\s*/, '');
+});
+
+// ---------------------------------------------------------------------------
+// CHECK 78 — O1-M2: HILL bit-exato com no máximo três buffers de imagem
+// ---------------------------------------------------------------------------
+check('v2.43.24 interna: HILL reduz buffers pela metade sem mudar mapa de custos', () => {
+  const out = execSync(`node "${path.join(__dirname, 'test', 'check_o1_hill_buffers.js')}"`, {encoding:'utf8'}).trim();
+  assert(out.includes('O1-M2 HILL buffers OK'), 'contrato O1-M2 de HILL com reuso de buffers falhou');
+  return out.replace(/^O1-M2 HILL buffers OK\s*[—-]?\s*/, '');
+});
+
+// ---------------------------------------------------------------------------
+// CHECK 79 — O1-M1: all-opaque fast path/cache sem lista de índices
+// ---------------------------------------------------------------------------
+check('v2.43.25 interna: pixels opacos evitam lista gigante no caso comum e reutilizam o mapa', () => {
+  const out = execSync(`node "${path.join(__dirname, 'test', 'check_o1_opaque_pixels.js')}"`, {encoding:'utf8'}).trim();
+  assert(out.includes('O1-M1 opaque pixels OK'), 'contrato O1-M1 de pixels opacos falhou');
+  return out.replace(/^O1-M1 opaque pixels OK\s*[—-]?\s*/, '');
+});
+
+// ---------------------------------------------------------------------------
+// CHECK 80 — laboratório mobile/perf: swipe, scroll e profiling por estágio
+// ---------------------------------------------------------------------------
+check('v2.43.25 interna: swipe móvel, âncora RESULTADO e profiling permanecem verificáveis sem poluir a UI pública', () => {
+  const out = execSync(`node "${path.join(__dirname, 'test', 'check_v24325_mobile_perf_lab.js')}"`, {encoding:'utf8'}).trim();
+  assert(out.includes('v2.43.25 mobile/perf lab OK'), 'contrato mobile/perf laboratorial da .25 falhou');
+  return out.replace(/^v2\.43\.25 mobile\/perf lab OK\s*[—-]?\s*/, '');
+});
+
+// ---------------------------------------------------------------------------
+// CHECK 81 — O1 data-driven mobile hot paths + shared robust DCT + encoder scroll
+// ---------------------------------------------------------------------------
+check('v2.43.26 interna: gargalos móveis medidos deixam de criar strings RGB e robusto reutiliza DCT compartilhado', () => {
+  const out = execSync(`node "${path.join(__dirname, 'test', 'check_o1_mobile_hotpaths.js')}"`, {encoding:'utf8'}).trim();
+  assert(out.includes('O1 mobile hot paths OK'), 'contrato O1 de hot paths móveis falhou');
+  return out.replace(/^O1 mobile hot paths OK\s*[—-]?\s*/, '');
+});
+
+// ---------------------------------------------------------------------------
+// CHECK 82 — O1-J1: store DCT compacto + caminhos JPEG sem arrays JS gigantes
+// ---------------------------------------------------------------------------
+check('v2.43.27 interna: JPEG mantém coeficientes tipados e elimina materializações gigantes no Analyzer/recovery', () => {
+  const out = execSync(`node "${path.join(__dirname, 'test', 'check_o1_jpeg_compact_dct.js')}"`, {encoding:'utf8'}).trim();
+  assert(out.includes('O1-J1 compact JPEG DCT OK'), 'contrato O1-J1 de DCT compacto falhou');
+  return out.replace(/^O1-J1 compact JPEG DCT OK\s*[—-]?\s*/, '');
+});
+
+
+// ---------------------------------------------------------------------------
+// CHECK 83 — O1-E1 / P1A: STC carrier pool espalhado com wire explícito
+// ---------------------------------------------------------------------------
+check('v2.43.28 interna: STC espalha o pool candidato sem quebrar wire antigo/F21/F1', () => {
+  const out = execSync(`node "${path.join(__dirname, 'test', 'check_o1_stc_spread.js')}"`, {encoding:'utf8'}).trim();
+  assert(out.includes('O1-E1 STC spread OK'), 'contrato O1-E1/P1A de pool STC espalhado falhou');
+  return out.replace(/^O1-E1 STC spread OK\s*[—-]?\s*/, '');
+});
+
+// ---------------------------------------------------------------------------
+// CHECK 84 — O1-E1 / P1A R2: frozen cursor/wire vectors + immutable PNGs
+// ---------------------------------------------------------------------------
+check('v2.43.28_R2 interna: o wire spread não deriva sem decisão registrada', () => {
+  const out = execSync(`node "${path.join(__dirname, 'test', 'check_o1_stc_spread_vectors.js')}"`, {encoding:'utf8'}).trim();
+  assert(out.includes('P1A wire vectors OK'), 'vetores/fixtures congelados do wire P1A divergiram');
+  return out.split('\n').pop().replace(/^P1A wire vectors OK\s*[—-]?\s*/, '');
+});
+
+// ---------------------------------------------------------------------------
+// CHECK 85 — P1A R2: w-byte definitivo + diagnóstico sob alpha/dimensões
+// ---------------------------------------------------------------------------
+check('v2.43.28_R2 interna: spread usa w-byte e falha geométrica não é vendida como senha', () => {
+  const out = execSync(`node "${path.join(__dirname, 'test', 'check_o1_stc_spread_r2.js')}"`, {encoding:'utf8'}).trim();
+  assert(out.includes('P1A R2 diagnostics OK'), 'contrato R2 de wire/diagnóstico spread falhou');
+  return out.replace(/^P1A R2 diagnostics OK\s*[—-]?\s*/, '');
+});
+
+// ---------------------------------------------------------------------------
+// CHECK 86 — O1-E2 / P1B: pressão objetiva compartilhada com o encode
+// ---------------------------------------------------------------------------
+check('v2.43.29 interna: pressão de embedding usa payload físico/STC w sem virar probabilidade', () => {
+  const out = execSync(`node "${path.join(__dirname, 'test', 'check_o1_embedding_pressure.js')}"`, {encoding:'utf8'}).trim();
+  assert(out.includes('O1-E2 embedding pressure OK'), 'contrato O1-E2/P1B de pressão objetiva falhou');
+  return out.replace(/^O1-E2 embedding pressure OK\s*[—-]?\s*/, '');
+});
+
+// ---------------------------------------------------------------------------
+// CHECK 87 — O1-X/M5: raster da saída só existe sob demanda para o heatmap
+// ---------------------------------------------------------------------------
+check('v2.43.31 interna: saída PNG não retém RGBA completo só para o heatmap opcional', () => {
+  const out = execSync(`node "${path.join(__dirname, 'test', 'check_o1_lazy_output_raster.js')}"`, {encoding:'utf8'}).trim();
+  assert(out.includes('O1-X lazy output raster OK'), 'contrato O1-X/M5 de raster lazy falhou');
+  return out.replace(/^O1-X lazy output raster OK\s*[—-]?\s*/, '');
+});
+
+
+// ---------------------------------------------------------------------------
+// CHECK 88 — O1 cumulative release closure: public UI/docs shed lab residue
+// ---------------------------------------------------------------------------
+check('v2.44.0: fechamento cumulativo remove O1-LAB da UI e alinha histórico/compatibilidade/orientação', () => {
+  const out = execSync(`node "${path.join(__dirname, 'test', 'check_o1_release_closure.js')}"`, {encoding:'utf8'}).trim();
+  assert(out.includes('O1 release closure OK'), 'contrato de fechamento cumulativo O1 falhou');
+  return out.replace(/^O1 release closure OK\s*[—-]?\s*/, '');
+});
+
+// ---------------------------------------------------------------------------
+// CHECK 89 — build compaction must preserve the JavaScript AST
+// ---------------------------------------------------------------------------
+check('v2.44.0 RC2: compactação do build preserva a AST dos módulos e armadilhas de ASI', () => {
+  const out = execSync(`node "${path.join(__dirname, 'test', 'check_build_compaction_ast.js')}"`, {encoding:'utf8'}).trim();
+  assert(out.includes('build compaction AST OK'), 'compactação alterou a AST de módulo/corpus adversarial');
+  return out.replace(/^build compaction AST OK\s*[—-]?\s*/, '');
 });
 
 // ---------------------------------------------------------------------------

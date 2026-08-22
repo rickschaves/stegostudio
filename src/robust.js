@@ -181,7 +181,7 @@ const rbStep = (q, delta) => Math.max(2, Math.ceil(delta / q));   // m, com Δ =
 function rbEmbedBits(blocks, plan, qNat, bits, offset, delta) {
   for (let i = 0; i < bits.length; i++) {
     const s = plan.slots[offset + i], bi = (s / 64) | 0, pos = s % 64;
-    const blk = blocks.get('0,' + ((bi / plan.wb) | 0) + ',' + (bi % plan.wb));
+    const blk = jpegGetBlock(blocks,0,((bi / plan.wb) | 0),(bi % plan.wb));
     const m = rbStep(qNat[pos], delta), d = Math.floor(plan.u[offset + i] * m);
     let j = Math.round((blk[pos] - d) / m);
     if (((j % 2) + 2) % 2 !== bits[i]) j += (blk[pos] - d >= j * m) ? 1 : -1;
@@ -195,7 +195,7 @@ function rbExtractBits(decLido, plan, qNat, qLido, nbits, offset, delta) {
   const out = new Uint8Array(nbits);
   for (let i = 0; i < nbits; i++) {
     const s = plan.slots[offset + i], bi = (s / 64) | 0, pos = s % 64;
-    const blk = decLido.blocks.get('0,' + ((bi / plan.wb) | 0) + ',' + (bi % plan.wb));
+    const blk = jpegGetBlock(decLido,0,((bi / plan.wb) | 0),(bi % plan.wb));
     if (!blk) { out[i] = 0; continue; }
     const m = rbStep(qNat[pos], delta), d = Math.floor(plan.u[offset + i] * m);
     const j = Math.round((blk[pos] * qLido[pos] / qNat[pos] - d) / m);
@@ -306,9 +306,14 @@ function robustEmbed(rgba, w, h, payload, senha) {
 // -------------------------------------------------------------------- EXTRAIR
 // Devolve {status:'ok'|'damaged'|'none', payload}. 'damaged' é o caso honesto:
 // o cabeçalho sobreviveu mas o corpo não — melhor do que dizer "nada aqui".
-function robustExtract(jpegBytes, senha) {
-  let dec;
-  try { dec = decodeJpegCoefficients(jpegBytes); } catch (_) { return { status: 'none' }; }
+function robustExtract(jpegBytes, senha, sharedDec=null) {
+  // O Analyzer já mantém um decode DCT compartilhado entre os motores JPEG.
+  // Reusar esse objeto evita decodificar o mesmo JPEG inteiro outra vez só para
+  // a sonda robusta. A API de 2 argumentos continua autônoma/compatível.
+  let dec = sharedDec;
+  if (!dec) {
+    try { dec = decodeJpegCoefficients(jpegBytes); } catch (_) { return { status: 'none' }; }
+  }
   const c0 = dec.comps[0];
   const qLido = rbZigToNat(dec.qtables[c0.qt]);
   const qNat = rbQtableNatural(RB_QUALITY);
@@ -371,8 +376,10 @@ function robustSignature(dec) {
     if (!dec || !dec.comps || !dec.comps.length) return null;
     const zz = JD_ZIGZAG;
     let z1 = 0, n1 = 0, z2 = 0, n2 = 0, blocos = 0;
-    for (const [chave, v] of dec.blocks) {
-      if (chave.charCodeAt(0) !== 48 || chave.charCodeAt(1) !== 44) continue;  // só '0,'
+    const c=dec.comps[0];
+    for(let r=0;r<c.height_blocks;r++) for(let col=0;col<c.width_blocks;col++){
+      const v=jpegGetBlock(dec,0,r,col);
+      if(!v) continue;
       blocos++;
       for (let p = 6; p < 22; p++) { if (v[zz[p]] === 0) z1++; n1++; }
       for (let p = 22; p < 36; p++) { if (v[zz[p]] === 0) z2++; n2++; }

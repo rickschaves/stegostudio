@@ -13,11 +13,16 @@ function assert(c,m){ if(!c) throw new Error(m); }
 assert(main.includes('let passwordIgnored=false'), 'estado local passwordIgnored ausente');
 assert(dec.includes('payload.passwordUsedForFraming = password.length > 0 && (stealth || shuffled);'), 'decoder legado não informa uso de senha no framing');
 assert(main.includes('const studioUsedPasswordForFraming = !!studioPayload.passwordUsedForFraming;'), 'main não consome metadado de framing protegido');
-assert((main.match(/if\(!studioUsedPasswordForFraming\) passwordIgnored=true;/g)||[]).length===2, 'os dois produtores nativos plaintext/comprimido precisam respeitar uso de senha no framing');
-assert((main.match(/passwordIgnored=true/g)||[]).length>=5, 'rotas de fallback sem senha deixaram de sinalizar passwordIgnored');
-assert(/decodeStatus=t\('decStatusPlainKeyIgnored'\);[\s\S]{0,120}if\(!studioUsedPasswordForFraming\) passwordIgnored=true;[\s\S]{0,80}nativePayloadRecovered=true;/.test(main), 'payload nativo comprimido não distingue framing com senha');
-assert(/decodeStatus=t\('decStatusPlainKeyIgnored'\);if\(!studioUsedPasswordForFraming\) passwordIgnored=true;nativePayloadRecovered=true;/.test(main), 'fallback nativo plaintext não distingue framing com senha');
-assert(main.includes("if(key.length>0 && rb.status==='none')") && main.includes("robustExtract(bytes, '')"), 'JPEG robusto não tenta fallback sem senha');
+// Cada produtor nativo que pode recuperar conteúdo sem usar a senha precisa
+// decidir o aviso pelo framing REAL, não pela simples presença de texto no campo.
+// A P1A/R2 acrescentou um terceiro produtor legítimo (STC spread passwordless),
+// então prendemos os três caminhos semanticamente em vez de contar produtores.
+assert(/if\(isSpreadClassic\)\{[\s\S]{0,700}decodeStatus=studioUsedPasswordForFraming\?t\('decStatusPlainNoCipher'\):t\('decStatusPlainKeyIgnored'\);[\s\S]{0,120}if\(!studioUsedPasswordForFraming\) passwordIgnored=true;[\s\S]{0,80}nativePayloadRecovered=true;/.test(main), 'STC spread passwordless não distingue senha informada de senha realmente usada no framing');
+assert(/else if\(comp\)\{[\s\S]{0,500}decodeStatus=t\('decStatusPlainKeyIgnored'\);[\s\S]{0,120}if\(!studioUsedPasswordForFraming\) passwordIgnored=true;[\s\S]{0,80}nativePayloadRecovered=true;/.test(main), 'payload nativo comprimido não distingue framing com senha');
+assert(/const plain=new TextDecoder[\s\S]{0,260}decodeStatus=t\('decStatusPlainKeyIgnored'\);if\(!studioUsedPasswordForFraming\) passwordIgnored=true;nativePayloadRecovered=true;/.test(main), 'fallback nativo plaintext não distingue framing com senha');
+assert((main.match(/if\(!studioUsedPasswordForFraming\) passwordIgnored=true;/g)||[]).length===3, 'produtores nativos protegidos por passwordUsedForFraming mudaram — revisar semântica do aviso de senha ignorada');
+assert((main.match(/passwordIgnored=true/g)||[]).length>=6, 'rotas de fallback sem senha deixaram de sinalizar passwordIgnored');
+assert(main.includes("if(key.length>0 && rb.status==='none')") && main.includes("robustExtract(bytes, '', dec)"), 'JPEG robusto não tenta fallback sem senha');
 assert(main.includes('if(robustUsedEmptyPassword && !opened.passwordUsed) passwordIgnored=true;'), 'robusto não distingue senha estrutural de senha realmente usada no conteúdo');
 assert(main.includes('if(key.length>0 && shRes.usedEmptyPassword) passwordIgnored=true;'), 'Steghide fallback vazio não sinaliza senha ignorada');
 assert(main.includes('if(key.length>0 && ogRes.usedDefaultKey) passwordIgnored=true;'), 'OutGuess fallback default não sinaliza senha ignorada');

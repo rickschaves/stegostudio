@@ -1,14 +1,12 @@
 #!/usr/bin/env node
 'use strict';
 
-// CHECK 30 — public Version History is a curated product-evolution history.
-// Internal technical changelog records every build. Public entries are a subset:
-// each one must appear only once and keep the same chronological order.
+// CHECK 30 — the in-app Version History is a bounded window over the canonical
+// public CHANGELOG.md. The Markdown keeps the complete public product history;
+// the standalone app keeps exactly its ten newest public releases.
 //
-// In a full development checkout, the private/internal technical changelog adds a
-// stronger provenance check: every public card must correspond to a real documented
-// build. In a public GitHub checkout `internal/` is intentionally absent, so CI keeps
-// the public self-consistency checks without pretending it can validate private data.
+// In a full development checkout, the private technical changelog adds a
+// provenance check. Public GitHub checkouts intentionally omit internal/.
 
 const fs=require('fs');
 const path=require('path');
@@ -18,42 +16,30 @@ const ui=fs.readFileSync(path.join(root,'src','ui.js'),'utf8');
 const md=fs.readFileSync(path.join(root,'CHANGELOG.md'),'utf8');
 const techPath=path.join(root,'internal','STEGO_STUDIO_CHANGELOG_TECNICO.md');
 
-const publicLabels=[...ui.matchAll(/ver:'v([^']+)'/g)].map(m=>m[1]);
-const mdLabels=[...md.matchAll(/^## v(.+?)\s+[—–-]\s+\d{4}/gm)].map(m=>m[1]);
+const a=ui.indexOf('const CHANGELOG = [');
+const b=ui.indexOf('function renderChangelog()',a);
+assert(a>=0 && b>a,'bounded Version History not found');
+const site=ui.slice(a,b);
+const local=[...site.matchAll(/ver:'v([^']+)'/g)].map(m=>m[1]);
+const completeCount=(md.match(/^## v/gm)||[]).length;
+const complete=[...md.matchAll(/^## v([^\n]+?)\s+—\s+\d{4}-\d{2}-\d{2}\s*$/gm)].map(m=>m[1]).slice(0,10);
 
-function semverEra(label){
-  const m=/^(\d+)\.(\d+)/.exec(label);
-  return !!m && (+m[1]>2 || (+m[1]===2 && +m[2]>=10));
-}
-const actual=publicLabels.filter(semverEra);
-const mdActual=mdLabels.filter(semverEra);
-
-assert(new Set(actual).size===actual.length,'Version History has duplicate semver-era entries');
-assert(new Set(mdActual).size===mdActual.length,'CHANGELOG.md has duplicate semver-era entries');
-
-// CHANGELOG.md is the shorter public release/product log; every entry it carries
-// must also exist in the in-app history and keep the same relative order.
-const missingOnSite=mdActual.filter(v=>!actual.includes(v));
-assert(!missingOnSite.length,`CHANGELOG.md contains public version(s) missing from site history: ${missingOnSite.join(', ')}`);
-const sitePositions=mdActual.map(v=>actual.indexOf(v));
-assert(sitePositions.every((p,i)=>i===0 || p>sitePositions[i-1]),
-  'CHANGELOG.md order diverged from in-app Version History');
+assert(local.length===10,`Version History should contain exactly 10 releases, found ${local.length}`);
+assert(new Set(local).size===local.length,'Version History has duplicate entries');
+assert(completeCount>=local.length,'CHANGELOG.md is shorter than local history window');
+assert(JSON.stringify(local)===JSON.stringify(complete.slice(0,10)),
+  'local Version History diverged from the ten newest canonical CHANGELOG.md releases');
 
 let provenance='public checkout: internal provenance unavailable by design';
 if(fs.existsSync(techPath)){
   const tech=fs.readFileSync(techPath,'utf8');
-  const technicalLabels=[...tech.matchAll(/^## v(.+?)\s+[—–-]\s+\d{4}/gm)].map(m=>m[1]);
-  const technical=technicalLabels.filter(semverEra);
-
-  const unknown=actual.filter(v=>!technical.includes(v));
+  const technical=[...tech.matchAll(/^## v(.+?)\s+[—–-]\s+\d{4}/gm)].map(m=>m[1]);
+  const unknown=local.filter(v=>!technical.includes(v));
   assert(!unknown.length,`Version History contains build(s) absent from technical changelog: ${unknown.join(', ')}`);
-  const unknownMd=mdActual.filter(v=>!technical.includes(v));
-  assert(!unknownMd.length,`CHANGELOG.md contains build(s) absent from technical changelog: ${unknownMd.join(', ')}`);
-
-  const positions=actual.map(v=>technical.indexOf(v));
-  assert(positions.every((p,i)=>i===0 || p>positions[i-1]),
+  const positions=local.map(v=>technical.indexOf(v));
+  assert(positions.every((p,i)=>i===0||p>positions[i-1]),
     'Version History order diverged from internal technical chronology');
   provenance='full checkout: internal provenance verified';
 }
 
-console.log(`public version history OK — ${actual.length} curated semver-era product entries; ${provenance}`);
+console.log(`public version history OK — 10/${completeCount} canonical releases local; ${provenance}`);

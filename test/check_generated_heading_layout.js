@@ -19,10 +19,12 @@ assert(i18n.includes('fieldGenerated: "Imagem gerada"'),'fieldGenerated PT deve 
 assert(!i18n.includes('fieldGenerated: "// generated image"') && !i18n.includes('fieldGenerated: "// imagem gerada"'),'prefixo // legado reapareceu em IMAGEM GERADA');
 assert(i18n.includes('processingTime: "// processing time"') && i18n.includes('processingTime: "// tempo de processamento"'),'timing deve manter // como marcador técnico');
 
-// Both global headings keep the same trailing rule so the two tabs feel intentional.
-const enc=tpl.match(/<div class="processing-head">([\s\S]*?)<\/div>\s*<div class="out-pair">/);
-const dec=tpl.match(/<div class="result-title-row">([\s\S]*?)<\/div>\s*\n\s*<!-- Aviso de calibração -->/);
-assert(enc && enc[1].includes('class="result-title-line"'),'cabeçalho do Encoder perdeu a linha estrutural');
-assert(dec && dec[1].includes('class="result-title-line"'),'cabeçalho do Decoder perdeu a linha estrutural');
+// Both global headings keep the same trailing rule and the initial-state copy must
+// follow immediately after the heading container. This avoids an empty flex item
+// creating a larger visual gap on one tab than on the other.
+const encHeadingToPlaceholder = /<div class="processing-head">[\s\S]*?<div class="result-title-line"><\/div>\s*<\/div>\s*<div[^>]*id="enc-placeholder"/;
+const decHeadingToPlaceholder = /<div class="result-title-row">[\s\S]*?<div class="result-title-line"><\/div>\s*<\/div>\s*<div[^>]*id="dec-placeholder"/;
+assert(encHeadingToPlaceholder.test(tpl),'Encoder perdeu linha estrutural ou ganhou espaço/elemento entre IMAGEM GERADA e placeholder');
+assert(decHeadingToPlaceholder.test(tpl),'Decoder perdeu linha estrutural ou ganhou espaço/elemento entre RESULTADO e placeholder');
 
-process.stdout.write('generated heading layout OK — IMAGEM GERADA e RESULTADO compartilham hierarquia, timing mantém //');
+process.stdout.write('generated heading layout OK — IMAGEM GERADA/RESULTADO compartilham hierarquia e distância do placeholder; timing mantém //');

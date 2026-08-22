@@ -1,0 +1,31 @@
+{
+  "format": "P1A-STC-SPREAD-R2",
+  "generatedOnce": "2026-08-21",
+  "width": 128,
+  "height": 128,
+  "stcW": 4,
+  "spreadWByte": 36,
+  "password": "P1A-R2-2414",
+  "plain": {
+    "file": "plain.txt",
+    "bytes": 51,
+    "sha256": "8ffb4bec503f157458174d8e8422ec9eeb12b71ae17a90915d79db264cf58105"
+  },
+  "cover": {
+    "file": "cover.png",
+    "bytes": 1068,
+    "sha256": "6ee3d3210ca1e5cbfc8988eafde80c6f625814e1f0e82ca3503f00bd21dab64c"
+  },
+  "cases": {
+    "passwordless": {
+      "file": "encoded_passwordless.png",
+      "bytes": 1427,
+      "sha256": "6778cef6293ab79cb0b63285c4773834634cd58afdbe6cc98d8dcafb3d5945bd"
+    },
+    "f21": {
+      "file": "encoded_f21.png",
+      "bytes": 1653,
+      "sha256": "15f9d115622074a8026632643e40bdd030736ef93ab7835a6da1d417c71e7731"
+    }
+  }
+}

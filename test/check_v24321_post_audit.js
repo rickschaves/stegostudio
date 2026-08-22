@@ -26,7 +26,7 @@ assert(liveTag, 'nó #dec-key-live ausente no HTML final');
 assert(/role="status"/.test(liveTag[0]) && /aria-live="polite"/.test(liveTag[0]) && /aria-atomic="true"/.test(liveTag[0]), 'região viva não declara status/polite/atomic');
 
 const start = app.indexOf('let keyFlashTimer = null;');
-const end = app.indexOf('// Verifica se bytes brutos', start);
+const end = app.indexOf('function printable(bytes)', start);
 assert(start >= 0 && end > start, 'bloco de flash não encontrado no HTML final');
 const block = app.slice(start, end);
 

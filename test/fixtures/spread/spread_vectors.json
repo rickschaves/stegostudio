@@ -1,0 +1,188 @@
+{
+  "wire": "P1A cursor v1; signaling R2 = STC w-byte bit5 (0x20), mode 0x80 reserved",
+  "origin": "cursor vectors generated once from v2.43.28 INTERNA_FIX and revalidated unchanged by v2.43.28_R2; immutable R2 PNG wire fixtures are in manifest.json",
+  "contract": "sequencia de indices LOGICOS no pool de pixels opacos, em ordem raster crescente",
+  "digest": "SHA-256 sobre a sequencia completa serializada como Int32Array little-endian",
+  "warning": "FIXTURE CONGELADA. Se um destes valores mudar, o wire mudou e toda imagem escrita por builds anteriores deixa de abrir. Nao regenerar para fazer o teste passar.",
+  "cases": [
+    {
+      "label": "payload de 1% — pool bem espalhado",
+      "start": 88,
+      "available": 10000,
+      "count": 160,
+      "width": 200,
+      "height": 100,
+      "stcW": 16,
+      "seed": 3090891823,
+      "first8": [
+        106,
+        176,
+        246,
+        290,
+        392,
+        442,
+        474,
+        569
+      ],
+      "last4": [
+        9889,
+        9931,
+        9972,
+        10043
+      ],
+      "sha256": "b034b9de3b35144c6172fd4797248645f6df5b672f5f534c77de14ffd6cf423c"
+    },
+    {
+      "label": "cover 128x128 opaca, stcW maximo",
+      "start": 88,
+      "available": 16296,
+      "count": 392,
+      "width": 128,
+      "height": 128,
+      "stcW": 16,
+      "seed": 296353163,
+      "first8": [
+        100,
+        146,
+        197,
+        219,
+        290,
+        312,
+        361,
+        402
+      ],
+      "last4": [
+        16221,
+        16289,
+        16300,
+        16358
+      ],
+      "sha256": "22c3cbaa5df125f35b8432c3be901e5a2b53b2aca1e7edb67eea8186a5e298ab"
+    },
+    {
+      "label": "count == available — degenera p/ sequencial",
+      "start": 0,
+      "available": 4008,
+      "count": 4008,
+      "width": 64,
+      "height": 64,
+      "stcW": 1,
+      "seed": 3757496044,
+      "first8": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+      ],
+      "last4": [
+        4004,
+        4005,
+        4006,
+        4007
+      ],
+      "sha256": "9196e26b84700d431bf8e2daf6c2a4ee46afb0a8fca9ac29bed5c830e8d603e9"
+    },
+    {
+      "label": "F21: pool comeca apos o bootstrap de 1792",
+      "start": 1792,
+      "available": 23808,
+      "count": 1568,
+      "width": 160,
+      "height": 160,
+      "stcW": 4,
+      "seed": 3796511821,
+      "first8": [
+        1804,
+        1820,
+        1833,
+        1850,
+        1854,
+        1881,
+        1890,
+        1900
+      ],
+      "last4": [
+        25552,
+        25566,
+        25576,
+        25590
+      ],
+      "sha256": "ae6a3602b922434fa051a2c16f52a8dbf7dbac06c8a0ebd30b952c96612cb177"
+    },
+    {
+      "label": "cover grande, payload pequeno",
+      "start": 88,
+      "available": 65448,
+      "count": 512,
+      "width": 256,
+      "height": 256,
+      "stcW": 8,
+      "seed": 360304955,
+      "first8": [
+        116,
+        222,
+        447,
+        551,
+        712,
+        850,
+        909,
+        1039
+      ],
+      "last4": [
+        65051,
+        65205,
+        65316,
+        65428
+      ],
+      "sha256": "ad747a894b4312275540d69e89cdd54a55515a368e46fe354a1f8a5eb57c350a"
+    },
+    {
+      "label": "estrato minimo (count == available - 1)",
+      "start": 5,
+      "available": 1000,
+      "count": 999,
+      "width": 50,
+      "height": 20,
+      "stcW": 2,
+      "seed": 1782236187,
+      "first8": [
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12
+      ],
+      "last4": [
+        1000,
+        1001,
+        1002,
+        1004
+      ],
+      "sha256": "3c8ee1d3c2dd403dae19045dd67d72a71b3ede905c7246573951bee6c21a663a"
+    },
+    {
+      "label": "count == 1",
+      "start": 7,
+      "available": 9999,
+      "count": 1,
+      "width": 99,
+      "height": 101,
+      "stcW": 3,
+      "seed": 2561280323,
+      "first8": [
+        2474
+      ],
+      "last4": [
+        2474
+      ],
+      "sha256": "bf2b661b646e45de5f031d62695e46516ac442c955fd43107fab41985e339fd9"
+    }
+  ]
+}

@@ -298,7 +298,107 @@ async function parseC2PA(file) {
   });
 }
 
-async function runForensics(imageData, file, onProgress=()=>{}, sharedDec=null) {
+
+// O1-PERF1 — estatísticas de pixel exatas sem chaves RGB textuais.
+// Os relatórios continuam byte-semanticamente iguais: mesmas contagens, mesma
+// ordem de acumulação e mesmos arredondamentos. O ganho vem de parar de criar
+// milhões de strings como "123,45,67" durante uma análise grande.
+function analyzeEntropyStatsExact(d, w, h, isLossy, isPalette) {
+  const total = w * h;
+  const freq = new Map();
+  for (let i = 0; i < d.length; i += 4) {
+    const k = (d[i] << 16) | (d[i + 1] << 8) | d[i + 2];
+    freq.set(k, (freq.get(k) || 0) + 1);
+  }
+  let entropy = 0;
+  for (const c of freq.values()) {
+    const p = c / total;
+    if (p > 0) entropy -= p * Math.log2(p);
+  }
+
+  let noiseTotal = 0, noiseCount = 0;
+  const rows = Math.min(50, h);
+  for (let y = 0; y < rows; y++) {
+    for (let x = 0; x < w - 1; x++) {
+      const i = (y * w + x) * 4;
+      noiseTotal += Math.abs(d[i] - d[i + 4]);
+      noiseCount++;
+    }
+  }
+  const avgNoise = noiseTotal / noiseCount;
+  const noiseThreshold = isLossy ? 0.8 : isPalette ? 0.5 : 2;
+  return {shannon:entropy.toFixed(4), uniqueColors:freq.size,
+    avgNoise:avgNoise.toFixed(2), noiseAnomaly:avgNoise<noiseThreshold,
+    noiseThreshold, highEntropy:entropy>18};
+}
+
+function analyzeColorStatsExact(d, total, isLossless, isLossy) {
+  const alphaSeen = new Uint8Array(256);
+  let uniqueAlpha = 0, partialAlpha = 0;
+  // round(channel/8) produz 0..32 (255 arredonda para 32 => valor exibido 256).
+  const SIDE = 33, bins = new Uint32Array(SIDE * SIDE * SIDE), touched = [];
+  for (let i = 0; i < d.length; i += 4) {
+    const a = d[i + 3];
+    if (!alphaSeen[a]) { alphaSeen[a] = 1; uniqueAlpha++; }
+    if (a !== 255 && a !== 0) partialAlpha++;
+
+    const qr = Math.round(d[i] / 8), qg = Math.round(d[i + 1] / 8), qb = Math.round(d[i + 2] / 8);
+    const idx = (qr * SIDE + qg) * SIDE + qb;
+    if (bins[idx] === 0) touched.push(idx); // preserva ordem de primeira aparição
+    bins[idx]++;
+  }
+  const rare = [];
+  for (const idx of touched) {
+    const count = bins[idx];
+    if (count > 5 && count / total < 0.001) rare.push([idx, count]);
+  }
+  // Sort estável: em empate preserva a ordem de primeira aparição, igual ao
+  // Object.entries(colorMap) da implementação anterior.
+  rare.sort((a,b)=>b[1]-a[1]);
+  if (rare.length > 5) rare.length = 5;
+  const rareThreshold = isLossy ? 8 : 2;
+  const rareDetails = rare.map(([idx,count]) => {
+    const qr = Math.floor(idx / (SIDE * SIDE));
+    const rem = idx - qr * SIDE * SIDE;
+    const qg = Math.floor(rem / SIDE), qb = rem - qg * SIDE;
+    return `RGB(${qr*8},${qg*8},${qb*8}): ${count}px`;
+  });
+  return {uniqueAlpha,
+    alphaAnomaly:isLossless&&uniqueAlpha>2&&uniqueAlpha<20,
+    partialAlpha, rareClusters:rare.length,
+    rareSuspicious:rare.length>rareThreshold,
+    rareDetails};
+}
+
+function regionalEntropySpreadExact(d, w, h) {
+  const qW = Math.floor(w / 2), qH = Math.floor(h / 2);
+  const SIDE = 17, BIN_COUNT = SIDE * SIDE * SIDE;
+  const quadEntropies = [];
+  for (let qy = 0; qy < 2; qy++) {
+    for (let qx = 0; qx < 2; qx++) {
+      const bins = new Uint32Array(BIN_COUNT), touched = [];
+      for (let y = qy * qH; y < (qy + 1) * qH; y++) {
+        for (let x = qx * qW; x < (qx + 1) * qW; x++) {
+          const i = (y * w + x) * 4;
+          const qr = Math.round(d[i] / 16), qg = Math.round(d[i + 1] / 16), qb = Math.round(d[i + 2] / 16);
+          const idx = (qr * SIDE + qg) * SIDE + qb;
+          if (bins[idx] === 0) touched.push(idx);
+          bins[idx]++;
+        }
+      }
+      const qTotal = qW * qH;
+      let qEnt = 0;
+      for (const idx of touched) {
+        const p = bins[idx] / qTotal;
+        if (p > 0) qEnt -= p * Math.log2(p);
+      }
+      quadEntropies.push(qEnt);
+    }
+  }
+  return Math.max(...quadEntropies) - Math.min(...quadEntropies);
+}
+
+async function runForensics(imageData, file, onProgress=()=>{}, sharedDec=null, analysisLab=null) {
   const d=imageData.data, w=imageData.width, h=imageData.height, total=w*h;
   // Sniff dos primeiros bytes: detecção por assinatura tem precedência sobre
   // extensão/MIME (pega .jfif, .jpe, MIME errado do browser, sem extensão, etc.)
@@ -321,6 +421,7 @@ async function runForensics(imageData, file, onProgress=()=>{}, sharedDec=null) 
 
   // M2: STRINGS
   onProgress(2, PIPELINE_STEPS[1]);
+  let labT=processingNow();
   const strResult = await (async () => {
     const bytes = await readFileBytes(file, 'strings');
     {
@@ -376,9 +477,11 @@ async function runForensics(imageData, file, onProgress=()=>{}, sharedDec=null) 
     }
   })();
   report.strings=strResult;
+  analysisLabAdd(analysisLab,'strings',labT,'forensic');
 
   // ── F3-C: esteganálise DCT para JPEG (usa os bytes já lidos acima) ──
   let jpegStruct = null;
+  labT=processingNow();
   if(fmt.ext==='JPEG' && strResult._rawBytes){
     try{ report.jpegDCT = analyzeJpegDCT(strResult._rawBytes, sharedDec); }
     catch(_){ report.jpegDCT = {available:false, reason:'analysis-error'}; }
@@ -395,9 +498,11 @@ async function runForensics(imageData, file, onProgress=()=>{}, sharedDec=null) 
     }catch(_){ jpegStruct = null; }
   }
   delete strResult._rawBytes; // não vaza os bytes crus para o relatório final
+  analysisLabAdd(analysisLab,'jpegStructural',labT,'forensic');
 
   // M3: LSB — desabilitado para lossy/palette
   onProgress(3, PIPELINE_STEPS[2]);
+  labT=processingNow();
   // Pré-análise de complexidade do cover: imagens chapadas/sintéticas (poucas
   // cores) fazem o WS (Weighted Stego) e o viés de paridade DISPARAREM sem stego
   // (falso-positivo). Detectamos esse tipo de cover para não confiar nesses
@@ -501,8 +606,11 @@ async function runForensics(imageData, file, onProgress=()=>{}, sharedDec=null) 
         :t('interpLSBUnavailPalette').replace('{ext}',fmt.ext)};
   }
 
+  analysisLabAdd(analysisLab,'lsb',labT,'forensic');
+
   // M4: FREQUENCY
   onProgress(4, PIPELINE_STEPS[3]);
+  labT=processingNow();
   const hR=new Array(256).fill(0),hG=new Array(256).fill(0),hB=new Array(256).fill(0);
   for(let i=0;i<d.length;i+=4){hR[d[i]]++;hG[d[i+1]]++;hB[d[i+2]]++;}
   let evenOdd=0;
@@ -513,40 +621,23 @@ async function runForensics(imageData, file, onProgress=()=>{}, sharedDec=null) 
     biasAnomaly:isLossless&&evenOdd>0.3&&!lowComplexity,biasReliable:isLossless,biasLowComplexity:isLossless&&lowComplexity,
     dominantRGB:[hR.indexOf(Math.max(...hR)),hG.indexOf(Math.max(...hG)),hB.indexOf(Math.max(...hB))]};
 
+  analysisLabAdd(analysisLab,'frequency',labT,'forensic');
+
   // M5: ENTROPY
   onProgress(5, PIPELINE_STEPS[4]);
-  const freq={};
-  for(let i=0;i<d.length;i+=4){const k=`${d[i]},${d[i+1]},${d[i+2]}`;freq[k]=(freq[k]||0)+1;}
-  let entropy=0;
-  for(const c of Object.values(freq)){const p=c/total;if(p>0)entropy-=p*Math.log2(p);}
-  const noiseSum=[];
-  const rows=Math.min(50,h);
-  for(let y=0;y<rows;y++)for(let x=0;x<w-1;x++){const i=(y*w+x)*4;noiseSum.push(Math.abs(d[i]-d[i+4]));}
-  const avgNoise=noiseSum.reduce((a,b)=>a+b,0)/noiseSum.length;
-  const noiseThreshold=isLossy?0.8:isPalette?0.5:2;
-  report.entropy={shannon:entropy.toFixed(4),uniqueColors:Object.keys(freq).length,
-    avgNoise:avgNoise.toFixed(2),noiseAnomaly:avgNoise<noiseThreshold,
-    noiseThreshold,highEntropy:entropy>18};
+  labT=processingNow();
+  report.entropy=analyzeEntropyStatsExact(d,w,h,isLossy,isPalette);
+  analysisLabAdd(analysisLab,'entropy',labT,'forensic');
 
   // M6: COLOR
   onProgress(6, PIPELINE_STEPS[5]);
-  const alphaVals=new Set(); let partialAlpha=0;
-  for(let i=3;i<d.length;i+=4){alphaVals.add(d[i]);if(d[i]!==255&&d[i]!==0)partialAlpha++;}
-  const colorMap={};
-  for(let i=0;i<d.length;i+=4){
-    const k=`${Math.round(d[i]/8)*8},${Math.round(d[i+1]/8)*8},${Math.round(d[i+2]/8)*8}`;
-    colorMap[k]=(colorMap[k]||0)+1;
-  }
-  const rare=Object.entries(colorMap).filter(([,v])=>v>5&&v/total<0.001).sort((a,b)=>b[1]-a[1]).slice(0,5);
-  const rareThreshold=isLossy?8:2;
-  report.color={uniqueAlpha:alphaVals.size,
-    alphaAnomaly:isLossless&&alphaVals.size>2&&alphaVals.size<20,
-    partialAlpha,rareClusters:rare.length,
-    rareSuspicious:rare.length>rareThreshold,
-    rareDetails:rare.map(([c,v])=>`RGB(${c}): ${v}px`)};
+  labT=processingNow();
+  report.color=analyzeColorStatsExact(d,total,isLossless,isLossy);
+  analysisLabAdd(analysisLab,'color',labT,'forensic');
 
   // M7: STUDIO PROTOCOL
   onProgress(7, PIPELINE_STEPS[6]);
+  labT=processingNow();
   const studioRaw=isLossless?extractLSBStudio(imageData):null;
   const studioShuffled=!!(studioRaw && studioRaw.needsPassword);
   const studioPayload=studioShuffled?null:studioRaw;
@@ -556,13 +647,17 @@ async function runForensics(imageData, file, onProgress=()=>{}, sharedDec=null) 
     available:isLossless,
     note:!isLossless?t('noteStudioUnavailable').replace('{ext}',fmt.ext):''};
 
+  analysisLabAdd(analysisLab,'studio',labT,'forensic');
 
   // M8: DCT, GRADIENTS, CHROMINANCE, EXIF, C2PA
   onProgress(8, PIPELINE_STEPS[7]);
+  labT=processingNow();
   report.dct = analyzeDCT(imageData);
   report.gradients = analyzeGradients(imageData);
   onProgress(9, PIPELINE_STEPS[8]);
   report.chroma = analyzeChrominance(imageData);
+  analysisLabAdd(analysisLab,'pixelStats',labT,'forensic');
+  labT=processingNow();
   // Falha de leitura e ausência de EXIF são estados distintos. `noExif` alimenta
   // o classificador de origem e só pode ser afirmado depois de uma leitura válida.
   report.exif  = await parseEXIF(file).catch(e=>({available:false,readError:String(e&&e.message||e),
@@ -575,9 +670,11 @@ async function runForensics(imageData, file, onProgress=()=>{}, sharedDec=null) 
   if(!report.exif.found && report.exif.available !== false){
     report.exif.noExif = fmt.ext==='JPEG' || file.type==='image/png';
   }
+  analysisLabAdd(analysisLab,'exifC2pa',labT,'forensic');
 
   // M9: DETECÇÃO DE IA
   onProgress(10, PIPELINE_STEPS[9]);
+  labT=processingNow();
   const aiSignals=[];
   let aiScore=0;
   const aiDims=[512,640,768,832,1024,1152,1280,1344,1536,1792,2048];
@@ -655,22 +752,7 @@ async function runForensics(imageData, file, onProgress=()=>{}, sharedDec=null) 
   const matchRatio=aiRatios.find(a=>Math.abs(ratio-a.r)<0.01);
   if(matchRatio&&(wExact||hExact)){aiScore+=10;aiSignals.push({labelKey:'aiLblExactRatio',labelVars:{ratio:matchRatio.label},detailKey:'aiDetExactRatio',level:'info'});}
 
-  const qW=Math.floor(w/2),qH=Math.floor(h/2);
-  const quadEntropies=[];
-  for(let qy=0;qy<2;qy++)
-    for(let qx=0;qx<2;qx++){
-      const qFreq={};
-      for(let y=qy*qH;y<(qy+1)*qH;y++)
-        for(let x=qx*qW;x<(qx+1)*qW;x++){
-          const i=(y*w+x)*4;
-          const k=`${Math.round(d[i]/16)*16},${Math.round(d[i+1]/16)*16},${Math.round(d[i+2]/16)*16}`;
-          qFreq[k]=(qFreq[k]||0)+1;
-        }
-      const qTotal=qW*qH;let qEnt=0;
-      for(const c of Object.values(qFreq)){const p=c/qTotal;if(p>0)qEnt-=p*Math.log2(p);}
-      quadEntropies.push(qEnt);
-    }
-  const qSpread=Math.max(...quadEntropies)-Math.min(...quadEntropies);
+  const qSpread=regionalEntropySpreadExact(d,w,h);
   report._regionalEntropyVar = qSpread;  // exposto para o classificador de origem
   // Escala proporcional — quanto menor o spread, maior o peso (máx 28)
   if(uniqueColors>200){
@@ -819,6 +901,7 @@ async function runForensics(imageData, file, onProgress=()=>{}, sharedDec=null) 
 
   // Detecção de pipeline de rede social pelo nome do arquivo.
   report.socialPipeline = detectSocialPipeline(file?.name || '', jpegStruct);
+  analysisLabAdd(analysisLab,'aiOrigin',labT,'forensic');
 
   return report;
 }
@@ -1488,22 +1571,23 @@ function analyzeJpegDCT(jpegBytes, sharedDec){
       return {available:false, reason:'decode-failed'};
     }
   }
-  let lin;
-  try{ lin=jpegCoeffsLinear(dec); }
-  catch(_){ return {available:false, reason:'linearization-failed'}; }
-
-  // estatísticas descritivas dos coeficientes AC (pula DC = índice múltiplo de 64)
+  // Estatísticas diretamente nos blocos compactos. A implementação histórica
+  // materializava todos os coeficientes em um Array JS antes de percorrê-los;
+  // em fotos grandes isso custava milhões de Numbers e GC sem acrescentar informação.
   let acTotal=0, acNonZero=0, acAbsSum=0, maxAbs=0;
+  let lowNZ=0, midNZ=0, highNZ=0;
   const hist=new Map(); // valor -> contagem (só AC não-zero)
-  for(let i=0;i<lin.length;i++){
-    if(i%64===0) continue;         // DC
-    acTotal++;
-    const v=lin[i];
-    if(v!==0){
-      acNonZero++; const a=Math.abs(v); acAbsSum+=a; if(a>maxAbs)maxAbs=a;
-      hist.set(v,(hist.get(v)||0)+1);
-    }
-  }
+  try{
+    jpegForEachLinear(dec,(v,pos)=>{
+      if(pos===0) return;
+      acTotal++;
+      if(v!==0){
+        acNonZero++; const a=Math.abs(v); acAbsSum+=a; if(a>maxAbs)maxAbs=a;
+        hist.set(v,(hist.get(v)||0)+1);
+        if(pos<=5) lowNZ++; else if(pos<=20) midNZ++; else highNZ++;
+      }
+    });
+  }catch(_){ return {available:false, reason:'linearization-failed'}; }
   if(acTotal===0) return {available:false, reason:'no-ac-coefficients'};
 
   // chi-quadrado sobre pares de valores (PoV: 2k ↔ 2k+1). Indicador FRACO.
@@ -1526,15 +1610,6 @@ function analyzeJpegDCT(jpegBytes, sharedDec){
   // frequências de pares estiverem MUITO próximas (chiPerPair baixo) COM amostra
   // significativa. Limiar deliberadamente exigente para não gerar falso alarme.
   const firstOrderAnomaly = (chiPerPair!==null && pairs>=8 && chiPerPair < 0.5);
-
-  // distribuição por banda de frequência (baixa/média/alta) — informativo.
-  // Dentro de cada bloco 8×8, índice natural 0..63; usamos faixas simples.
-  let lowNZ=0, midNZ=0, highNZ=0;
-  for(let i=0;i<lin.length;i++){
-    const pos=i%64; if(pos===0) continue;
-    if(lin[i]===0) continue;
-    if(pos<=5) lowNZ++; else if(pos<=20) midNZ++; else highNZ++;
-  }
 
   return {
     available:true,

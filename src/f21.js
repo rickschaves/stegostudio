@@ -161,16 +161,18 @@ async function f21HeaderTag(headerAuthKey, structuralSalt, headerCore) {
   return { full, truncated:full.slice(0, F21_HEADER_TAG_BYTES) };
 }
 
-function f21BuildHeaderCore({modeFlags, stcW=0, bodyLen, contentIv}) {
+function f21BuildHeaderCore({modeFlags, stcW=0, stcSpread=false, bodyLen, contentIv}) {
   if (!Number.isInteger(modeFlags) || modeFlags < 0 || modeFlags > 255) throw new Error('f21-mode-byte');
-  if (!Number.isInteger(stcW) || stcW < 0 || stcW > 255) throw new Error('f21-stcw-byte');
+  if (!Number.isInteger(stcW) || stcW < 0 || stcW > STC_WMAX) throw new Error('f21-stcw-byte');
+  if (typeof stcSpread !== 'boolean') throw new Error('f21-stc-spread');
+  if (stcSpread && (!(modeFlags & FLAG_STC) || stcW === 0)) throw new Error('f21-spread-without-stc');
   if (!Number.isInteger(bodyLen) || bodyLen < F21_GCM_TAG_BYTES || bodyLen > F21_BODY_MAX) throw new Error('f21-body-len');
   const iv = f21FixedBytes(contentIv, F21_CONTENT_IV_BYTES, 'iv');
   const core = new Uint8Array(F21_HEADER_CORE_BYTES);
   core.set(F21_MAGIC, 0);
   core[5] = F21_VERSION;
   core[6] = modeFlags & 0xFF;
-  core[7] = stcW & 0xFF;
+  core[7] = stcW > 0 ? packStcWByte(stcW, stcSpread) : 0;
   new DataView(core.buffer).setUint32(8, bodyLen >>> 0, true);
   core.set(iv, 12);
   return core;
@@ -178,11 +180,15 @@ function f21BuildHeaderCore({modeFlags, stcW=0, bodyLen, contentIv}) {
 
 function f21ParseHeaderCore(headerCore) {
   const core = f21FixedBytes(headerCore, F21_HEADER_CORE_BYTES, 'header-core');
+  const rawStcW = core[7];
+  const parsedStc = rawStcW === 0 ? {stcW:0, stcSpread:false} : parseStcWByte(rawStcW);
   return {
     magic:core.slice(0,5),
     version:core[5],
     modeFlags:core[6],
-    stcW:core[7],
+    stcW:parsedStc ? parsedStc.stcW : -1,
+    stcSpread:parsedStc ? parsedStc.stcSpread : false,
+    stcWByte:rawStcW,
     bodyLen:new DataView(core.buffer, core.byteOffset, core.byteLength).getUint32(8, true),
     contentIv:core.slice(12,24),
   };
@@ -192,19 +198,20 @@ function f21ParseHeaderCore(headerCore) {
 // de ser bytes não confiáveis e passam a comandar seleção de motor/capacidade.
 function f21ValidateParsedHeader(h, opaqueCount=null) {
   if (!f21BytesEqual(h.magic, F21_MAGIC) || h.version !== F21_VERSION) return false;
-  if (h.modeFlags & 0x80) return false;
+  if (h.modeFlags & 0x80) return false; // reservado: decoder novo não aceita extensão desconhecida.
   const mode = h.modeFlags & ~(FLAG_SHUFFLED|FLAG_ADAPTIVE|FLAG_STEALTH|FLAG_COMPRESSED|FLAG_STC|FLAG_HILLV2);
   const shuffled = !!(h.modeFlags & FLAG_SHUFFLED);
   const adaptive = !!(h.modeFlags & FLAG_ADAPTIVE);
   const stealth = !!(h.modeFlags & FLAG_STEALTH);
   const stc = !!(h.modeFlags & FLAG_STC);
   const hillV2 = !!(h.modeFlags & FLAG_HILLV2);
+  const stcSpread = h.stcSpread === true;
   if (!stealth || (mode !== MODE_B && mode !== MODE_RGB)) return false;
   if (h.bodyLen < F21_GCM_TAG_BYTES || h.bodyLen > F21_BODY_MAX) return false;
   if (stc) {
     if (mode !== MODE_B || h.stcW < 1 || h.stcW > STC_WMAX || shuffled || adaptive || hillV2) return false;
   } else {
-    if (h.stcW !== 0 || !shuffled) return false;
+    if (stcSpread || h.stcW !== 0 || h.stcWByte !== 0 || !shuffled) return false;
     if (adaptive) {
       if (mode !== MODE_B || !hillV2) return false;
     } else if (hillV2) return false;
@@ -230,8 +237,9 @@ function f21UsedOpaquePixels(modeFlags, stcW, bodyBits) {
 // escolhe pixels por custo em todo o pool restante; sua CONTAGEM não informa o
 // maior índice tocado. Falhar fechado impede uma futura combinação HILL+F1 de
 // sobrepor camadas silenciosamente.
-function f21TailReservationBoundary(modeFlags, stcW, bodyBits) {
+function f21TailReservationBoundary(modeFlags, stcW, bodyBits, stcSpread=false) {
   if (modeFlags & FLAG_ADAPTIVE) throw new Error('f21-adaptive-tail-boundary-noncontiguous');
+  if (stcSpread) throw new Error('f21-stc-spread-tail-boundary-noncontiguous');
   return f21UsedOpaquePixels(modeFlags, stcW, bodyBits);
 }
 
@@ -307,12 +315,12 @@ async function f21ShuffledOrder(n, bodyOrderKey, chunkBytes=F21_CTR_CHUNK_BYTES)
   return order;
 }
 
-async function f21CreatePacket(plainBytes, password, {modeFlags, stcW=0, structuralSalt=null, contentIv=null}={}) {
+async function f21CreatePacket(plainBytes, password, {modeFlags, stcW=0, stcSpread=false, structuralSalt=null, contentIv=null}={}) {
   const salt = f21RandomBytes(F21_STRUCTURAL_SALT_BYTES, structuralSalt, 'salt');
   const iv = f21RandomBytes(F21_CONTENT_IV_BYTES, contentIv, 'iv');
   const source = plainBytes instanceof Uint8Array ? plainBytes : new Uint8Array(plainBytes || 0);
   const bodyLen = source.length + F21_GCM_TAG_BYTES;
-  const headerCore = f21BuildHeaderCore({modeFlags, stcW, bodyLen, contentIv:iv});
+  const headerCore = f21BuildHeaderCore({modeFlags, stcW, stcSpread, bodyLen, contentIv:iv});
   const parsed = f21ParseHeaderCore(headerCore);
   if (!f21ValidateParsedHeader(parsed)) throw new Error('f21-header-invalid');
 
@@ -327,7 +335,7 @@ async function f21CreatePacket(plainBytes, password, {modeFlags, stcW=0, structu
   const maskedHeader = await f21CtrXor(keys.headerMaskKey, plainHeader);
   return { structuralSalt:salt, headerCore, headerTag:tag.truncated, headerTagFull:tag.full,
     plainHeader, maskedHeader, body, bodyOrderKey:keys.bodyOrderKey, contentIv:iv,
-    modeFlags, stcW, bodyLen };
+    modeFlags, stcW, stcSpread, bodyLen };
 }
 
 // Verificação isolada usada também pelos testes hostis: recebe chaves já derivadas,

@@ -61,6 +61,20 @@ function fakeHeaderImage(len){
   let jpegThrew=false;try{api.decodeJpegCoefficients(new Uint8Array([1,2,3,4]))}catch{jpegThrew=true}
   assert(jpegThrew,'raw JPEG parser unexpectedly accepted random bytes');
 
+  // O store DCT é Int16Array e o escopo suportado é JPEG 8-bit. Uma entrada que
+  // anuncie 12-bit precisa falhar antes de preencher coeficientes, em vez de
+  // aceitar silenciosamente valores que poderiam sofrer wrap no armazenamento.
+  const cleanJpeg=new Uint8Array(fs.readFileSync(path.join(root,'test','fixtures','third-party','clean','solid_q90.jpg')));
+  const badPrecision=new Uint8Array(cleanJpeg);
+  let sof=-1;
+  for(let i=0;i+4<badPrecision.length;i++){
+    if(badPrecision[i]===0xff && (badPrecision[i+1]===0xc0 || badPrecision[i+1]===0xc1 || badPrecision[i+1]===0xc2)){ sof=i; break; }
+  }
+  assert(sof>=0,'fixture JPEG limpa sem SOF para teste de precisão');
+  badPrecision[sof+4]=12; // marcador(2) + comprimento(2) + precision
+  let precisionThrew=false;try{api.decodeJpegCoefficients(badPrecision)}catch{precisionThrew=true}
+  assert(precisionThrew,'JPEG com precisão != 8 foi aceito pelo leitor DCT tipado');
+
   // Deterministic fuzz: no blob may become a confirmed robust envelope; PNG may
   // reject, but must never return absurd dimensions.
   let seed=0xF17BADC0; const rnd=()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed};

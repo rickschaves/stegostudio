@@ -14,6 +14,9 @@ The six functions that defined the legacy payload format (`buildPayload`,
 
 - `legacy/formato-A/` — historical format-A family
 
+- `v3/` — F21 protected-lossless fixtures (password-authenticated v3 wire)
+- `spread/` — P1A STC-spread R2 fixtures: frozen cursor vectors plus immutable passwordless/F21 PNGs; the spread signal is bit 5 of the STC w-byte.
+
 When a future wire format changes, add a new fixture family and keep the older family
 intact.
 

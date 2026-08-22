@@ -27,6 +27,14 @@ but it is older, and you should know which is which.
 
 ---
 
+## STEGO·STUDIO own-format compatibility
+
+The current release, v2.44.0, uses STC **spread** selection for new lossless STC messages that do not carry an alternative layer. Sequential STC images remain readable exactly as before; spread images require v2.44.0 or later, because the spread signal lives in bit 5 of the STC width byte. Builds `<= v2.43.27` interpret that byte as a width greater than the supported maximum and **fail closed** rather than decoding with the wrong carrier map.
+
+Spread selection also has a durability boundary worth stating explicitly: its deterministic carrier map depends on image dimensions and on which pixels are fully opaque. Resizing or changing the transparency map can invalidate recovery even when the visible image changes very little. This is not a robustness mode; the robust JPEG output is a separate wire.
+
+---
+
 ## OpenStego
 
 Reads the payload and recovers the original filename. Password-derived pixel

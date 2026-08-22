@@ -9,7 +9,7 @@ function extractLSBStudio(imageData, password='') {
   // Lê os bytes brutos do cabeçalho (primeiros headerBits pixels opacos, canal B)
   const rawHeader = new Uint8Array(hLen);
   for (let i = 0; i < hLen*8; i++) {
-    const bit = d[op[i]*4+2] & 1;
+    const bit = d[opaqueAt(op,i)*4+2] & 1;
     rawHeader[Math.floor(i/8)] |= bit << (7-(i%8));
   }
 
@@ -40,7 +40,7 @@ function extractLSBStudio(imageData, password='') {
   const hillV2 = !!(modeByte & FLAG_HILLV2); // adaptativo: V2 canônico vs legado (retrocompat)
   const compressed = !!(modeByte & FLAG_COMPRESSED);
   const isStc = !!(modeByte & FLAG_STC);
-  const mode = modeByte & ~(FLAG_SHUFFLED | FLAG_ADAPTIVE | FLAG_STEALTH | FLAG_COMPRESSED | FLAG_STC | FLAG_HILLV2); // modo puro
+  const mode = modeByte & ~(FLAG_SHUFFLED | FLAG_ADAPTIVE | FLAG_STEALTH | FLAG_COMPRESSED | FLAG_STC | FLAG_HILLV2); // modo puro; 0x80 reservado falha abaixo
   if (mode !== MODE_B && mode !== MODE_RGB) return null;
   // Lê como uint32 sem sinal (>>> 0 evita len negativo em mensagens grandes)
   const len = (hBytes[6]|(hBytes[7]<<8)|(hBytes[8]<<16)|(hBytes[9]<<24)) >>> 0;
@@ -65,16 +65,25 @@ function extractLSBStudio(imageData, password='') {
   //    e extrai por síndrome (independente de custo, sem recalcular HILL). ──
   if (isStc) {
     let rawW = 0;
-    for (let i = 0; i < 8; i++) rawW = (rawW << 1) | (d[op[hLen*8 + i]*4+2] & 1);
-    let stcW = rawW;
-    if (stealth && password.length > 0) { const ks = headerKeystream(password, hLen + 1); stcW = rawW ^ ks[hLen]; }
-    if (stcW < 1 || stcW > STC_WMAX) return null;
+    for (let i = 0; i < 8; i++) rawW = (rawW << 1) | (d[opaqueAt(op,hLen*8+i)*4+2] & 1);
+    let stcWByte = rawW;
+    if (stealth && password.length > 0) { const ks = headerKeystream(password, hLen + 1); stcWByte = rawW ^ ks[hLen]; }
+    const parsedW = parseStcWByte(stcWByte);
+    if (!parsedW) return null;
+    const stcW = parsedW.stcW, stcSpread = parsedW.stcSpread;
+    payload.stcSpread = stcSpread;
+    payload.stcW = stcW;
     const headBits2 = (hLen + 1) * 8;
     const n = bodyBits * stcW;
     if (op.length < headBits2 + n) return null;
     const Hhat = makeStcSubmatrix(STC_H, stcW);
     const y = new Uint8Array(n);
-    for (let k = 0; k < n; k++) y[k] = d[op[headBits2 + k]*4+2] & 1;
+    const spread = stcSpread ? makeStcSpreadCursor(headBits2, op.length-headBits2,
+      n, imageData.width, imageData.height, stcW) : null;
+    for (let k = 0; k < n; k++) {
+      const logical = spread ? spread.next() : headBits2+k;
+      y[k] = d[opaqueAt(op,logical)*4+2] & 1;
+    }
     const m = stcExtract(y, bodyBits, STC_H, Hhat);
     for (let i = 0; i < bodyBits; i++) if (m[i]) payload[i >> 3] |= (1 << (7 - (i & 7)));
     return payload;
@@ -89,7 +98,7 @@ function extractLSBStudio(imageData, password='') {
   if (adaptive) {
     const w = imageData.width, h = imageData.height;
     const cost = hillV2 ? hillCostMap(d, w, h) : hillCostMapLegacy(d, w, h);
-    const orderPx = adaptiveOrder(cost, op.subarray(headerBits));
+    const orderPx = adaptiveOrder(cost, opaqueRange(op,headerBits));
     for (let k = 0; k < bodyBits; k++) {
       if (k >= orderPx.length) break;
       const px = orderPx[k];
@@ -103,7 +112,7 @@ function extractLSBStudio(imageData, password='') {
     for (let k = 0; k < bodyBits; k++) {
       const pxIdx = headerBits + k;
       if (pxIdx >= op.length) break;
-      const px = op[pxIdx];
+      const px = opaqueAt(op,pxIdx);
       const i = order ? order[k] : k;
       payload[Math.floor(i/8)] |= (d[px*4+2]&1) << (7-(i%8));
     }
@@ -111,7 +120,7 @@ function extractLSBStudio(imageData, password='') {
     for (let k = 0; k < bodyBits; k++) {
       const pxIdx = headerBits + Math.floor(k/3);
       if (pxIdx >= op.length) break;
-      const px = op[pxIdx];
+      const px = opaqueAt(op,pxIdx);
       const chan = k % 3;
       const i = order ? order[k] : k;
       payload[Math.floor(i/8)] |= (d[px*4+chan]&1) << (7-(i%8));
@@ -135,7 +144,7 @@ async function extractLSBStudioV3(imageData, password='') {
   // O bootstrap físico não é uma faixa crua de bits: os 448 bits lógicos são
   // recuperados como síndrome de um STC fixo sobre a região canônica inicial.
   const yPrefix = new Uint8Array(F21_PREFIX_CARRIER_PIXELS);
-  for (let k = 0; k < yPrefix.length; k++) yPrefix[k] = d[op[k]*4+2] & 1;
+  for (let k = 0; k < yPrefix.length; k++) yPrefix[k] = d[opaqueAt(op,k)*4+2] & 1;
   const prefixBits = stcExtract(yPrefix, F21_PREFIX_BITS, STC_H,
     makeStcSubmatrix(STC_H, F21_BOOTSTRAP_STC_W, F21_BOOTSTRAP_STC_SEED));
   const prefix = new Uint8Array(F21_PREFIX_BYTES);
@@ -151,6 +160,7 @@ async function extractLSBStudioV3(imageData, password='') {
   const adaptive = !!(modeByte & FLAG_ADAPTIVE);
   const compressed = !!(modeByte & FLAG_COMPRESSED);
   const isStc = !!(modeByte & FLAG_STC);
+  const stcSpread = h.stcSpread === true;
   const mode = modeByte & ~(FLAG_SHUFFLED | FLAG_ADAPTIVE | FLAG_STEALTH |
                            FLAG_COMPRESSED | FLAG_STC | FLAG_HILLV2);
   const bodyBits = h.bodyLen * 8;
@@ -160,7 +170,12 @@ async function extractLSBStudioV3(imageData, password='') {
     const n = bodyBits * h.stcW;
     const Hhat = makeStcSubmatrix(STC_H, h.stcW);
     const y = new Uint8Array(n);
-    for (let k = 0; k < n; k++) y[k] = d[op[F21_PREFIX_CARRIER_PIXELS + k]*4+2] & 1;
+    const spread = stcSpread ? makeStcSpreadCursor(F21_PREFIX_CARRIER_PIXELS,
+      op.length-F21_PREFIX_CARRIER_PIXELS, n, imageData.width, imageData.height, h.stcW) : null;
+    for (let k = 0; k < n; k++) {
+      const logical = spread ? spread.next() : F21_PREFIX_CARRIER_PIXELS+k;
+      y[k] = d[opaqueAt(op,logical)*4+2] & 1;
+    }
     const m = stcExtract(y, bodyBits, STC_H, Hhat);
     for (let i = 0; i < bodyBits; i++) if (m[i]) body[i >> 3] |= 1 << (7 - (i & 7));
   } else {
@@ -172,7 +187,7 @@ async function extractLSBStudioV3(imageData, password='') {
     const byteOrder = await f21ShuffledOrder(h.bodyLen, opened.bodyOrderKey);
     if (adaptive) {
       const cost = hillCostMap(d, imageData.width, imageData.height);
-      const orderPx = adaptiveOrder(cost, op.subarray(F21_PREFIX_CARRIER_PIXELS));
+      const orderPx = adaptiveOrder(cost, opaqueRange(op,F21_PREFIX_CARRIER_PIXELS));
       if (bodyBits > orderPx.length) return null;
       for (let k = 0; k < bodyBits; k++) {
         const outByte = k >> 3, bitInByte = k & 7;
@@ -183,13 +198,13 @@ async function extractLSBStudioV3(imageData, password='') {
       for (let k = 0; k < bodyBits; k++) {
         const outByte = k >> 3, bitInByte = k & 7;
         const dstByte = byteOrder[outByte];
-        body[dstByte] |= (d[op[F21_PREFIX_CARRIER_PIXELS + k]*4+2] & 1) << (7 - bitInByte);
+        body[dstByte] |= (d[opaqueAt(op,F21_PREFIX_CARRIER_PIXELS+k)*4+2] & 1) << (7 - bitInByte);
       }
     } else if (mode === MODE_RGB) {
       for (let k = 0; k < bodyBits; k++) {
         const outByte = k >> 3, bitInByte = k & 7;
         const dstByte = byteOrder[outByte];
-        const px = op[F21_PREFIX_CARRIER_PIXELS + Math.floor(k/3)];
+        const px = opaqueAt(op,F21_PREFIX_CARRIER_PIXELS + Math.floor(k/3));
         body[dstByte] |= (d[px*4 + (k % 3)] & 1) << (7 - bitInByte);
       }
     } else return null;
@@ -198,12 +213,12 @@ async function extractLSBStudioV3(imageData, password='') {
   try {
     const plainBytes = await f21DecryptOpenedBody(body, opened);
     return { v3:true, headerMatched:true, bodyAuthenticated:true, compressed,
-      plainBytes, modeFlags:modeByte, stcW:h.stcW, bodyLen:h.bodyLen };
+      plainBytes, modeFlags:modeByte, stcW:h.stcW, stcSpread, bodyLen:h.bodyLen };
   } catch (_) {
     // Header válido + corpo GCM inválido é evidência estrutural real, mas não
     // mensagem recuperada. O chamador mantém essa distinção no relatório/UI.
     return { v3:true, headerMatched:true, bodyAuthenticated:false, compressed,
-      plainBytes:null, modeFlags:modeByte, stcW:h.stcW, bodyLen:h.bodyLen };
+      plainBytes:null, modeFlags:modeByte, stcW:h.stcW, stcSpread, bodyLen:h.bodyLen };
   }
 }
 
@@ -228,7 +243,7 @@ async function extractDecoyTail(imageData, password) {
   const readTail = (nBytes, bitOffset) => {
     const out = new Uint8Array(nBytes);
     for (let i = 0; i < nBytes * 8; i++) {
-      const px = op[op.length - 1 - (bitOffset + i)];
+      const px = opaqueAt(op,op.length - 1 - (bitOffset + i));
       out[i >> 3] |= (d[px * 4 + 2] & 1) << (7 - (i & 7));
     }
     return out;
@@ -1344,9 +1359,12 @@ function shAesKey(password){
 function shJpegEValues(jpegBytes, dec){
   try{ if(!dec) dec=decodeJpegCoefficients(jpegBytes); }catch(_){ return null; }
   if(!dec) return null;
-  const lin=jpegCoeffsLinear(dec);
-  const ev=[]; for(const v of lin){ if(v!==0) ev.push(Math.abs(v)%2); }
-  return ev;
+  // O Steghide precisa de acesso aleatório aos EValues, mas não dos coeficientes
+  // materializados em um Array JS. Um Uint8Array máximo custa 1 byte/coefficient
+  // e recebe diretamente a enumeração componente→bloco do DCT compartilhado.
+  const ev=new Uint8Array(jpegCoeffCount(dec)); let n=0;
+  jpegForEachLinear(dec,(v)=>{ if(v!==0) ev[n++]=Math.abs(v)%2; });
+  return ev.subarray(0,n);
 }
 
 // API pública do motor Steghide-JPEG: recebe os bytes crus do arquivo + senha,
@@ -1469,9 +1487,14 @@ class OGIterator{
 function ogBitmap(jpegBytes, dec){
   try{ if(!dec) dec=decodeJpegCoefficients(jpegBytes); }catch(_){ return null; }
   if(!dec) return null;
-  const co=jpegCoeffsMCUOrder(dec), bits=[];
-  for(let i=0;i<co.length;i++){ const v=co[i]; if(v===0||v===1) continue; bits.push(v&1); }
-  return bits;
+  // Mesmo princípio do Steghide: não materializa o vetor DCT inteiro em Array JS.
+  // O bitmap OutGuess é construído diretamente na ordem MCU em 1 byte por slot.
+  let hmax=1,vmax=1,blocksPerMCU=0;
+  for(const c of dec.comps){ if(c.h_samp>hmax)hmax=c.h_samp; if(c.v_samp>vmax)vmax=c.v_samp; blocksPerMCU+=c.h_samp*c.v_samp; }
+  const cap=Math.ceil(dec.header.width/(8*hmax))*Math.ceil(dec.header.height/(8*vmax))*blocksPerMCU*64;
+  const bits=new Uint8Array(cap); let n=0;
+  jpegForEachMCU(dec,(v)=>{ if(v!==0&&v!==1) bits[n++]=v&1; });
+  return bits.subarray(0,n);
 }
 // lê nbits seguindo o iterator; bits fora do bitmap não existem no arquivo
 // (o embed do OutGuess para na borda) — lemos 0 e sinalizamos em st.

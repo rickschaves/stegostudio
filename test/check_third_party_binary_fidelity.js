@@ -55,7 +55,7 @@ for(const needle of [
   'renderResults(report,decodedMsg,decodeStatus,{passwordIgnored,recoveredFile})'
 ]) assert((dec+'\n'+main).includes(needle),`wiring de bytes recuperados ausente: ${needle}`);
 assert((main.match(/if\(!decodedMsg && !recoveredFile\)/g)||[]).length===2, 'gates JPEG precisam proteger tanto o OutGuess quanto o pós-scan após arquivo recuperado');
-assert(/if\(!decodedMsg && !recoveredFile\)\{\s*const ogRes=ogDecodeJpeg/.test(main), 'OutGuess pode sobrescrever arquivo binário já recuperado pelo Steghide');
+assert(/if\(!decodedMsg && !recoveredFile\)\{[\s\S]{0,220}?const ogRes=ogDecodeJpeg/.test(main), 'OutGuess pode sobrescrever arquivo binário já recuperado pelo Steghide');
 
 // Download binário usa os bytes originais; nunca reencoda a visão textual.
 assert(res.includes("new Blob([lastRecoveredFile.bytes], {type:lastRecoveredFile.mime||'application/octet-stream'})"),'Salvar arquivo não usa bytes crus recuperados');

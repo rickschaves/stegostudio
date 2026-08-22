@@ -79,7 +79,7 @@ const api=new Function(`${prelude}\n${buildPayloadSrc}\n${buildRobustSrc}\nretur
 
   // Integration ratchet: the deferred JPEG output must build a classic payload
   // when F21 is active and pass that value — never the F21/null `payload` slot.
-  const bridgePos=files.indexOf('const robustPayload = cipher');
+  const bridgePos=files.indexOf('const robustPayload = (cipher || stcSpread)');
   const embedPos=files.indexOf('robustEmbed(robustCoverData, robustCoverW, robustCoverH, robustPayload, key)');
   assert(bridgePos>=0 && embedPos>bridgePos,'Encoder no longer bridges protected F21 PNG to a classic robust JPEG payload');
   assert(files.includes('const encOutputRun = encOutputGeneration') &&
@@ -90,7 +90,9 @@ const api=new Function(`${prelude}\n${buildPayloadSrc}\n${buildRobustSrc}\nretur
     'robust JPEG no longer snapshots the carrier identity before its async KDF');
   const bridgeBlock=files.slice(bridgePos,embedPos+100);
   assert(bridgeBlock.includes('await buildRobustPayload(bodyBytes, key, {mode, compressed, adaptive, stcW})'),
-    'protected robust bridge stopped reconstructing the pre-F21 payload');
+    'robust bridge stopped reconstructing the pre-F21 payload when the PNG wire diverges');
+  assert(bridgeBlock.includes('(cipher || stcSpread)'),
+    'passwordless STC spread can leak its lossless-only flag into the robust JPEG inner payload');
   assert(!/robustEmbed\(encID\.data,\s*encW,\s*encH,\s*payload,\s*key\)/.test(files),
     'regression: robustEmbed again receives the main payload slot, which is null on protected F21 encodes');
   assert(files.includes('f21Packet = await f21CreatePacket(bodyBytes, key'),

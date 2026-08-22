@@ -24,6 +24,87 @@
 //        (a mesma que o steghide usa em LinDctCoeffs).
 // ════════════════════════════════════════════════════════════════════════
 
+
+// Store compacto de blocos DCT. O runtime histórico expunha um Map com chaves
+// textuais "comp,row,col" e copiava cada Int16Array para Array JS. Isso multiplicava
+// memória e GC em JPEGs grandes. O facade abaixo preserva `.get()`, `.set()` e a
+// iteração compatível quando algum consumidor legado precisar, mas o caminho quente
+// usa `getBlock(ci,row,col)` sem strings e mantém os Int16Array originais.
+function jpegMakeBlockStore(compData, comps) {
+  return {
+    _compact: true,
+    _compData: compData,
+    _comps: comps,
+    getBlock(ci, r, c) {
+      const cd = compData[ci], meta = comps[ci];
+      if (!cd || !meta || r < 0 || c < 0 || r >= meta.height_blocks || c >= meta.width_blocks) return undefined;
+      return cd.blocks[r * cd.wb + c];
+    },
+    get(key) {
+      if (typeof key !== 'string') return undefined;
+      const a = key.indexOf(','), b = a < 0 ? -1 : key.indexOf(',', a + 1);
+      if (a < 0 || b < 0) return undefined;
+      return this.getBlock(Number(key.slice(0, a)), Number(key.slice(a + 1, b)), Number(key.slice(b + 1)));
+    },
+    set(key, value) {
+      if (typeof key !== 'string') return this;
+      const a = key.indexOf(','), b = a < 0 ? -1 : key.indexOf(',', a + 1);
+      if (a < 0 || b < 0) return this;
+      const ci = Number(key.slice(0, a)), r = Number(key.slice(a + 1, b)), c = Number(key.slice(b + 1));
+      const cd = compData[ci], meta = comps[ci];
+      if (cd && meta && r >= 0 && c >= 0 && r < meta.height_blocks && c < meta.width_blocks) cd.blocks[r * cd.wb + c] = value;
+      return this;
+    },
+    *[Symbol.iterator]() {
+      for (let ci = 0; ci < comps.length; ci++) {
+        const meta = comps[ci], cd = compData[ci];
+        for (let r = 0; r < meta.height_blocks; r++)
+          for (let c = 0; c < meta.width_blocks; c++)
+            yield [ci + ',' + r + ',' + c, cd.blocks[r * cd.wb + c]];
+      }
+    },
+  };
+}
+function jpegGetBlock(decOrBlocks, ci, r, c) {
+  const blocks = decOrBlocks && decOrBlocks.blocks ? decOrBlocks.blocks : decOrBlocks;
+  if (!blocks) return undefined;
+  if (typeof blocks.getBlock === 'function') return blocks.getBlock(ci, r, c);
+  return blocks.get(ci + ',' + r + ',' + c);
+}
+function jpegCoeffCount(dec) {
+  let n = 0;
+  for (const c of dec.comps) n += c.width_blocks * c.height_blocks * 64;
+  return n;
+}
+function jpegForEachLinear(dec, fn) {
+  for (let ci = 0; ci < dec.comps.length; ci++) {
+    const c = dec.comps[ci];
+    for (let r = 0; r < c.height_blocks; r++)
+      for (let cc = 0; cc < c.width_blocks; cc++) {
+        const blk = jpegGetBlock(dec, ci, r, cc);
+        for (let i = 0; i < 64; i++) fn(blk[i], i, ci, r, cc);
+      }
+  }
+}
+function jpegForEachMCU(dec, fn) {
+  const comps = dec.comps;
+  let hmax = 1, vmax = 1;
+  for (const c of comps) { if (c.h_samp > hmax) hmax = c.h_samp; if (c.v_samp > vmax) vmax = c.v_samp; }
+  const mcusX = Math.ceil(dec.header.width / (8 * hmax));
+  const mcusY = Math.ceil(dec.header.height / (8 * vmax));
+  for (let my = 0; my < mcusY; my++)
+    for (let mx = 0; mx < mcusX; mx++)
+      for (let ci = 0; ci < comps.length; ci++) {
+        const c = comps[ci];
+        for (let v = 0; v < c.v_samp; v++)
+          for (let h = 0; h < c.h_samp; h++) {
+            const blk = jpegGetBlock(dec, ci, my * c.v_samp + v, mx * c.h_samp + h);
+            if (!blk) { for (let k = 0; k < 64; k++) fn(0, k, ci); continue; }
+            for (let k = 0; k < 64; k++) fn(blk[k], k, ci);
+          }
+      }
+}
+
 function decodeJpegCoefficients(bytes) {
   // zig-zag → natural (ordem de armazenamento do libjpeg jpeg_read_coefficients)
   const ZIGZAG = [0,1,8,16,9,2,3,10,17,24,32,25,18,11,4,5,12,19,26,33,40,48,41,34,27,20,13,6,7,14,21,28,35,42,49,56,57,50,43,36,29,22,15,23,30,37,44,51,58,59,52,45,38,31,39,46,53,60,61,54,47,55,62,63];
@@ -305,6 +386,10 @@ function decodeJpegCoefficients(bytes) {
       }
     } else if (m === 0xC0 || m === 0xC1 || m === 0xC2) { // SOF0/1/2
       const precision = d[seg], h = u16(seg + 1), w = u16(seg + 3), nc = d[seg + 5];
+      // O leitor DCT suporta o perfil JPEG 8-bit usado pelas fixtures e pelos
+      // pipelines compatíveis. Outras precisões falham fechado antes de preencher
+      // os blocos Int16Array, evitando wrap silencioso fora do escopo suportado.
+      if (precision !== 8) throw new Error('precisão JPEG não suportada');
       const comps = []; let c = seg + 6;
       for (let i = 0; i < nc; i++) {
         comps.push({ id: d[c], hs: d[c + 1] >> 4, vs: d[c + 1] & 0xF, qt: d[c + 2] });
@@ -359,15 +444,7 @@ function decodeJpegCoefficients(bytes) {
     // id e qt são necessários para RE-ESCREVER o JPEG (encodeJpegCoefficients)
     id: c.id, qt: c.qt,
   }));
-  const blocks = new Map();
-  frame.comps.forEach((c, ci) => {
-    const cd = compData[ci];
-    for (let r = 0; r < cd.hbReal; r++) {
-      for (let cc = 0; cc < cd.wbReal; cc++) {
-        blocks.set(`${ci},${r},${cc}`, Array.from(cd.blocks[r * cd.wb + cc]));
-      }
-    }
-  });
+  const blocks = jpegMakeBlockStore(compData, comps);
   return {
     header: { components: frame.comps.length, width: frame.w, height: frame.h },
     comps, blocks, progressive: frame.progressive, qtables,
@@ -377,16 +454,9 @@ function decodeJpegCoefficients(bytes) {
 // Enumeração LINEAR dos coeficientes na ordem componente→linha→bloco→coef(0..63),
 // idêntica ao LinDctCoeffs do Steghide. Base para os consumidores DCT.
 function jpegCoeffsLinear(dec){
-  const out=[];
-  for(let ci=0; ci<dec.comps.length; ci++){
-    const c=dec.comps[ci];
-    for(let r=0;r<c.height_blocks;r++){
-      for(let cc=0;cc<c.width_blocks;cc++){
-        const blk=dec.blocks.get(ci+','+r+','+cc);
-        for(let i=0;i<64;i++) out.push(blk[i]);
-      }
-    }
-  }
+  const out=new Int16Array(jpegCoeffCount(dec));
+  let n=0;
+  jpegForEachLinear(dec,(v)=>{ out[n++]=v; });
   return out;
 }
 
@@ -398,7 +468,7 @@ function jpegCoeffHistogram(dec, {skipDC=true, skipZero=true}={}){
     const c=dec.comps[ci];
     for(let r=0;r<c.height_blocks;r++){
       for(let cc=0;cc<c.width_blocks;cc++){
-        const blk=dec.blocks.get(ci+','+r+','+cc);
+        const blk=jpegGetBlock(dec,ci,r,cc);
         for(let i=0;i<64;i++){
           if(skipDC && i===0) continue;
           const v=blk[i];
@@ -417,27 +487,12 @@ function jpegCoeffHistogram(dec, {skipDC=true, skipZero=true}={}){
 // Difere de jpegCoeffsLinear (que é componente-a-componente, ordem usada pelo
 // Steghide). O OutGuess usa ESTA ordem.
 function jpegCoeffsMCUOrder(dec){
-  const comps=dec.comps;
-  let hmax=1,vmax=1;
-  for(const c of comps){ if(c.h_samp>hmax)hmax=c.h_samp; if(c.v_samp>vmax)vmax=c.v_samp; }
-  const mcusX=Math.ceil(dec.header.width/(8*hmax));
-  const mcusY=Math.ceil(dec.header.height/(8*vmax));
-  const out=[];
-  for(let my=0;my<mcusY;my++){
-    for(let mx=0;mx<mcusX;mx++){
-      for(let ci=0;ci<comps.length;ci++){
-        const c=comps[ci];
-        for(let v=0;v<c.v_samp;v++){
-          for(let h=0;h<c.h_samp;h++){
-            const blk=dec.blocks.get(ci+','+(my*c.v_samp+v)+','+(mx*c.h_samp+h));
-            if(!blk){ for(let k=0;k<64;k++) out.push(0); continue; }
-            for(let k=0;k<64;k++) out.push(blk[k]);
-          }
-        }
-      }
-    }
-  }
-  return out;
+  let blocksPerMCU=0,hmax=1,vmax=1;
+  for(const c of dec.comps){ if(c.h_samp>hmax)hmax=c.h_samp; if(c.v_samp>vmax)vmax=c.v_samp; blocksPerMCU+=c.h_samp*c.v_samp; }
+  const total=Math.ceil(dec.header.width/(8*hmax))*Math.ceil(dec.header.height/(8*vmax))*blocksPerMCU*64;
+  const out=new Int16Array(total); let n=0;
+  jpegForEachMCU(dec,(v)=>{ out[n++]=v; });
+  return n===out.length?out:out.subarray(0,n);
 }
 
 // Leitura ESTRUTURAL do JPEG — marcadores, tabelas de quantização, tipo de SOF,
@@ -654,7 +709,7 @@ function encodeJpegCoefficients(dec, opts) {
     const cc = comps[ci];
     // blocos de preenchimento (fora da área real) replicam a borda
     const rr = Math.min(r, cc.hb - 1), ccl = Math.min(c, cc.wb - 1);
-    return dec.blocks.get(`${ci},${rr},${ccl}`) || ZERO;
+    return jpegGetBlock(dec,ci,rr,ccl) || ZERO;
   }
   function varrer(emit) {
     const pred = new Array(nc).fill(0);

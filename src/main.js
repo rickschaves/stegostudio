@@ -260,6 +260,21 @@ function createPublicLastReport(report, decodedMsg, decodeStatus) {
 }
 // PUBLIC REPORT ALLOWLIST — END
 
+// Medição interna de performance. Não entra no relatório público, não persiste
+// dados e não aparece na interface. O último snapshot fica disponível somente
+// para diagnóstico local explícito via `getStegoAnalysisTiming()` no console.
+let lastAnalysisLabTiming = null;
+function analysisLabCreate(){ return {stages:{}, forensic:{}, jpeg:{}, recoveryDetail:{}, started:processingNow()}; }
+function analysisLabAdd(lab,name,started,bucket='stages'){
+  if(!lab) return;
+  const dst=lab[bucket]||(lab[bucket]={});
+  dst[name]=(dst[name]||0)+Math.max(0,processingNow()-started);
+}
+function getStegoAnalysisTiming(){
+  if(!lastAnalysisLabTiming) return null;
+  return JSON.parse(JSON.stringify(lastAnalysisLabTiming));
+}
+
 let _analisando = false;   // guarda de reentrância
 document.getElementById('btn-analyze').addEventListener('click', async ()=>{
   if(!decID||!decFile) return;
@@ -270,6 +285,7 @@ document.getElementById('btn-analyze').addEventListener('click', async ()=>{
   _analisando = true;
   setAnalysisBusy(true);   // contrato de interação, não efeito colateral da thread
   const processingStartedAt = processingNow();
+  const analysisLab = analysisLabCreate();
   clearProcessingTime('dec-processing-time');
 
   // ── SNAPSHOT ──
@@ -297,16 +313,25 @@ document.getElementById('btn-analyze').addEventListener('click', async ()=>{
     // vem dos magic bytes do upload; se o decode compartilhado falhar, cada
     // consumidor recebe null e aplica seu tratamento específico.
     let sharedDec=null, jpegBytes=null;
+    let labT=processingNow();
     if(runFmt && runFmt.ext==='JPEG' && runFile){
       try{
+        let subT=processingNow();
         jpegBytes=new Uint8Array(await runFile.arrayBuffer());
+        analysisLabAdd(analysisLab,'read',subT,'jpeg');
+        subT=processingNow();
         sharedDec=decodeJpegCoefficients(jpegBytes);
+        analysisLabAdd(analysisLab,'coeff',subT,'jpeg');
       }catch(_){ sharedDec=null; }
     }
-    const report = await runForensics(runID, runFile, setProgress, sharedDec);
+    analysisLabAdd(analysisLab,'jpegSharedDecode',labT);
+    labT=processingNow();
+    const report = await runForensics(runID, runFile, setProgress, sharedDec, analysisLab);
+    analysisLabAdd(analysisLab,'forensics',labT);
     // report.format foi corrigido por magic bytes (pega .jfif, MIME errado, etc.)
     // — tem precedência sobre o decFmt detectado no upload (só por extensão).
     const fmt = report.format || runFmt;
+    labT=processingNow();
 
     // Decode attempt
     let decodedMsg=null, decodeStatus=t('decStatusNoStudio');
@@ -348,13 +373,17 @@ document.getElementById('btn-analyze').addEventListener('click', async ()=>{
           // 'damaged' é o caso honesto: o cabeçalho sobreviveu ao caminho e o
           // corpo não — dizer isso é melhor do que dizer "nada encontrado".
           try{
-            let rb = robustExtract(bytes, key);
+            let rbT=processingNow();
+            let rb = robustExtract(bytes, key, dec);
+            analysisLabAdd(analysisLab,'robust',rbT,'recoveryDetail');
             let robustUsedEmptyPassword=false;
             // Se o usuário informou uma senha para um JPEG robusto criado sem senha,
             // a senha não deve impedir a recuperação. Só fazemos fallback para o
             // plano vazio quando a tentativa informada não reconheceu envelope algum.
             if(key.length>0 && rb.status==='none'){
-              const rbNoKey=robustExtract(bytes, '');
+              rbT=processingNow();
+              const rbNoKey=robustExtract(bytes, '', dec);
+              analysisLabAdd(analysisLab,'robust',rbT,'recoveryDetail');
               if(rbNoKey.status!=='none'){ rb=rbNoKey; robustUsedEmptyPassword=true; }
             }
             if(rb.status === 'ok'){
@@ -364,7 +393,9 @@ document.getElementById('btn-analyze').addEventListener('click', async ()=>{
               // para arquivos hostis/malformados em que a senha do plano externo e
               // a senha AES interna não sejam a mesma, mesmo que nosso Encoder use
               // uma única senha para as duas camadas.
+              const rbOpenT=processingNow();
               const opened = await openRobustInnerPayload(rb.payload, key);
+              analysisLabAdd(analysisLab,'robustOpen',rbOpenT,'recoveryDetail');
               if(opened.state === 'ok' && opened.plain){
                 decodedMsg = new TextDecoder().decode(opened.plain);
                 decodeStatus = t('rbDecFound');
@@ -386,7 +417,12 @@ document.getElementById('btn-analyze').addEventListener('click', async ()=>{
               report.studio = {...report.studio, robust:'damaged'};
             }
           }catch(_){ /* não é payload robusto — segue para os motores de terceiros */ }
-          const shRes = (decodedMsg||recoveredFile) ? null : await shDecodeJpeg(bytes, key, dec);
+          let shRes=null;
+          if(!(decodedMsg||recoveredFile)){
+            const shT=processingNow();
+            shRes=await shDecodeJpeg(bytes, key, dec);
+            analysisLabAdd(analysisLab,'steghide',shT,'recoveryDetail');
+          }
           if(shRes && shRes.data instanceof Uint8Array && shRes.data.length>0){
             decodedMsg=typeof shRes.text==='string' && shRes.text.length>0 ? shRes.text : null;
             recoveredFile=(shRes.fileName || shRes.binary)
@@ -400,7 +436,9 @@ document.getElementById('btn-analyze').addEventListener('click', async ()=>{
           // Só tenta se o Steghide não achou nada. Sem magic próprio, o motor
           // só reporta extrações que pareçam conteúdo real (sem falso positivo).
           if(!decodedMsg && !recoveredFile){
+            const ogT=processingNow();
             const ogRes=ogDecodeJpeg(bytes, key, dec);
+            analysisLabAdd(analysisLab,'outguess',ogT,'recoveryDetail');
             if(ogRes && ogRes.data instanceof Uint8Array && ogRes.data.length>0){
               decodedMsg=typeof ogRes.text==='string' && ogRes.text.length>0 ? ogRes.text : null;
               recoveredFile=ogRes.binary
@@ -422,7 +460,9 @@ document.getElementById('btn-analyze').addEventListener('click', async ()=>{
           // quando o conteúdo não pôde ser lido. Só roda depois das tentativas de
           // extração para não duplicar uma evidência mais forte.
           try{
+            const shIdT=processingNow();
             const sh=shIdentifyJpeg(bytes, key, dec);
+            analysisLabAdd(analysisLab,'identify',shIdT,'recoveryDetail');
             if(sh) report.toolprint=[...(report.toolprint||[]),
               { tool:'Steghide', id:'steghide', level:'confirmado',
                 evidence:'magic', algoName:sh.algoName, modeName:sh.modeName,
@@ -462,6 +502,7 @@ document.getElementById('btn-analyze').addEventListener('click', async ()=>{
         const comp = !!studioPayload.compressed;
         const studioUsedPasswordForFraming = !!studioPayload.passwordUsedForFraming;
         const isF21 = studioPayload.v3 === true;
+        const isSpreadClassic = !isF21 && studioPayload.stcSpread === true;
         const isAes = !isF21 && isAesPayload(studioPayload);
         // Descomprime se o flag FLAG_COMPRESSED estiver setado; null se falhar.
         const inflateIfNeeded = async (bytes) => {
@@ -484,7 +525,21 @@ document.getElementById('btn-analyze').addEventListener('click', async ()=>{
             decodeStatus=t('decStatusProtectedDamaged');decodedMsg=null;
           }
         } else if(key.length>0){
-          if(isAes){
+          if(isSpreadClassic){
+            // P1A clássico é passwordless: a flag spread vive no w-byte e a
+            // seleção depende da geometria/mapa de alfa. Uma falha de leitura
+            // aqui NÃO prova senha errada. Tenta apenas o conteúdo como gravado;
+            // se não passar, diagnostica a fragilidade específica do spread.
+            const bytes=await inflateIfNeeded(studioPayload);
+            if(bytes!==null && isReadableText(bytes)>0.7){
+              decodedMsg=new TextDecoder('utf-8',{fatal:false}).decode(bytes);
+              decodeStatus=studioUsedPasswordForFraming?t('decStatusPlainNoCipher'):t('decStatusPlainKeyIgnored');
+              if(!studioUsedPasswordForFraming) passwordIgnored=true;
+              nativePayloadRecovered=true;
+            } else {
+              decodeStatus=t('decStatusSpreadDamaged');decodedMsg=null;
+            }
+          } else if(isAes){
             // Formato novo: AES-GCM (autenticado). Decifra → (descomprime) → texto.
             let bytes=null;
             try{ bytes=await aesDecryptBytes(studioPayload,key); }catch(_){ bytes=null; }
@@ -520,8 +575,19 @@ document.getElementById('btn-analyze').addEventListener('click', async ()=>{
             }
           }
         } else {
-          // Sem chave: se for payload AES, avisa que precisa de senha.
-          if(isAes){
+          // Sem chave: spread clássico é explicitamente passwordless. Se o
+          // header sobreviveu mas o corpo não é mais legível, dimensões/alfa
+          // alterados são uma causa plausível; não inventa uma senha ausente.
+          if(isSpreadClassic){
+            const bytes=await inflateIfNeeded(studioPayload);
+            if(bytes!==null && isReadableText(bytes)>0.7){
+              decodedMsg=new TextDecoder('utf-8',{fatal:false}).decode(bytes);
+              decodeStatus=t('decStatusPlainNoCipher');
+              nativePayloadRecovered=true;
+            } else {
+              decodeStatus=t('decStatusSpreadDamaged');decodedMsg=null;
+            }
+          } else if(isAes){
             decodeStatus=t('decStatusCipherFound');decodedMsg=null;flashKey('missing');
           } else {
             const bytes=await inflateIfNeeded(studioPayload);
@@ -699,6 +765,8 @@ document.getElementById('btn-analyze').addEventListener('click', async ()=>{
       else if (jpegKeyFeedback === 'inconclusive') flashKey('jpeg');
     }
 
+    analysisLabAdd(analysisLab,'recovery',labT);
+
     // ── PORTÃO ──
     // Última chance antes de publicar. Se a imagem trocou durante os awaits,
     // este resultado é da imagem ANTERIOR: descartar em silêncio é o correto,
@@ -710,21 +778,17 @@ document.getElementById('btn-analyze').addEventListener('click', async ()=>{
     lastReport=createPublicLastReport(report, decodedMsg, decodeStatus);
     // Guarda os argumentos do render para poder refazê-lo ao trocar de idioma
     lastRenderArgs = {report, decodedMsg, decodeStatus, passwordIgnored, recoveredFile, gen: run};
+    labT=processingNow();
     renderResults(report,decodedMsg,decodeStatus,{passwordIgnored,recoveredFile});
-    showProcessingTime('dec-processing-time', processingNow() - processingStartedAt);
-    // Rola até o topo dos resultados para o usuário ver os scores imediatamente,
-    // sem precisar rolar manualmente. Funciona tanto no scroll da coluna direita
-    // (desktop) quanto no scroll do painel inteiro (mobile).
+    analysisLabAdd(analysisLab,'render',labT);
+    analysisLab.total=Math.max(0,processingNow()-processingStartedAt);
+    lastAnalysisLabTiming=analysisLab;
+    showProcessingTime('dec-processing-time', analysisLab.total);
+    // O heading RESULTADO virou âncora permanente. `scroll-margin-top` deixa
+    // uma pequena folga visual acima dele em vez de colá-lo à borda do viewport.
     requestAnimationFrame(() => {
-      const results = document.getElementById('results-area');
-      if (results) {
-        if (window.innerWidth > 760) {
-          const y = results.getBoundingClientRect().top + window.scrollY - 22;
-          window.scrollTo({ top: y, behavior: 'smooth' });
-        } else {
-          results.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }
-      }
+      const title = document.querySelector('#panel-dec .result-title-row');
+      if (title) title.scrollIntoView({ behavior:'smooth', block:'start' });
     });
 
     const {score:tScore}=computeThreat(report);
@@ -765,7 +829,7 @@ document.getElementById('btn-analyze').addEventListener('click', async ()=>{
 // ════════════════════════════════════════
 document.getElementById('btn-export-json').addEventListener('click',()=>{
   if(!lastReport) return;
-  const payload={_tool:'STEGO·STUDIO v2.43.21',_schema:'forensic-report-v2',
+  const payload={_tool:'STEGO·STUDIO v2.44.0',_schema:'forensic-report-v2',
     _hint:t('exportHintJSON'),
     ...lastReport};
   const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
@@ -812,18 +876,26 @@ function positionEncOverlay(){
   hm.style.left=(img.offsetLeft+(bw-dw)/2)+'px'; hm.style.top=(img.offsetTop+(bh-dh)/2)+'px';
   hm.style.width=dw+'px'; hm.style.height=dh+'px';
 }
-function toggleEncOverlay(){
+async function toggleEncOverlay(){
   const hm=document.getElementById('enc-heatmap'), btn=document.getElementById('btn-enc-heatmap');
-  if(!hm||!btn||!encOutID) return;
+  if(!hm||!btn||!encOutBlob) return;
   if(hm.classList.contains('on')){ hm.classList.remove('on'); btn.textContent=t('encMapShow'); return; }
   if(hm.dataset.built!=='1'){
-    const w=encOutID.width, h=encOutID.height;
-    const cols=Math.max(8,Math.min(20,Math.round(w/32))), rows=Math.max(6,Math.min(16,Math.round(h/32)));
-    const mp=rsResidualMap(encOutID.data,w,h,cols,rows);
-    hm.style.gridTemplateColumns='repeat('+cols+',1fr)';
-    hm.innerHTML=mp.map(function(v){ const a=Math.min(v/0.22,1).toFixed(2); return '<span style="background:rgba(150,220,255,'+a+')"></span>'; }).join('');
-    hm.dataset.built='1';
+    const run=encOutputGeneration;
+    btn.disabled=true;
+    try {
+      const decoded=await pngDecodeRGBA(new Uint8Array(await encOutBlob.arrayBuffer()));
+      if(run!==encOutputGeneration) return;
+      const w=decoded.width, h=decoded.height;
+      const cols=Math.max(8,Math.min(20,Math.round(w/32))), rows=Math.max(6,Math.min(16,Math.round(h/32)));
+      const mp=rsResidualMap(decoded.data,w,h,cols,rows);
+      hm.style.gridTemplateColumns='repeat('+cols+',1fr)';
+      hm.innerHTML=mp.map(function(v){ const a=Math.min(v/0.22,1).toFixed(2); return '<span style="background:rgba(150,220,255,'+a+')"></span>'; }).join('');
+      hm.dataset.built='1';
+    } catch(_) { return; }
+    finally { if(run===encOutputGeneration) btn.disabled=false; }
   }
+  if(!encOutBlob) return;
   positionEncOverlay();
   hm.classList.add('on'); btn.textContent=t('encMapHide');
 }
@@ -843,6 +915,7 @@ function toggleEncOverlay(){
   on('#lang-pt', 'click', () => setLang('pt'));
   on('#decoded-copy', 'click', () => { copyDecodedMessage(); });
   on('#decoded-save', 'click', () => saveDecodedMessage());
+  on('#enc-pressure-toggle', 'click', () => toggleEmbeddingPressure());
   on('#enc-message-expand', 'click', () => openEncMessageEditor('enc-msg'));
   on('#enc-decoy-message-expand', 'click', () => openEncMessageEditor('enc-decoy-msg'));
   on('#enc-message-close', 'click', () => closeEncMessageEditor());

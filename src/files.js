@@ -428,6 +428,181 @@ function selectEmbedMode(bodyBits, opaqueCount, headerBits, maxcap) {
   return bodyBits <= avail ? { mode: MODE_B, adaptive: false, stc: true } : null;
 }
 
+// P1B / O1-E2 — prepara o MESMO corpo que será usado pelo encode e pelo
+// medidor de pressão. O texto chega já normalizado por getEncNormalizedMessage().
+// A compressão continua oportunista: só vale quando reduz bytes. `mark` é usado
+// apenas pelo encode para manter o profiling laboratorial; o medidor não mede tempo.
+async function prepareEncMainBody(msg, cipher, mark=null) {
+  let bodyBytes = new TextEncoder().encode(msg);
+  let compressed = false;
+  try {
+    if (mark) mark('deflate:in');
+    const comp = await deflateBytes(bodyBytes);
+    if (mark) mark('deflate:out');
+    if (comp.length < bodyBytes.length) { bodyBytes = comp; compressed = true; }
+  } catch(_) { /* sem CompressionStream → segue sem comprimir, como o encode */ }
+  const bodyStoredBytes = cipher ? (bodyBytes.length + F21_GCM_TAG_BYTES) : bodyBytes.length;
+  return { bodyBytes, compressed, bodyStoredBytes, bodyBits: bodyStoredBytes * 8 };
+}
+
+// Métrica estrutural, não detector. "Pressão" descreve quanta liberdade física o
+// encoder tem para o corpo atual. Em STC o dado central é w (= carriers candidatos
+// por bit da mensagem); em RGB mostramos a ocupação objetiva dos slots disponíveis.
+// Não usa RS/WS, não estima probabilidade e não altera o wire.
+function computeEmbeddingPressure(bodyBits, opaqueCount, cipher, maxcap, decoyBits=0) {
+  if (!Number.isFinite(bodyBits) || bodyBits <= 0 || !Number.isFinite(opaqueCount) || opaqueCount <= 0) return null;
+  const prefixPx = cipher ? F21_PREFIX_CARRIER_PIXELS : HEADER_BYTES*8;
+  const sel = selectEmbedMode(bodyBits, opaqueCount, prefixPx, maxcap);
+  if (!sel) return { fits:false, payloadBpp: bodyBits / opaqueCount };
+
+  const payloadBpp = bodyBits / opaqueCount;
+  if (sel.stc) {
+    const stcPrefixPx = cipher ? F21_PREFIX_CARRIER_PIXELS : (HEADER_BYTES+1)*8;
+    const availBodyPx = Math.max(0, opaqueCount - stcPrefixPx);
+    const stcW = pickStcW(bodyBits, availBodyPx);
+    if (stcW < 1) return { fits:false, payloadBpp };
+    const candidatePx = bodyBits * stcW;
+    const poolPct = availBodyPx > 0 ? Math.min(100, candidatePx / availBodyPx * 100) : 100;
+    const totalCarrierPct = Math.min(100, (stcPrefixPx + candidatePx + Math.max(0,decoyBits)) / opaqueCount * 100);
+    const tier = stcW >= 8 ? 'low' : stcW >= 4 ? 'moderate' : stcW >= 2 ? 'high' : 'max';
+    return { fits:true, path:'stc', payloadBpp, stcW, poolPct, totalCarrierPct, decoyBits:Math.max(0,decoyBits), tier };
+  }
+
+  const availSlots = Math.max(0, opaqueCount - prefixPx) * 3;
+  const slotPct = availSlots > 0 ? Math.min(100, bodyBits / availSlots * 100) : 100;
+  const totalCarrierPct = Math.min(100, (prefixPx + Math.ceil(bodyBits/3) + Math.max(0,decoyBits)) / opaqueCount * 100);
+  return { fits:true, path:'rgb', payloadBpp, slotPct, totalCarrierPct, decoyBits:Math.max(0,decoyBits), tier:'rgb' };
+}
+
+let encPressureGeneration = 0;
+let encPressureTimer = null;
+let encPressureOpen = false;
+let encPressureLast = null;
+
+function refreshEmbeddingPressureToggleLabel() {
+  const btn=document.getElementById('enc-pressure-toggle');
+  if(!btn) return;
+  const label=t(encPressureOpen?'encPressureClose':'encPressureOpen');
+  btn.setAttribute('aria-label',label);
+  btn.setAttribute('title',label);
+  btn.setAttribute('aria-expanded',encPressureOpen?'true':'false');
+}
+function hideEmbeddingPressure() {
+  encPressureOpen=false;
+  encPressureLast=null;
+  encPressureGeneration++;
+  if(encPressureTimer){ clearTimeout(encPressureTimer); encPressureTimer=null; }
+  const box=document.getElementById('enc-pressure');
+  if(box) box.style.display='none';
+  const warn=document.getElementById('enc-fill-warn');
+  if(warn) warn.style.display='none';
+  refreshEmbeddingPressureToggleLabel();
+}
+function formatPressureBpp(v) {
+  if (!Number.isFinite(v)) return '—';
+  return (v < 0.1 ? v.toFixed(4) : v.toFixed(3)) + ' bpp';
+}
+function renderEmbeddingPressure(m) {
+  const box=document.getElementById('enc-pressure');
+  const tier=document.getElementById('enc-pressure-tier');
+  const metrics=document.getElementById('enc-pressure-metrics');
+  const warn=document.getElementById('enc-fill-warn');
+  if(!box||!tier||!metrics) return;
+  if(!encPressureOpen){ box.style.display='none'; return; }
+  box.style.display='block';
+  if(!m){
+    tier.textContent='—'; tier.dataset.tier='';
+    metrics.textContent=t('encPressureNeedInput');
+    if(warn) warn.style.display='none';
+    return;
+  }
+  if(!m.fits){
+    tier.textContent=t('encPressureOver'); tier.dataset.tier='max';
+    metrics.textContent=t('encPressurePayloadRate')+': '+formatPressureBpp(m.payloadBpp);
+    if(warn){ warn.textContent=t('encPressureDoesNotFit'); warn.style.color='#ff6464'; warn.style.display='block'; }
+    return;
+  }
+  const tierKey = m.path==='rgb' ? 'encPressureRgb' :
+    (m.tier==='low'?'encPressureLow':m.tier==='moderate'?'encPressureModerate':m.tier==='high'?'encPressureHigh':'encPressureMax');
+  tier.textContent=t(tierKey); tier.dataset.tier=m.tier;
+  const parts=[t('encPressurePayloadRate')+': '+formatPressureBpp(m.payloadBpp)];
+  if(m.path==='stc'){
+    parts.push('STC w='+m.stcW);
+    parts.push(t('encPressurePool')+': '+m.poolPct.toFixed(1)+'%');
+  }else{
+    parts.push(t('encPressureRgbSlots')+': '+m.slotPct.toFixed(1)+'%');
+  }
+  if(m.decoyBits>0) parts.push(t('encPressureAlt').replace('{bits}',m.decoyBits.toLocaleString()));
+  metrics.textContent=parts.join(' · ');
+  if(warn){
+    if(m.path==='stc' && (m.tier==='high'||m.tier==='max')){
+      warn.textContent=t('encFillHigh'); warn.style.color='#ffb300'; warn.style.display='block';
+    }else if(m.path==='stc' && m.tier==='moderate'){
+      warn.textContent=t('encFillCaution'); warn.style.color='var(--dim)'; warn.style.display='block';
+    }else{
+      warn.style.display='none';
+    }
+  }
+}
+function refreshEmbeddingPressureLanguage() {
+  refreshEmbeddingPressureToggleLabel();
+  if(encPressureOpen) renderEmbeddingPressure(encPressureLast);
+}
+function toggleEmbeddingPressure() {
+  encPressureOpen=!encPressureOpen;
+  refreshEmbeddingPressureToggleLabel();
+  const box=document.getElementById('enc-pressure');
+  if(!encPressureOpen){
+    encPressureGeneration++;
+    // Com o painel fechado a medição não acompanha mensagem/portadora/senha.
+    // Guardar o último valor faria a reabertura pintar o número da entrada
+    // anterior até o recálculo chegar.
+    encPressureLast=null;
+    if(encPressureTimer){ clearTimeout(encPressureTimer); encPressureTimer=null; }
+    if(box) box.style.display='none';
+    return;
+  }
+  if(box) box.style.display='block';
+  if(encPressureLast){
+    renderEmbeddingPressure(encPressureLast);
+  }else if(encID && getEncNormalizedMessage('enc-msg').length){
+    const tier=document.getElementById('enc-pressure-tier');
+    const metrics=document.getElementById('enc-pressure-metrics');
+    const warn=document.getElementById('enc-fill-warn');
+    if(tier){ tier.textContent='…'; tier.dataset.tier=''; }
+    if(metrics) metrics.textContent=t('encPressureCalculating');
+    if(warn) warn.style.display='none';
+  }else{
+    renderEmbeddingPressure(null);
+  }
+  scheduleEmbeddingPressure(true);
+}
+function scheduleEmbeddingPressure(immediate=false) {
+  // P1B R2: a medição é deliberadamente opt-in. Enquanto o ícone não for aberto,
+  // digitar não normaliza, não comprime e não prepara payload algum para este painel.
+  if(!encPressureOpen) return;
+  const run=++encPressureGeneration;
+  if(encPressureTimer){ clearTimeout(encPressureTimer); encPressureTimer=null; }
+  const msg=getEncNormalizedMessage('enc-msg');
+  if(!encID || !msg.length){ encPressureLast=null; renderEmbeddingPressure(null); return; }
+  encPressureTimer=setTimeout(async()=>{
+    try{
+      const cipher=(document.getElementById('enc-key')?.value||'').length>0;
+      const cap=getEncCapacitySnapshot();
+      const prepared=await prepareEncMainBody(msg,cipher);
+      if(run!==encPressureGeneration || !encPressureOpen) return;
+      const decoyOn=!!document.getElementById('enc-decoy-toggle')?.checked;
+      const decoyMsg=decoyOn?getEncNormalizedMessage('enc-decoy-msg'):'';
+      // F1 usa dois envelopes GCM: len=32 B e mensagem=28 B+plaintext.
+      const decoyBits=decoyMsg.length ? (60 + new TextEncoder().encode(decoyMsg).length) * 8 : 0;
+      encPressureLast=computeEmbeddingPressure(prepared.bodyBits, encOpaque, cipher, cap.effective, decoyBits);
+      renderEmbeddingPressure(encPressureLast);
+    }catch(_){
+      if(run===encPressureGeneration && encPressureOpen){ encPressureLast=null; renderEmbeddingPressure(null); }
+    }
+  },immediate?0:650);
+}
+
 // O Encoder remove whitespace apenas nas bordas antes de codificar. Toda
 // superfície que mostra/mede a mensagem deve usar esta mesma representação para
 // que capacidade, gate e estatísticas nunca contem textos diferentes.
@@ -525,7 +700,7 @@ function closeEncMessageEditor() {
 function updateCap() {
   const cap=getEncCapacitySnapshot();
   // Mesmo sem cover, o editor grande continua contando o que foi digitado.
-  if (!cap.hasImage) { updateEncMessageModalCount(); return; }
+  if (!cap.hasImage) { scheduleEmbeddingPressure(); updateEncMessageModalCount(); return; }
   const box = document.getElementById('enc-maxcap');
   const note = document.getElementById('enc-mode-note');
   if (box) { box.checked = cap.effective; box.disabled = cap.forced; }
@@ -537,14 +712,9 @@ function updateCap() {
   const f=document.getElementById('cap-fill');
   f.style.width=pct+'%';
   f.style.background=pct>90?'#ff6464':pct>70?'#ffb300':'var(--enc)';
-  const fw=document.getElementById('enc-fill-warn');
-  if (used>0 && pct>50) {
-    fw.textContent=t('encFillHigh'); fw.style.color='#ff6464'; fw.style.display='block';
-  } else if (used>0 && pct>25) {
-    fw.textContent=t('encFillCaution'); fw.style.color='#ffb300'; fw.style.display='block';
-  } else {
-    fw.style.display='none';
-  }
+  // P1B R2 só recalcula se o usuário abriu os detalhes técnicos. Fechado,
+  // este caminho retorna antes de preparar/comprimir qualquer payload.
+  scheduleEmbeddingPressure();
   updateEncMessageModalCount();
 }
 document.getElementById('enc-msg').addEventListener('input', updateCap);
@@ -600,7 +770,7 @@ document.getElementById('enc-key').addEventListener('input',()=>{ updateCap(); c
 // ════════════════════════════════════════
 //  ENCODE
 // ════════════════════════════════════════
-let encOutURL=null, encOutID=null, rbOutURL=null;
+let encOutURL=null, encOutBlob=null, rbOutURL=null;
 let encOutputGeneration=0; // invalida resultados assíncronos da segunda saída robusta
 
 // Centraliza a limpeza de toda a área de saída do Encoder para que encode e
@@ -616,11 +786,15 @@ function resetEncOutputs() {
   semSrc('enc-out-prev'); semSrc('rb-out-prev');
   if (encOutURL && encOutURL.startsWith('blob:')) URL.revokeObjectURL(encOutURL);
   if (rbOutURL && rbOutURL.startsWith('blob:')) URL.revokeObjectURL(rbOutURL);
-  encOutURL = null; rbOutURL = null; encOutID = null;
+  encOutURL = null; encOutBlob = null; rbOutURL = null;
   const hm = document.getElementById('enc-heatmap');
   if (hm) { hm.classList.remove('on'); hm.dataset.built = ''; }
   const hb = document.getElementById('btn-enc-heatmap');
-  if (hb) hb.textContent = t('encMapShow');
+  // O primeiro clique no heatmap desabilita o botão enquanto decodifica o PNG.
+  // Se um novo encode invalidar a geração no meio disso, o `finally` de
+  // toggleEncOverlay() não reabilita — este reset é o único ponto que fecha
+  // esse caminho, senão o botão fica morto até recarregar a página.
+  if (hb) { hb.textContent = t('encMapShow'); hb.disabled = false; }
   const ph = document.getElementById('enc-placeholder');
   if (ph) ph.style.display = 'block';
 }
@@ -671,19 +845,13 @@ document.getElementById('btn-encode').addEventListener('click',async ()=>{
   const cipher=key.length>0;
   const maxcap=document.getElementById('enc-maxcap').checked;
   try {
-    // Comprime o corpo (deflate-raw) ANTES da cifragem; usa só se realmente encolher.
-    let bodyBytes = new TextEncoder().encode(msg);
-    let compressed = false;
-    try {
-      encMark('deflate:in');
-      const comp = await deflateBytes(bodyBytes);
-      encMark('deflate:out');
-      if (comp.length < bodyBytes.length) { bodyBytes = comp; compressed = true; }
-    } catch(_) { /* sem CompressionStream → segue sem comprimir */ }
-
-    // v3: o corpo físico é ciphertext+tag, então seu tamanho é conhecido antes do
-    // Argon2. Isso permite escolher modo/capacidade sem executar a KDF duas vezes.
-    const bodyStoredBytes = cipher ? (bodyBytes.length + F21_GCM_TAG_BYTES) : bodyBytes.length;
+    // P1B: medidor e encode compartilham a MESMA preparação física do corpo.
+    // O medidor roda isso de forma debounced; aqui repetimos na operação real para
+    // manter o profiling e não depender de cache/estado assíncrono da UI.
+    const preparedMain = await prepareEncMainBody(msg, cipher, encMark);
+    let bodyBytes = preparedMain.bodyBytes;
+    const compressed = preparedMain.compressed;
+    const bodyStoredBytes = preparedMain.bodyStoredBytes;
     // O wire v3 limita ciphertext+tag a 5 MB. Falhar aqui mantém a UI e o
     // contrato lógico alinhados e evita executar Argon para um packet impossível.
     if (cipher && bodyStoredBytes > F21_BODY_MAX) throw new Error(t('msgTooLong'));
@@ -696,6 +864,14 @@ document.getElementById('btn-encode').addEventListener('click',async ()=>{
       throw new Error(t('msgTooLong'));
     }
     const mode = sel.mode, adaptive = sel.adaptive, useStc = sel.stc;
+    // A decisão F1 precisa existir antes de derivar o modo STC: acessar uma const
+    // ainda não inicializada aqui cairia na temporal dead zone e abortaria todo encode.
+    const decoyRequested = !!document.getElementById('enc-decoy-toggle')?.checked;
+    // P1A: novas escritas STC sem camada alternativa espalham o pool candidato
+    // por toda a cover. Com F1/decoy mantemos o wire contíguo antigo: a camada
+    // alternativa cresce do fim e o decoder da mensagem real não conhece o seu
+    // tamanho para excluir dinamicamente essa cauda.
+    const stcSpread = useStc && !decoyRequested;
     // STC: escolhe a maior largura w (=1/α) que cabe → máxima furtividade.
     let stcW = 0;
     if (useStc) {
@@ -707,12 +883,12 @@ document.getElementById('btn-encode').addEventListener('click',async ()=>{
     // Embedding e ESCRITA sem canvas: clona o cover limpo, embute, e remonta o
     // PNG na mão. Evita o farbling do toDataURL/getImageData (vide Brave Shields).
     const work = new ImageData(new Uint8ClampedArray(encID.data), encW, encH);
+    inheritOpaquePixels(encID.data, work.data);
     let payload = null, f21Packet = null, realUsedPx = 0, mainSlotsUsed = 0, encodedPayloadBytes = 0;
-    const decoyRequested = !!document.getElementById('enc-decoy-toggle')?.checked;
     encMark('crypto:in');
     if (cipher) {
       const modeFlags = f21ModeFlagsForEmbed(mode, compressed, adaptive, stcW);
-      f21Packet = await f21CreatePacket(bodyBytes, key, {modeFlags, stcW});
+      f21Packet = await f21CreatePacket(bodyBytes, key, {modeFlags, stcW, stcSpread});
       encodedPayloadBytes = F21_PREFIX_BYTES + f21Packet.body.length;
     } else {
       payload = buildPayload(bodyBytes, compressed ? (mode | FLAG_COMPRESSED) : mode);
@@ -724,7 +900,7 @@ document.getElementById('btn-encode').addEventListener('click',async ()=>{
     if (cipher) {
       await embedLSBV3(work, f21Packet, mode, adaptive, stcW);
       realUsedPx = decoyRequested
-        ? f21TailReservationBoundary(f21Packet.modeFlags, stcW, f21Packet.body.length*8)
+        ? f21TailReservationBoundary(f21Packet.modeFlags, stcW, f21Packet.body.length*8, f21Packet.stcSpread)
         : f21UsedOpaquePixels(f21Packet.modeFlags, stcW, f21Packet.body.length*8);
       mainSlotsUsed = useStc
         ? F21_PREFIX_CARRIER_PIXELS + f21Packet.body.length*8*stcW
@@ -732,7 +908,7 @@ document.getElementById('btn-encode').addEventListener('click',async ()=>{
         // percentual de impacto visual sem corresponder a slots tocados.
         : F21_PREFIX_CARRIER_PIXELS + f21Packet.body.length*8;
     } else {
-      embedLSB(work, payload, mode, '', adaptive, false, stcW);
+      embedLSB(work, payload, mode, '', adaptive, false, stcW, stcSpread);
       realUsedPx = useStc
         ? ((HEADER_BYTES+1)*8 + (payload.length-HEADER_BYTES)*8*stcW)
         : (mode===MODE_RGB ? HEADER_BYTES*8 + Math.ceil((payload.length-HEADER_BYTES)*8/3) : payload.length*8);
@@ -758,9 +934,9 @@ document.getElementById('btn-encode').addEventListener('click',async ()=>{
     encMark('png:out');
     encTimingsFlush(false);
     if (encOutURL && encOutURL.startsWith('blob:')) URL.revokeObjectURL(encOutURL);
-    encOutURL = URL.createObjectURL(new Blob([pngBytes], { type: 'image/png' }));
+    encOutBlob = new Blob([pngBytes], { type: 'image/png' });
+    encOutURL = URL.createObjectURL(encOutBlob);
     document.getElementById('enc-out-prev').src=encOutURL;
-    encOutID = work;
     document.getElementById('enc-dl').classList.add('visible');
     document.getElementById('enc-tips').classList.add('visible');
     document.getElementById('enc-placeholder').style.display='none';
@@ -853,7 +1029,7 @@ document.getElementById('btn-encode').addEventListener('click',async ()=>{
           // Com senha isto executa a derivação legada do conteúdo uma segunda
           // vez, deliberadamente, em vez de reutilizar o packet F21 e mudar o
           // formato robusto por acidente.
-          const robustPayload = cipher
+          const robustPayload = (cipher || stcSpread)
             ? await buildRobustPayload(bodyBytes, key, {mode, compressed, adaptive, stcW})
             : payload;
           if(encOutputRun !== encOutputGeneration) return;

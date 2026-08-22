@@ -224,6 +224,7 @@ header {
 .processing-head, .result-title-row {
   display:flex; align-items:center; gap:12px; min-width:0;
 }
+.result-title-row { scroll-margin-top:18px; }
 .processing-head { margin-bottom:5px; }
 .result-main-title {
   font-family:var(--display); font-size:1.1rem; letter-spacing:5px; color:var(--text);
@@ -424,9 +425,32 @@ textarea.dec-t:focus { border-color:rgba(255,107,53,0.4); }
 }
 
 /* CAPACITY */
+.capacity-label { display:flex; align-items:center; gap:6px; }
+.capacity-info-btn {
+  width:15px; height:15px; padding:0; flex:0 0 15px; border:1px solid var(--border2);
+  border-radius:50%; background:transparent; color:var(--dim); font-family:var(--mono);
+  font-size:0.5rem; line-height:13px; text-align:center; cursor:pointer; letter-spacing:0;
+  text-transform:none; transition:border-color .15s,color .15s,background .15s;
+}
+.capacity-info-btn:hover, .capacity-info-btn:focus-visible, .capacity-info-btn[aria-expanded="true"] {
+  border-color:var(--enc); color:var(--enc); background:rgba(0,255,179,.06); outline:none;
+}
 .cap-row { display:flex; justify-content:space-between; font-size:0.6rem; color:var(--dim); }
 .cap-bar { height:3px; background:var(--border); border-radius:2px; overflow:hidden; margin-top:4px; }
 .cap-fill { height:100%; border-radius:2px; background:var(--enc); width:0%; transition:width 0.3s,background 0.3s; }
+.embedding-pressure { margin-top:8px; padding:7px 9px; border:1px solid var(--border); border-radius:3px; background:var(--surface2); font-family:var(--mono); }
+.ep-head { display:flex; justify-content:space-between; align-items:center; gap:8px; font-size:0.58rem; letter-spacing:0.8px; color:var(--dim); text-transform:uppercase; }
+.ep-tier { font-weight:700; color:var(--enc); white-space:nowrap; }
+.ep-tier[data-tier="moderate"] { color:#ffb300; }
+.ep-tier[data-tier="high"], .ep-tier[data-tier="max"] { color:#ff8a65; }
+.ep-tier[data-tier="rgb"] { color:#ffb300; }
+.ep-metrics { margin-top:4px; font-size:0.6rem; line-height:1.55; color:var(--text); overflow-wrap:anywhere; }
+.ep-note { margin-top:3px; font-size:0.54rem; line-height:1.5; color:var(--dim); }
+.ep-warn { margin-top:5px; }
+@media (max-width:600px) {
+  .ep-head { align-items:flex-start; flex-wrap:wrap; }
+  .ep-tier { margin-left:auto; }
+}
 
 /* BUTTONS */
 .btn {
@@ -542,6 +566,7 @@ textarea.dec-t:focus { border-color:rgba(255,107,53,0.4); }
 .stat-col { display:flex; flex-direction:column; gap:5px; }
 .stat-col-head { font-size:0.62rem; letter-spacing:1px; text-transform:uppercase; color:var(--enc); font-weight:600; padding-bottom:3px; border-bottom:1px solid var(--border); margin-bottom:1px; }
 .stat-impact { display:flex; justify-content:space-between; align-items:center; padding:7px 9px; background:var(--surface2); border:1px solid var(--border); border-radius:3px; }
+.stat-impact .sv-dim { font-size:0.72rem; line-height:1.45; }
 .sv-dim { color:var(--neutral); }
 .stat-item { background:var(--surface2); border:1px solid var(--border); border-radius:3px; padding:7px 9px; }
 .stat-key { font-size:0.56rem; color:var(--neutral); letter-spacing:1px; text-transform:uppercase; }
@@ -593,7 +618,12 @@ textarea.dec-t:focus { border-color:rgba(255,107,53,0.4); }
 /* Editor de mensagem do Encoder: campo compacto + acesso a um editor grande. */
 .enc-message-wrap { position:relative; }
 .enc-message-field {
-  padding-right:46px; overflow:auto; overscroll-behavior:contain;
+  padding-right:46px; overflow:auto;
+  /* Igual ao quadro recuperado: o textarea mantém scroll próprio quando precisa,
+     mas um gesto vertical iniciado dentro dele pode continuar na página quando
+     chega à borda (ou quando o campo nem tem overflow). */
+  overscroll-behavior-x:contain; overscroll-behavior-y:auto;
+  touch-action:pan-y pinch-zoom;
   scrollbar-width:thin; scrollbar-color:var(--enc) rgba(0,0,0,0.3);
 }
 .enc-message-expand {
@@ -1139,6 +1169,17 @@ textarea.dec-t:focus { border-color:rgba(255,107,53,0.4); }
 .cl-tag.chg { background:rgba(167,139,250,0.1); color:var(--scan); border:1px solid rgba(167,139,250,0.25); }
 .cl-tag.fix { background:rgba(255,179,0,0.1); color:#ffb300; border:1px solid rgba(255,179,0,0.25); }
 .cl-li b { color:var(--text); font-weight:600; }
+.cl-full-history {
+  display:flex; flex-direction:column; align-items:center; gap:5px;
+  padding:18px 0 4px; text-align:center;
+}
+.cl-full-history-link {
+  font-family:var(--mono); font-size:0.67rem; letter-spacing:0.4px;
+  color:#c4b5fd; text-decoration:none; border-bottom:1px solid rgba(196,181,253,0.35);
+}
+.cl-full-history-link:hover { color:#ddd6fe; border-bottom-color:#ddd6fe; }
+.cl-full-history-link:focus-visible { outline:2px solid var(--scan); outline-offset:4px; border-radius:2px; }
+.cl-full-history-note { font-family:var(--mono); font-size:0.56rem; color:var(--dim); letter-spacing:0.4px; }
 
 /* Notas e avisos da análise */
 .c2pa-fp-note {
@@ -1344,11 +1385,15 @@ textarea.dec-t:focus { border-color:rgba(255,107,53,0.4); }
 
   /* Swipe interativo: o painel vizinho é temporariamente projetado no mesmo
      viewport e acompanha o dedo. A posição fixa vale somente durante o gesto. */
-  .panel.swipe-current { position:relative; z-index:19; background:var(--bg); }
+  html.mobile-swipe-active, body.mobile-swipe-active { overflow-x:hidden; }
+  .panel.swipe-current {
+    position:relative; z-index:19; background:var(--bg);
+    contain:paint; backface-visibility:hidden;
+  }
   .panel.swipe-preview {
     display:flex; flex-direction:column; overflow-y:auto; flex:none;
     position:fixed;
-    background:var(--bg); will-change:transform; contain:paint;
+    background:var(--bg); will-change:transform; contain:paint; backface-visibility:hidden;
   }
   .panel.swipe-animating {
     transition-property:transform;

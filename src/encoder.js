@@ -7,11 +7,28 @@ const FLAG_STEALTH = 0x08;  // bit no byte de modo: header cifrado (modo furtivo
 const FLAG_COMPRESSED = 0x10; // bit no byte de modo: corpo comprimido (deflate-raw) antes de cifrar
 const FLAG_STC = 0x20; // bit no byte de modo: corpo embutido via STC (Syndrome-Trellis Codes)
 const FLAG_HILLV2 = 0x40; // bit no byte de modo: custo HILL canônico (L1 3x3 + L2 15x15).
+// 0x80 permanece RESERVADO no byte de modo. P1A guarda o spread no próprio
+// w-byte STC: largura usa 5 bits (1..16), bit 5 sinaliza seleção espalhada e
+// bits 6..7 ficam reservados para extensões futuras.
+const STC_W_MASK = 0x1F;
+const STC_W_FLAG_SPREAD = 0x20;
+const STC_W_RESERVED_MASK = 0xC0;
 // Versiona o mapa de custo do ADAPTATIVO: imagens adaptativas antigas (sem este bit) são
 // decodificadas com o mapa LEGADO; novas, com o V2. O STC não precisa do bit (decode por
 // síndrome é independente de custo).
 const STC_H = 8;       // altura de restrição do trellis (2^h estados)
 const STC_WMAX = 16;   // largura máxima da submatriz (= 1/α mínimo)
+
+function packStcWByte(stcW, spread=false) {
+  if (!Number.isInteger(stcW) || stcW < 1 || stcW > STC_WMAX) throw new Error('stc-w-range');
+  return (stcW & STC_W_MASK) | (spread ? STC_W_FLAG_SPREAD : 0);
+}
+function parseStcWByte(raw) {
+  if (!Number.isInteger(raw) || raw < 0 || raw > 255 || (raw & STC_W_RESERVED_MASK)) return null;
+  const stcW = raw & STC_W_MASK;
+  if (stcW < 1 || stcW > STC_WMAX) return null;
+  return { stcW, stcSpread:!!(raw & STC_W_FLAG_SPREAD), raw };
+}
 
 // ════════════════════════════════════════
 //  LEGADO — modo furtivo/header mascarado por senha (leitura/sem-senha compat.)
@@ -58,12 +75,43 @@ function xorHeader(headerBytes, password) {
 // e o round-trip do PNG é lossless. O canvas zera os transparentes de forma
 // DETERMINÍSTICA no encode e no decode, então o mapa de custo do adaptativo (que ignora
 // LSB) é reproduzível dos dois lados.
+// Cache por buffer de pixels. O alfa não é modificado pelos caminhos de embed/decode,
+// então a mesma imagem pode reutilizar o mapa em todas as sondas sem nova varredura.
+// No caso comum (imagem totalmente opaca) não existe lista de índices: o índice
+// lógico do pixel opaco É o próprio índice raster, evitando ~4 bytes/pixel.
+const _opaquePixelsCache = new WeakMap();
 function opaquePixels(d) {
+  const cached = _opaquePixelsCache.get(d);
+  if (cached) return cached;
   const n = d.length / 4;
-  const list = new Uint32Array(n);
-  let m = 0;
-  for (let p = 0; p < n; p++) if (d[p*4+3] === 255) list[m++] = p;
-  return list.subarray(0, m);
+  let firstNonOpaque = -1;
+  for (let p = 0; p < n; p++) {
+    if (d[p*4+3] !== 255) { firstNonOpaque = p; break; }
+  }
+  let out;
+  if (firstNonOpaque < 0) {
+    out = { length:n, identity:true, list:null };
+  } else {
+    const list = new Uint32Array(n);
+    let m = 0;
+    for (let p = 0; p < firstNonOpaque; p++) list[m++] = p;
+    for (let p = firstNonOpaque; p < n; p++) if (d[p*4+3] === 255) list[m++] = p;
+    out = { length:m, identity:false, list:list.subarray(0,m) };
+  }
+  _opaquePixelsCache.set(d, out);
+  return out;
+}
+function opaqueAt(op, i) { return op.identity ? i : op.list[i]; }
+function opaqueRange(op, start=0) {
+  const len = Math.max(0, op.length - start);
+  return op.identity ? { identityRange:true, start, length:len } : op.list.subarray(start);
+}
+// Clones de RGBA usados pelo Encoder preservam o alfa da cover. Herdar o mapa
+// evita uma segunda varredura/lista antes do embedding sem acoplar o wire ao cache.
+function inheritOpaquePixels(sourceData, targetData) {
+  const op = opaquePixels(sourceData);
+  _opaquePixelsCache.set(targetData, op);
+  return op;
 }
 
 // Cover "chapado" / pouca textura: poucas cores únicas. Imagens assim (ícones,
@@ -189,7 +237,7 @@ function writeBitLSBR(d, idx, bit) {
 // no canal B, para que o decoder possa lê-lo da mesma forma e descobrir o modo.
 const HEADER_BYTES = MAGIC.length + 1 + 4;
 
-function embedLSB(imageData, payload, mode=MODE_B, password='', adaptive=false, stealth=false, stcW=0) {
+function embedLSB(imageData, payload, mode=MODE_B, password='', adaptive=false, stealth=false, stcW=0, stcSpread=false) {
   const d = imageData.data;
   const w = imageData.width, h = imageData.height;
   const op = opaquePixels(d);
@@ -209,20 +257,30 @@ function embedLSB(imageData, payload, mode=MODE_B, password='', adaptive=false, 
     if (opCount < headBits2 + n) throw new Error(t('msgTooLong'));
     const hb = new Uint8Array(HEADER_BYTES + 1);
     hb.set(payload.slice(0, HEADER_BYTES));
-    hb[HEADER_BYTES] = stcW & 0xFF;
+    hb[HEADER_BYTES] = packStcWByte(stcW, stcSpread);
     const hbOut = (stealth && password.length > 0) ? xorHeader(hb, password) : hb;
     for (let i = 0; i < headBits2; i++) {
       const bit = (hbOut[i >> 3] >> (7 - (i & 7))) & 1;
-      writeBitLSBR(d, op[i] * 4 + 2, bit);
+      writeBitLSBR(d, opaqueAt(op,i) * 4 + 2, bit);
     }
     const cost = hillCostMap(d, w, h);
     const Hhat = makeStcSubmatrix(STC_H, stcW);
     const xb = new Uint8Array(n), rho = new Float64Array(n);
-    for (let k = 0; k < n; k++) { const px = op[headBits2 + k]; xb[k] = d[px*4+2] & 1; rho[k] = cost[px]; }
+    let spread = stcSpread ? makeStcSpreadCursor(headBits2, opCount-headBits2, n, w, h, stcW) : null;
+    for (let k = 0; k < n; k++) {
+      const logical = spread ? spread.next() : headBits2+k;
+      const px = opaqueAt(op,logical);
+      xb[k] = d[px*4+2] & 1; rho[k] = cost[px];
+    }
     const m = new Uint8Array(bodyBits);
     for (let i = 0; i < bodyBits; i++) { const g = HEADER_BYTES*8 + i; m[i] = (payload[g>>3] >> (7-(g&7))) & 1; }
     const y = stcEmbed(xb, m, rho, STC_H, Hhat);
-    for (let k = 0; k < n; k++) { const px = op[headBits2 + k]; d[px*4+2] = (d[px*4+2] & 0xFE) | y[k]; }
+    spread = stcSpread ? makeStcSpreadCursor(headBits2, opCount-headBits2, n, w, h, stcW) : null;
+    for (let k = 0; k < n; k++) {
+      const logical = spread ? spread.next() : headBits2+k;
+      const px = opaqueAt(op,logical);
+      d[px*4+2] = (d[px*4+2] & 0xFE) | y[k];
+    }
     return imageData;
   }
 
@@ -248,13 +306,13 @@ function embedLSB(imageData, payload, mode=MODE_B, password='', adaptive=false, 
   const writeBit = adaptive ? writeBitLSBR : writeBitLSBM;
   for (let i = 0; i < headerBits; i++) {
     const bit = (headerSlice[Math.floor(i/8)] >> (7-(i%8))) & 1;
-    writeBit(d, op[i]*4+2, bit);
+    writeBit(d, opaqueAt(op,i)*4+2, bit);
   }
 
   if (adaptive) {
     // Adaptativo: entre os pixels OPACOS além do header, escolhe os de MENOR custo.
     const cost = hillCostMap(d, w, h);
-    const orderPx = adaptiveOrder(cost, op.subarray(headerBits));
+    const orderPx = adaptiveOrder(cost, opaqueRange(op,headerBits));
     const bitOrder = shuffle ? shuffledOrder(bodyBits, password) : null;
     for (let k = 0; k < bodyBits; k++) {
       const i = bitOrder ? bitOrder[k] : k;
@@ -272,14 +330,14 @@ function embedLSB(imageData, payload, mode=MODE_B, password='', adaptive=false, 
       const i = order ? order[k] : k;
       const bitGlobal = headerBits + i;
       const bit = (payload[Math.floor(bitGlobal/8)] >> (7-(bitGlobal%8))) & 1;
-      writeBitLSBM(d, op[headerBits + k]*4+2, bit);
+      writeBitLSBM(d, opaqueAt(op,headerBits+k)*4+2, bit);
     }
   } else {
     for (let k = 0; k < bodyBits; k++) {
       const i = order ? order[k] : k;
       const bitGlobal = headerBits + i;
       const bit = (payload[Math.floor(bitGlobal/8)] >> (7-(bitGlobal%8))) & 1;
-      const px = op[headerBits + Math.floor(k/3)];
+      const px = opaqueAt(op,headerBits + Math.floor(k/3));
       const chan = k % 3;
       writeBitLSBM(d, px*4 + chan, bit);
     }
@@ -329,29 +387,36 @@ async function embedLSBV3(imageData, packet, mode=MODE_B, adaptive=false, stcW=0
   {
     const n = F21_PREFIX_CARRIER_PIXELS;
     const xb = new Uint8Array(n), rho = new Float64Array(n); rho.fill(1);
-    for (let k = 0; k < n; k++) xb[k] = d[op[k]*4+2] & 1;
+    for (let k = 0; k < n; k++) xb[k] = d[opaqueAt(op,k)*4+2] & 1;
     const msg = new Uint8Array(F21_PREFIX_BITS);
     for (let i = 0; i < F21_PREFIX_BITS; i++) msg[i] = (prefix[i >> 3] >> (7 - (i & 7))) & 1;
     const Hhat = makeStcSubmatrix(STC_H, F21_BOOTSTRAP_STC_W, F21_BOOTSTRAP_STC_SEED);
     const y = stcEmbed(xb, msg, rho, STC_H, Hhat);
-    for (let k = 0; k < n; k++) d[op[k]*4+2] = (d[op[k]*4+2] & 0xFE) | y[k];
+    for (let k = 0; k < n; k++) { const px=opaqueAt(op,k); d[px*4+2] = (d[px*4+2] & 0xFE) | y[k]; }
   }
 
   if (stcW > 0) {
     const n = bodyBits * stcW;
+    const stcSpread = packet.stcSpread === true;
     const cost = hillCostMap(d, w, h);
     const Hhat = makeStcSubmatrix(STC_H, stcW);
     const xb = new Uint8Array(n), rho = new Float64Array(n);
+    let spread = stcSpread ? makeStcSpreadCursor(F21_PREFIX_CARRIER_PIXELS,
+      op.length-F21_PREFIX_CARRIER_PIXELS, n, w, h, stcW) : null;
     for (let k = 0; k < n; k++) {
-      const px = op[F21_PREFIX_CARRIER_PIXELS + k];
+      const logical = spread ? spread.next() : F21_PREFIX_CARRIER_PIXELS+k;
+      const px = opaqueAt(op,logical);
       xb[k] = d[px*4+2] & 1;
       rho[k] = cost[px];
     }
     const m = new Uint8Array(bodyBits);
     for (let i = 0; i < bodyBits; i++) m[i] = (body[i >> 3] >> (7 - (i & 7))) & 1;
     const y = stcEmbed(xb, m, rho, STC_H, Hhat);
+    spread = stcSpread ? makeStcSpreadCursor(F21_PREFIX_CARRIER_PIXELS,
+      op.length-F21_PREFIX_CARRIER_PIXELS, n, w, h, stcW) : null;
     for (let k = 0; k < n; k++) {
-      const px = op[F21_PREFIX_CARRIER_PIXELS + k];
+      const logical = spread ? spread.next() : F21_PREFIX_CARRIER_PIXELS+k;
+      const px = opaqueAt(op,logical);
       d[px*4+2] = (d[px*4+2] & 0xFE) | y[k];
     }
     return imageData;
@@ -362,7 +427,7 @@ async function embedLSBV3(imageData, packet, mode=MODE_B, adaptive=false, stcW=0
   const byteOrder = await f21ShuffledOrder(body.length, packet.bodyOrderKey);
   if (adaptive) {
     const cost = hillCostMap(d, w, h);
-    const orderPx = adaptiveOrder(cost, op.subarray(F21_PREFIX_CARRIER_PIXELS));
+    const orderPx = adaptiveOrder(cost, opaqueRange(op,F21_PREFIX_CARRIER_PIXELS));
     if (bodyBits > orderPx.length) throw new Error(t('msgTooLong'));
     for (let k = 0; k < bodyBits; k++) {
       const outByte = k >> 3, bitInByte = k & 7;
@@ -378,14 +443,14 @@ async function embedLSBV3(imageData, packet, mode=MODE_B, adaptive=false, stcW=0
       const outByte = k >> 3, bitInByte = k & 7;
       const srcByte = byteOrder[outByte];
       const bit = (body[srcByte] >> (7 - bitInByte)) & 1;
-      writeBitLSBM(d, op[F21_PREFIX_CARRIER_PIXELS + k]*4 + 2, bit);
+      writeBitLSBM(d, opaqueAt(op,F21_PREFIX_CARRIER_PIXELS+k)*4 + 2, bit);
     }
   } else if (mode === MODE_RGB) {
     for (let k = 0; k < bodyBits; k++) {
       const outByte = k >> 3, bitInByte = k & 7;
       const srcByte = byteOrder[outByte];
       const bit = (body[srcByte] >> (7 - bitInByte)) & 1;
-      const px = op[F21_PREFIX_CARRIER_PIXELS + Math.floor(k/3)];
+      const px = opaqueAt(op,F21_PREFIX_CARRIER_PIXELS + Math.floor(k/3));
       writeBitLSBM(d, px*4 + (k % 3), bit);
     }
   } else {
@@ -407,7 +472,7 @@ async function embedLSBV3(imageData, packet, mode=MODE_B, adaptive=false, stcW=0
 function writeDecoyTailBits(d, op, bytes, bitOffset) {
   const nBits = bytes.length * 8;
   for (let i = 0; i < nBits; i++) {
-    const px = op[op.length - 1 - (bitOffset + i)];
+    const px = opaqueAt(op,op.length - 1 - (bitOffset + i));
     const bit = (bytes[i >> 3] >> (7 - (i & 7))) & 1;
     d[px * 4 + 2] = (d[px * 4 + 2] & 0xFE) | bit;
   }

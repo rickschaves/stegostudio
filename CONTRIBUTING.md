@@ -18,7 +18,9 @@ node build.js           # builds dist/stego_studio_v<VERSION>.html
 node test.js            # runs the project regression checks
 ```
 
-No package install or bundler is required. A green test run means the change is
+No package install or bundler is required. Acorn is vendored under `tools/vendor/` as a
+build-only parser so comment stripping remains syntax-aware and reproducible; it is not
+part of the runtime HTML. A green test run means the change is
 consistent with the properties these checks cover; it is not a general proof of
 correctness or security.
 

@@ -98,7 +98,7 @@ const encPanel=panel('panel-enc',true), decPanel=panel('panel-dec',false), panel
 let active='enc', reduced=false;
 const activeEl={classList:{contains(name){ return name===active; }}};
 const documentStub={
-  documentElement:{clientWidth:360}, activeElement:null,
+  documentElement:{clientWidth:360,classList:classList()}, body:{classList:classList()}, activeElement:null,
   querySelectorAll(sel){ return sel==='.panel' ? panels : []; },
   querySelector(sel){ return sel==='.tab.active' ? activeEl : null; },
   getElementById(id){ return id==='panel-enc'?encPanel:id==='panel-dec'?decPanel:null; },
